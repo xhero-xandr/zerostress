@@ -1,0 +1,35 @@
+# Сервер разработки: что на нём есть и как с ним работать
+
+Состояние проверено 4 ноября 2026, после перезагрузки хоста и сквозной проверки с нуля (скрипты хоста, сборка агента и образа, установка, дымовой тест и тест сети). Доступ: `ssh vultr` (под `root`, на время разработки; перед публичным запуском вход `root` нужно закрыть, см. [спецификацию 001](specs/001-host-baseline.md), раздел 4.7).
+
+## Что установлено
+| Путь | Что | Откуда |
+|---|---|---|
+| `/opt/zerostress/bin/firecracker` | Firecracker v1.17.0 | официальный релиз, хеш закреплён в `deploy/001-host-baseline.sh` |
+| `/opt/zerostress/bin/zsnet` | скрипт сети слотов (`up N`, `down N`, N от 0 до 3) | `deploy/zsnet`, ставит `deploy/003-network.sh` |
+| `/opt/zerostress/images/` | ядро гостя, `guest-rootfs.ext4`, `manifest.json` | `guest-image/build.sh`, ставит `guest-image/install.sh` |
+| `/opt/node` | Node 24.22.2 для супервизора и тестов хоста | официальный архив, сумма проверена по `SHASUMS256.txt` |
+| `/opt/go` | Go 1.27.3, только для сборки агента | архив с go.dev, сумма проверена |
+| `/opt/zerostress-src` | копия рабочего дерева (без git) | `deploy/dev-sync.sh` с локальной машины |
+| `/var/lib/zerostress/runs` | каталоги запусков, на каждый запуск свой, после него удаляется | супервизор (тесты создают и убирают сами) |
+| `/run/zerostress` | каталог для сокета супервизора | `tmpfiles.d` создаёт при каждой загрузке |
+
+Системные настройки: пользователи `zerostress-sup` (группа `kvm`) и `zerostress-web`, группа `zerostress-ipc`; `/dev/kvm` с правами `0660` (правило udev); зона `zerostress` и политика `zerostress-egress` в `firewalld`; `net.ipv4.ip_forward=1` (`/etc/sysctl.d/90-zerostress.conf`); правило sudoers только для `zsnet up|down` (`/etc/sudoers.d/zerostress-net`). Таблица `inet zerostress` в nftables создаётся при первом `zsnet up` и после перезагрузки отсутствует до него, это нормально. Наружу слушает только `sshd`. SELinux в режиме `Enforcing`.
+
+Служб `zerostress-*` и прокси пока нет. Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
+
+## Как работать
+```
+bash deploy/dev-sync.sh                                   # локально: отправить рабочее дерево на сервер
+ssh vultr 'sudo -u linuxuser bash /opt/zerostress-src/guest-image/build-agent.sh'   # тесты и сборка агента
+ssh vultr 'AGENT_BIN=/opt/zerostress-src/guest-image/agent/zerostress-agent bash /opt/zerostress-src/guest-image/build.sh'   # образ в /var/tmp/zerostress-build/out
+ssh vultr 'bash /opt/zerostress-src/guest-image/install.sh'                          # установить образ в /opt/zerostress/images
+ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                       # дымовой тест образа, Chromium и сеть
+ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
+```
+После сборки образа каталог `/var/tmp/zerostress-build` (около 1,6 ГБ) удаляется вручную: `rm -rf /var/tmp/zerostress-build`.
+
+Первичная настройка чистого хоста Rocky Linux 10: `deploy/001-host-baseline.sh`, затем `deploy/003-network.sh`, затем сборка и установка образа, как выше (Node и Go ставятся отдельно, процедура описана в разделе «Что установлено», скрипта для них пока нет).
+
+## Правило порядка
+Всё, что создают тесты (ВМ, интерфейсы `zstap*`, каталоги запусков, loop-монтирования), они убирают сами через `trap`. Если запуск прервали, проверка: `pgrep firecracker`, `ip -br link | grep zstap`, `ls /var/lib/zerostress/runs`, `losetup -a`: везде должно быть пусто.

@@ -3,8 +3,6 @@
 # Does NOT touch sshd, swap, firewalld or services.
 set -euo pipefail
 
-SRC="${SRC:-/home/linuxuser/fc-test}"
-
 # 4.1 users and groups
 getent group kvm >/dev/null || groupadd -r kvm
 getent group zerostress-ipc >/dev/null || groupadd -r zerostress-ipc
@@ -18,10 +16,22 @@ install -d -m 0755 -o root -g root /opt/zerostress /opt/zerostress/bin /opt/zero
 install -d -m 0700 -o zerostress-sup -g zerostress-sup /var/lib/zerostress/runs
 install -d -m 0750 -o zerostress-sup -g zerostress-ipc /run/zerostress
 
-# artifacts (read-only for services)
-install -m 0755 -o root -g root "$SRC/firecracker" /opt/zerostress/bin/firecracker
-install -m 0644 -o root -g root "$SRC/vmlinux-6.18.56" /opt/zerostress/images/vmlinux-6.18.56
-install -m 0644 -o root -g root "$SRC/chromium.ext4" /opt/zerostress/images/guest-base.ext4
+# /run is tmpfs: recreate the socket directory at every boot
+cat >/etc/tmpfiles.d/zerostress.conf <<'EOF'
+d /run/zerostress 0750 zerostress-sup zerostress-ipc -
+EOF
+systemd-tmpfiles --create /etc/tmpfiles.d/zerostress.conf
+
+# Firecracker: official release, pinned checksum (published next to the tarball)
+FC_VERSION=v1.17.0
+FC_SHA256=06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558
+T=$(mktemp -d)
+curl -fsSL --retry 3 -o "$T/fc.tgz" "https://github.com/firecracker-microvm/firecracker/releases/download/$FC_VERSION/firecracker-$FC_VERSION-x86_64.tgz"
+echo "$FC_SHA256  $T/fc.tgz" | sha256sum -c -
+tar -xzf "$T/fc.tgz" -C "$T"
+install -m 0755 -o root -g root "$T/release-$FC_VERSION-x86_64/firecracker-$FC_VERSION-x86_64" /opt/zerostress/bin/firecracker
+rm -rf "$T"
+# kernel and guest image are installed by guest-image/install.sh after guest-image/build.sh
 
 # 4.4a SELinux labels
 if command -v semanage >/dev/null; then

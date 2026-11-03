@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Smoke test of the guest image: overlay -> boot with vsock -> agent -> stub collector. Run as root on the host.
-# Usage: smoke.sh BASE_IMAGE AGENT_BIN   (defaults: the installed base image, /tmp/zerostress-agent)
+# Usage: smoke.sh BASE_IMAGE AGENT_BIN   (defaults: the installed image, guest-image/agent/zerostress-agent)
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 BASE=${1:-/opt/zerostress/images/guest-rootfs.ext4}
-AGENT=${2:-/tmp/zerostress-agent}
+AGENT=${2:-$HERE/../agent/zerostress-agent}
 D=/var/lib/zerostress/runs/smoke
 NODE=/opt/node/bin/node
 SUP=zerostress-sup

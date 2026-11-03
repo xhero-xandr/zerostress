@@ -4,7 +4,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 BASE=${1:-/opt/zerostress/images/guest-rootfs.ext4}
-AGENT=${2:-/tmp/zerostress-agent}
+AGENT=${2:-$HERE/../agent/zerostress-agent}
 D=/var/lib/zerostress/runs/netiso
 NODE=/opt/node/bin/node
 SUP=zerostress-sup
