@@ -65,6 +65,7 @@ out=$(run '{"mode":"whoami"}'); check "collector runs as pw" "$out" '"out":"pw"'
 out=$(run '{"mode":"fetch","url":"https://example.com"}'); check "public internet via guest" "$out" '"status":200'
 out=$(run '{"mode":"fetch","url":"http://169.254.169.254/","timeout_ms":3000}'); check "metadata blocked" "$out" '"kind":"error"'
 out=$(run '{"mode":"fetch","url":"http://172.16.0.1:22/","timeout_ms":3000}');   check "host gateway blocked" "$out" '"kind":"error"'
+out=$(run '{"mode":"chromium"}'); check "chromium (sandbox on) renders and screenshots" "$out" '"kind":"chromium".*"title":"ok"'
 out=$(run '{"mode":"flood"}');  check "oversize capped" "$out" '"status":"oversize"'
 size=$(run '{"mode":"flood"}' | wc -c); [[ $size -le 1048900 ]] && echo "PASS  forwarded $size bytes (cap 1048576 + status)" || { echo "FAIL  forwarded $size"; fail=1; }
 out=$(run 'garbage');           check "bad job rejected" "$out" '"status":"bad_job"'

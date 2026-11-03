@@ -18,6 +18,19 @@ switch (job.mode) {
     }
     break;
   }
+  case 'chromium': {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({ chromiumSandbox: true });
+    try {
+      const page = await browser.newPage();
+      await page.goto(job.url ?? 'data:text/html;charset=utf-8,<title>ok</title><h1>Привет, мир 日本語 😀</h1>');
+      const png = await page.screenshot();
+      emit({ type: 'event', kind: 'chromium', version: browser.version(), title: await page.title(), screenshot_bytes: png.length });
+    } finally {
+      await browser.close();
+    }
+    break;
+  }
   case 'sleep':
     await new Promise((r) => setTimeout(r, job.ms ?? 1000));
     break;

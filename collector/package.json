@@ -1,0 +1,14 @@
+{
+  "name": "zerostress-collector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evidence collector that runs inside the guest microVM",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}
