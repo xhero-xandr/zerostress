@@ -70,7 +70,9 @@ case $cmd in
     ip tuntap add dev "$tap" mode tap user "$TAP_OWNER"
     ip addr add "$host_ip/30" dev "$tap"
     ip link set "$tap" up
-    sysctl -q -w net.ipv4.ip_forward=1
+    # forwarding is enabled persistently (/etc/sysctl.d/90-zerostress.conf); only check it, so the
+    # supervisor's unit can keep ProtectKernelTunables=yes
+    [[ $(cat /proc/sys/net/ipv4/ip_forward) == 1 ]] || { ip link del "$tap" 2>/dev/null; die "net.ipv4.ip_forward is not enabled"; }
     nft add element inet $TABLE slots "{ \"$tap\" . $guest_ip }"
     ;;
   down)

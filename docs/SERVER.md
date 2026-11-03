@@ -26,7 +26,9 @@ ssh vultr 'AGENT_BIN=/opt/zerostress-src/guest-image/agent/zerostress-agent bash
 ssh vultr 'bash /opt/zerostress-src/guest-image/install.sh'                          # установить образ в /opt/zerostress/images
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                       # дымовой тест образа, Chromium и сеть
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
+ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'        # совместимость параметров юнита с SELinux (см. спецификацию 006)
 ```
+Отказы SELinux на этом сервере читаются прямо из `/var/log/audit/audit.log` и `audit.log.1` (лог ротируется при 8 МБ): `ausearch` ничего не находит даже по номеру записи.
 После сборки образа каталог `/var/tmp/zerostress-build` (около 1,6 ГБ) удаляется вручную: `rm -rf /var/tmp/zerostress-build`.
 
 Первичная настройка чистого хоста Rocky Linux 10: `deploy/001-host-baseline.sh`, затем `deploy/003-network.sh`, затем сборка и установка образа, как выше (Node и Go ставятся отдельно, процедура описана в разделе «Что установлено», скрипта для них пока нет).
