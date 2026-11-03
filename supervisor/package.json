@@ -1,0 +1,20 @@
+{
+  "name": "zerostress-supervisor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privileged supervisor: one disposable Firecracker microVM per job. Runtime uses only the Node standard library.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test --test-reporter=spec \"test/**/*.test.ts\"",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
