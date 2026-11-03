@@ -4,6 +4,13 @@ After=local-fs.target
 
 [Service]
 ExecStart=/usr/local/bin/zerostress-agent -port 5000 -user pw -timeout 60s -- /opt/node/bin/node /opt/collector/collect.mjs
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
 StandardOutput=journal+console
 StandardError=journal+console
 Restart=always

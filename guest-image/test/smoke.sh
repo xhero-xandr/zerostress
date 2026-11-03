@@ -3,7 +3,7 @@
 # Usage: smoke.sh BASE_IMAGE AGENT_BIN   (defaults: the installed base image, /tmp/zerostress-agent)
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASE=${1:-/opt/zerostress/images/guest-base.ext4}
+BASE=${1:-/opt/zerostress/images/guest-rootfs.ext4}
 AGENT=${2:-/tmp/zerostress-agent}
 D=/var/lib/zerostress/runs/smoke
 NODE=/opt/node/bin/node
@@ -66,6 +66,13 @@ out=$(run '{"mode":"fetch","url":"https://example.com"}'); check "public interne
 out=$(run '{"mode":"fetch","url":"http://169.254.169.254/","timeout_ms":3000}'); check "metadata blocked" "$out" '"kind":"error"'
 out=$(run '{"mode":"fetch","url":"http://172.16.0.1:22/","timeout_ms":3000}');   check "host gateway blocked" "$out" '"kind":"error"'
 out=$(run '{"mode":"chromium"}'); check "chromium (sandbox on) renders and screenshots" "$out" '"kind":"chromium".*"title":"ok"'
+host_ms=$(date +%s%3N)
+out=$(run '{"mode":"sys"}');    check "no TCP listeners in the guest" "$out" '"tcp_listeners":\[\]'
+guest_ms=$(grep -o '"epoch_ms":[0-9]*' <<<"$out" | cut -d: -f2)
+skew=$(( guest_ms - host_ms )); skew=${skew#-}
+[[ $skew -lt 5000 ]] && echo "PASS  guest clock skew ${skew} ms" || { echo "FAIL  guest clock skew ${skew} ms"; fail=1; }
+run '{"mode":"chromium","png":true}' | grep -o '"png_b64":"[^"]*"' | cut -d'"' -f4 | base64 -d > "${SHOT_OUT:-/tmp/smoke-shot.png}" 2>/dev/null
+echo "screenshot saved: ${SHOT_OUT:-/tmp/smoke-shot.png} ($(stat -c %s "${SHOT_OUT:-/tmp/smoke-shot.png}") bytes)"
 out=$(run '{"mode":"flood"}');  check "oversize capped" "$out" '"status":"oversize"'
 size=$(run '{"mode":"flood"}' | wc -c); [[ $size -le 1048900 ]] && echo "PASS  forwarded $size bytes (cap 1048576 + status)" || { echo "FAIL  forwarded $size"; fail=1; }
 out=$(run 'garbage');           check "bad job rejected" "$out" '"status":"bad_job"'

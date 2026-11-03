@@ -25,10 +25,25 @@ switch (job.mode) {
       const page = await browser.newPage();
       await page.goto(job.url ?? 'data:text/html;charset=utf-8,<title>ok</title><h1>Привет, мир 日本語 😀</h1>');
       const png = await page.screenshot();
-      emit({ type: 'event', kind: 'chromium', version: browser.version(), title: await page.title(), screenshot_bytes: png.length });
+      emit({
+        type: 'event', kind: 'chromium', version: browser.version(), title: await page.title(),
+        screenshot_bytes: png.length, ...(job.png ? { png_b64: png.toString('base64') } : {}),
+      });
     } finally {
       await browser.close();
     }
+    break;
+  }
+  case 'sys': {
+    // guest clock and listening TCP sockets (state 0A = LISTEN)
+    const listeners = [];
+    for (const f of ['/proc/net/tcp', '/proc/net/tcp6']) {
+      for (const l of readFileSync(f, 'utf8').split('\n').slice(1)) {
+        const c = l.trim().split(/\s+/);
+        if (c[3] === '0A') listeners.push(c[1]);
+      }
+    }
+    emit({ type: 'event', kind: 'sys', epoch_ms: Date.now(), tcp_listeners: listeners });
     break;
   }
   case 'sleep':
