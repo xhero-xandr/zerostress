@@ -6,9 +6,19 @@ import { execFileSync } from 'node:child_process';
 const job = JSON.parse(readFileSync(0, 'utf8'));
 const emit = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 
-emit({ type: 'event', kind: 'started', mode: job.mode ?? 'hello', uid: process.getuid() });
+// The supervisor sends {kind:"url", url}. For tests the mode can ride in the URL: ?stub=sleep&ms=20000
+// (stub=fetch is the default, i.e. a plain GET of the URL). Smoke tests set job.mode directly.
+let mode = job.mode;
+if (!mode && job.kind === 'url') {
+  const u = new URL(job.url);
+  mode = u.searchParams.get('stub') ?? 'fetch';
+  if (u.searchParams.has('ms')) job.ms = Number(u.searchParams.get('ms'));
+}
+mode ??= 'hello';
 
-switch (job.mode) {
+emit({ type: 'event', kind: 'started', mode, uid: process.getuid() });
+
+switch (mode) {
   case 'fetch': {
     try {
       const r = await fetch(job.url, { redirect: 'manual', signal: AbortSignal.timeout(job.timeout_ms ?? 5000) });

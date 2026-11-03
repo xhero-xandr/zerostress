@@ -119,8 +119,9 @@ export class Supervisor {
       this.setState(rec, 'failed', { reason: 'supervisor_restart', finishedAt: this.now() });
     }
     for (const rec of this.store.queued()) this.queue.push(rec.id);
-    this.timers.push(setInterval(() => this.sweepQueue(), this.sweepMs));
-    this.timers.push(setInterval(() => this.removeExpired(), 10 * 60 * 1000));
+    // unref: housekeeping timers must never keep the process alive on their own
+    this.timers.push(setInterval(() => this.sweepQueue(), this.sweepMs).unref());
+    this.timers.push(setInterval(() => this.removeExpired(), 10 * 60 * 1000).unref());
     this.removeExpired();
     this.pump();
   }

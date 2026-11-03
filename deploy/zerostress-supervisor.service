@@ -1,0 +1,34 @@
+[Unit]
+Description=ZeroStress supervisor (one disposable Firecracker microVM per job)
+After=network.target firewalld.service
+Wants=firewalld.service
+
+[Service]
+Type=simple
+User=zerostress-sup
+# the primary group owns the API socket, so the web layer (group zerostress-ipc) can connect
+Group=zerostress-ipc
+SupplementaryGroups=kvm
+UMask=0077
+EnvironmentFile=/etc/zerostress/supervisor.env
+WorkingDirectory=/opt/zerostress/supervisor
+ExecStart=/opt/node/bin/node --disable-warning=ExperimentalWarning src/main.ts
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=20
+
+# Hardening verified under SELinux Enforcing with deploy/test/unit-compat.sh (spec 006, section 4).
+# NoNewPrivileges must stay off: the service calls "sudo zsnet up|down". AF_NETLINK is needed by zsnet (ip, nft).
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/zerostress /run/zerostress
+
+[Install]
+WantedBy=multi-user.target
