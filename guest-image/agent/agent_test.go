@@ -222,6 +222,23 @@ func TestBusyWhileJobRuns(t *testing.T) {
 	}
 }
 
+func TestProbeDoesNotMakeNextJobBusy(t *testing.T) {
+	_, dial := serve(t, testConfig("cat"))
+	for i := 0; i < 20; i++ {
+		probe := dial() // a readiness probe: connect, send nothing, close
+		probe.Close()
+		c := dial() // the real job arrives immediately after
+		if _, err := c.Write([]byte(`{"n":1}` + "\n")); err != nil {
+			t.Fatal(err)
+		}
+		st := lastStatus(t, readLines(t, c))
+		c.Close()
+		if st.Status != "ok" {
+			t.Fatalf("round %d: status = %+v", i, st)
+		}
+	}
+}
+
 func TestBadJobs(t *testing.T) {
 	cases := map[string]string{
 		"not json":      "hello",

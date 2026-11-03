@@ -86,17 +86,18 @@ func NewAgent(cfg Config) (*Agent, error) {
 
 func (a *Agent) Handle(conn net.Conn) {
 	defer conn.Close()
-	if !a.busy.CompareAndSwap(false, true) {
-		reject(conn, "busy")
-		return
-	}
-	defer a.busy.Store(false)
-
+	// Read the job first, and only then claim the slot: a readiness probe (connect, no job, close) must not make
+	// the real job that follows it a moment later fail with "busy".
 	job, err := a.readJob(conn)
 	if err != nil {
 		reject(conn, "bad_job")
 		return
 	}
+	if !a.busy.CompareAndSwap(false, true) {
+		reject(conn, "busy")
+		return
+	}
+	defer a.busy.Store(false)
 	st, needNL := a.run(conn, job)
 	log.Printf("job finished: status=%s duration_ms=%d", st.Status, st.DurationMs)
 	if st.Status != "client_gone" {

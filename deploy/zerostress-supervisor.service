@@ -16,6 +16,9 @@ ExecStart=/opt/node/bin/node --disable-warning=ExperimentalWarning src/main.ts
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=20
+# SIGTERM goes to the supervisor only, so it can drain running jobs itself; whatever is left (Firecracker children)
+# is killed when the stop timeout ends. The default (control-group) would kill every microVM at once.
+KillMode=mixed
 
 # Hardening verified under SELinux Enforcing with deploy/test/unit-compat.sh (spec 006, section 4).
 # NoNewPrivileges must stay off: the service calls "sudo zsnet up|down". AF_NETLINK is needed by zsnet (ip, nft).

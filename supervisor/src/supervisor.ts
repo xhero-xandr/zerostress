@@ -314,7 +314,8 @@ export class Supervisor {
       const vm = await raceAbort<VmHandle>(vmP.catch((e) => Promise.reject(asRunError(e, 'fc_api'))), sig);
       void vm.exited.then(() => {
         vmDead = true;
-        if (!destroying) ctl.abort(new RunError('fc_crashed', 'firecracker exited'));
+        // while we are shutting down, a dying VM is our own doing (or systemd's), not a crash
+        if (!destroying) ctl.abort(this.draining ? new RunError('supervisor_restart') : new RunError('fc_crashed', 'firecracker exited'));
       });
       await raceAbort(vm.waitReady(this.config.bootTimeoutMs, sig), sig);
 

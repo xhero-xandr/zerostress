@@ -48,7 +48,7 @@ check "reaches done" "$(wait_state "$id" '^(done|failed)$' 60)" '^done$'
 ev=$(api --max-time 10 "http://localhost/v1/runs/$id/events")
 check "SSE has evidence from the guest (HTTP 200)" "$ev" 'event: evidence.*"status":200'
 check "SSE has the agent status" "$ev" 'event: status.*"status":"ok"'
-check "SSE ends with the done state" "$ev" '"state":"done"[^"]*"?[^e]*$'
+check "SSE ends with the done state" "$(grep '^data:' <<<"$ev" | tail -1)" '"state":"done"'
 v=$(view "$id")
 check "view has no url" "$(grep -c '"url"' <<<"$v")" '^0$'
 host_clean "happy path"
