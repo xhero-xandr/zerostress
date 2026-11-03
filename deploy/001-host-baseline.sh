@@ -16,6 +16,29 @@ install -d -m 0755 -o root -g root /opt/zerostress /opt/zerostress/bin /opt/zero
 install -d -m 0700 -o zerostress-sup -g zerostress-sup /var/lib/zerostress/runs
 install -d -m 0750 -o zerostress-sup -g zerostress-ipc /run/zerostress
 
+# service environment files (secrets live only here, on the host). Created once, never overwritten.
+install -d -m 0755 -o root -g root /etc/zerostress
+if [[ ! -e /etc/zerostress/web.env ]]; then
+  cat >/etc/zerostress/web.env <<'EOF'
+# Environment of zerostress-web. Fill in INFERENCE_API_KEY and INFERENCE_MODEL; do not commit or paste this file anywhere.
+INFERENCE_BASE_URL=https://api.vultrinference.com/v1
+INFERENCE_API_KEY=
+INFERENCE_MODEL=
+# auto | vision | text | rules-only
+AGENT_MODE=auto
+EOF
+  chown root:zerostress-web /etc/zerostress/web.env
+  chmod 0640 /etc/zerostress/web.env
+fi
+if [[ ! -e /etc/zerostress/supervisor.env ]]; then
+  cat >/etc/zerostress/supervisor.env <<'EOF'
+# Environment of zerostress-supervisor (no secrets). Defaults are in docs/specs/006-supervisor-api.md.
+SUP_CONCURRENCY=2
+EOF
+  chown root:zerostress-sup /etc/zerostress/supervisor.env
+  chmod 0640 /etc/zerostress/supervisor.env
+fi
+
 # /run is tmpfs: recreate the socket directory at every boot
 cat >/etc/tmpfiles.d/zerostress.conf <<'EOF'
 d /run/zerostress 0750 zerostress-sup zerostress-ipc -

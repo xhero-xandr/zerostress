@@ -13,6 +13,8 @@
 | `/opt/zerostress-src` | копия рабочего дерева (без git) | `deploy/dev-sync.sh` с локальной машины |
 | `/var/lib/zerostress/runs` | каталоги запусков, на каждый запуск свой, после него удаляется | супервизор (тесты создают и убирают сами) |
 | `/run/zerostress` | каталог для сокета супервизора | `tmpfiles.d` создаёт при каждой загрузке |
+| `/etc/zerostress/web.env` | окружение веб-слоя, здесь живёт ключ Vultr Inference (`root:zerostress-web`, `0640`); читают только `root` и `zerostress-web` | создаёт `deploy/001-host-baseline.sh` один раз, повторный запуск не перезаписывает |
+| `/etc/zerostress/supervisor.env` | настройки супервизора без секретов (`root:zerostress-sup`, `0640`) | то же |
 
 Системные настройки: пользователи `zerostress-sup` (группа `kvm`) и `zerostress-web`, группа `zerostress-ipc`; `/dev/kvm` с правами `0660` (правило udev); зона `zerostress` и политика `zerostress-egress` в `firewalld`; `net.ipv4.ip_forward=1` (`/etc/sysctl.d/90-zerostress.conf`); правило sudoers только для `zsnet up|down` (`/etc/sudoers.d/zerostress-net`). Таблица `inet zerostress` в nftables создаётся при первом `zsnet up` и после перезагрузки отсутствует до него, это нормально. Наружу слушает только `sshd`. SELinux в режиме `Enforcing`.
 
