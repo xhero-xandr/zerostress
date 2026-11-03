@@ -29,6 +29,10 @@ ssh vultr 'bash /opt/zerostress-src/guest-image/install.sh'                     
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                       # дымовой тест образа, Chromium и сеть
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
 ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'        # совместимость параметров юнита с SELinux (см. спецификацию 006)
+ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                        # установить и запустить службу супервизора
+ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-e2e.sh'                   # сквозной тест службы с настоящими ВМ (47 проверок)
+ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-timeouts.sh'              # лимит агента 60 с и жёсткий потолок (около 2 минут, временно меняет юнит и восстанавливает)
+ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-probe.sh'                        # юнит systemd на ВМ: лимиты cgroup, сигналы, очистка (остановите службу супервизора на время теста)
 ```
 Отказы SELinux на этом сервере читаются прямо из `/var/log/audit/audit.log` и `audit.log.1` (лог ротируется при 8 МБ): `ausearch` ничего не находит даже по номеру записи.
 После сборки образа каталог `/var/tmp/zerostress-build` (около 1,6 ГБ) удаляется вручную: `rm -rf /var/tmp/zerostress-build`.

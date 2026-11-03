@@ -30,11 +30,26 @@ host_clean() { # name
   [[ $p == 0 && $q == 0 && $d == 0 ]] && ok "host clean after: $1" || bad "host clean after: $1" "firecracker=$p zstap=$q rundirs=$d"
 }
 
+echo "== controls: the detectors of this test must be able to fail"
+ip link add zstap9 type dummy
+out=$( (host_clean "control") 2>&1 )
+ip link del zstap9
+[[ $out =~ FAIL ]] && ok "control: host_clean notices a leftover interface" || bad "control: host_clean is blind" "$out"
+check "control: state of an unknown run is empty" "$(state 00000000-0000-4000-8000-000000000000)" '^$'
+check "control: wait_state reports a timeout instead of success" "$(wait_state 00000000-0000-4000-8000-000000000000 '^done$' 1)" '^timeout'
+
 echo "== service"
 check "service active" "$(systemctl is-active zerostress-supervisor)" '^active$'
 h=$(api http://localhost/v1/health)
 check "health ok with image checksum" "$h" '"ok":true.*"image_sha256":"[0-9a-f]{64}"'
 check "socket is 0660 group zerostress-ipc" "$(stat -c '%a %G' $SOCK)" '^660 zerostress-ipc$'
+
+echo "== who may talk to the socket"
+code() { sudo -u "$1" curl -sS -o /dev/null -w '%{http_code}' --max-time 5 --unix-socket "$SOCK" http://localhost/v1/health 2>/dev/null; }
+check "web user (group zerostress-ipc) gets 200" "$(code zerostress-web)" '^200$'
+check "supervisor user itself gets 200" "$(code zerostress-sup)" '^200$'
+check "linuxuser (not in the group) is refused" "$(code linuxuser)" '^000$'
+check "nobody is refused" "$(code nobody)" '^000$'
 
 echo "== request validation"
 check "file: URL rejected" "$(api -o /dev/null -w '%{http_code}' -X POST -d '{"kind":"url","url":"file:///etc/passwd"}' http://localhost/v1/runs)" '^400$'
@@ -79,6 +94,17 @@ check "service restarted by systemd" "$(systemctl is-active zerostress-superviso
 check "interrupted run is failed" "$(wait_state "$id" '^failed$' 20)" '^failed$'
 check "reason supervisor_restart" "$(field "$(view "$id")" reason)" '^supervisor_restart$'
 host_clean "supervisor crash"
+
+echo "== queued runs survive a supervisor crash, running ones do not"
+r1=$(post 'https://example.com/?stub=sleep&ms=30000&n=r1' | rid); r2=$(post 'https://example.com/?stub=sleep&ms=30000&n=r2' | rid)
+q1=$(post 'https://example.com/?stub=sleep&ms=3000&n=q1' | rid); q2=$(post 'https://example.com/?stub=sleep&ms=3000&n=q2' | rid)
+check "first two are running" "$(wait_state "$r1" '^running$' 30) $(wait_state "$r2" '^running$' 30)" '^running running$'
+check "the other two wait in the queue" "$(state "$q1") $(state "$q2")" '^queued queued$'
+kill -9 "$(systemctl show -p MainPID --value zerostress-supervisor)"
+for _ in $(seq 1 40); do api -m 2 http://localhost/v1/health >/dev/null 2>&1 && break; sleep 0.5; done
+check "running ones failed with supervisor_restart" "$(wait_state "$r1" '^failed$' 20) $(field "$(view "$r1")" reason) $(wait_state "$r2" '^failed$' 5) $(field "$(view "$r2")" reason)" '^failed supervisor_restart failed supervisor_restart$'
+check "queued ones ran to the end after the restart" "$(wait_state "$q1" '^done$' 60) $(wait_state "$q2" '^done$' 60)" '^done done$'
+host_clean "queue across a crash"
 
 echo "== graceful restart mid-run"
 id=$(post 'https://example.com/?stub=sleep&ms=30000' | rid)
