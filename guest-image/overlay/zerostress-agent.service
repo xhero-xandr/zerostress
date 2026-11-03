@@ -1,0 +1,13 @@
+[Unit]
+Description=ZeroStress guest agent (vsock job receiver)
+After=local-fs.target
+
+[Service]
+ExecStart=/usr/local/bin/zerostress-agent -port 5000 -user pw -timeout 60s -- /opt/node/bin/node /opt/collector/collect.mjs
+StandardOutput=journal+console
+StandardError=journal+console
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

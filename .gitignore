@@ -1,0 +1,27 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*id_rsa*
+
+# dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+guest-image/build/
+guest-image/agent/zerostress-agent
+
+# images and run data never go to the repository
+*.ext4
+*.squashfs
+vmlinux*
+*.sock
+runs/
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
