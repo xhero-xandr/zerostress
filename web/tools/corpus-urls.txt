@@ -1,0 +1,49 @@
+# Ordinary public pages for the false-hit check (tools/corpus.mjs). One address per line; # starts a comment.
+# Reference and documentation
+https://example.com/
+https://en.wikipedia.org/wiki/Phishing
+https://en.wikipedia.org/wiki/Prompt_injection
+https://en.wikipedia.org/wiki/Computer_security
+https://ru.wikipedia.org/wiki/Фишинг
+https://zh.wikipedia.org/wiki/网络钓鱼
+https://es.wikipedia.org/wiki/Phishing
+https://de.wikipedia.org/wiki/Phishing
+https://fr.wikipedia.org/wiki/Hameçonnage
+https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview
+https://developer.mozilla.org/en-US/docs/Web/Security
+https://docs.python.org/3/tutorial/introduction.html
+https://nodejs.org/en/about
+https://www.w3.org/TR/WCAG21/
+https://httpbin.org/html
+https://httpbin.org/forms/post
+# Security and AI-safety writing (talks about injection, may contain the phrases themselves)
+https://owasp.org/www-community/attacks/Phishing
+https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+https://www.cloudflare.com/learning/security/threats/phishing-attack/
+https://www.cloudflare.com/learning/ai/prompt-injection/
+https://www.cisa.gov/secure-our-world/recognize-and-report-phishing
+https://support.google.com/accounts/answer/6063376
+https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview
+https://platform.openai.com/docs/guides/prompt-engineering
+# Shops, recipes, news, forums, legal
+https://books.toscrape.com/
+https://quotes.toscrape.com/
+https://news.ycombinator.com/
+https://lobste.rs/
+https://www.bbc.com/news
+https://www.theguardian.com/international
+https://www.allrecipes.com/recipe/10813/best-chocolate-chip-cookies/
+https://www.bbcgoodfood.com/recipes/classic-lasagne
+https://www.gnu.org/licenses/gpl-3.0.html
+https://policies.google.com/terms
+https://www.apple.com/legal/internet-services/terms/site.html
+https://github.com/about
+https://github.com/nodejs/node/blob/main/README.md
+# Other languages
+https://habr.com/ru/articles/
+https://lenta.ru/
+https://www.rbc.ru/
+https://www.lemonde.fr/
+https://www.spiegel.de/
+https://elpais.com/
+https://www.people.com.cn/

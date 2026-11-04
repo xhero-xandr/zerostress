@@ -245,6 +245,7 @@ const BENIGN: Array<[string, string]> = [
   ['phishing: reward', 'You will receive a bonus of 50 dollars. Confirm your card to get it.'],
   ['a shop with a test environment', 'Welcome to the test environment of our shop.'],
   ['developer mode setting', 'Developer mode enabled in settings.'],
+  ['a page reference and the next sentence', 'See the deprecations page for the current timeline.\nFor new prompt objects, use the editor.'],
   ['instructions are available at a url', 'The installation instructions are available at https://docs.example.com/setup'],
   ['click here for the instructions', 'Click here for the instructions to set up your router.'],
   ['for further instructions', 'For further instructions, call us.'],

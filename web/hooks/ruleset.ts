@@ -37,6 +37,9 @@ const MATCH_VIEWS: readonly ViewName[] = ['lat', 'leet', 'cyr', 'raw', 'rot13', 
 const NB = String.raw`[^\p{L}\p{N}]`;
 const WD = String.raw`[\p{L}\p{N}']`;
 const gap = (n: number) => String.raw`(?:${NB}+${WD}+){0,${n}}${NB}+`;
+// the same, but inside one sentence: no full stop, question or exclamation mark, semicolon or line break in between
+const NS = String.raw`[^\p{L}\p{N}.!?;\n]`;
+const sgap = (n: number) => String.raw`(?:${NS}+${WD}+){0,${n}}${NS}+`;
 const boundary = (s: string) => String.raw`(?<![\p{L}\p{N}])(?:${s})(?![\p{L}\p{N}])`;
 
 const fail = (where: string, msg: string): never => {
@@ -89,7 +92,7 @@ function expand(where: string, text: string, macros: Macros, depth = 0): string 
 
 /**
  * Parts: "b:<alternatives>" (a whole word or phrase, bounded by non-letters), "gap:<n>" (up to n words in between),
- * "raw:<regular expression>". @NAME inside a part is a macro.
+ * "sgap:<n>" (the same inside one sentence), "raw:<regular expression>". @NAME inside a part is a macro.
  */
 function buildPattern(where: string, parts: unknown, macros: Macros): string {
   const list = stringList(where, parts, 1, 60, LIMITS.macroChars);
@@ -98,9 +101,9 @@ function buildPattern(where: string, parts: unknown, macros: Macros): string {
     const at = part.indexOf(':');
     const kind = at < 0 ? '' : part.slice(0, at);
     const arg = at < 0 ? '' : part.slice(at + 1);
-    if (kind === 'gap') {
-      if (!/^[0-9]$/.test(arg)) fail(where, `gap needs a number from 0 to 9, got "${arg}"`);
-      out += gap(Number(arg));
+    if (kind === 'gap' || kind === 'sgap') {
+      if (!/^[0-9]$/.test(arg)) fail(where, `${kind} needs a number from 0 to 9, got "${arg}"`);
+      out += kind === 'gap' ? gap(Number(arg)) : sgap(Number(arg));
     } else if (kind === 'b') {
       if (arg === '') fail(where, 'empty b: part');
       out += boundary(expand(where, arg, macros));
@@ -108,7 +111,7 @@ function buildPattern(where: string, parts: unknown, macros: Macros): string {
       if (arg === '') fail(where, 'empty raw: part');
       out += expand(where, arg, macros);
     } else {
-      fail(where, `a part must start with b:, gap: or raw:, got "${part.slice(0, 20)}"`);
+      fail(where, `a part must start with b:, gap:, sgap: or raw:, got "${part.slice(0, 20)}"`);
     }
   }
   return out;

@@ -73,6 +73,7 @@ export const MUTATIONS = [
   ['macros file not required', 'hooks/ruleset.ts', "if (!docs.has('macros.json')) fail(", 'if (false) fail(', LOADER],
   ['any schema allowed in a rules file', 'hooks/ruleset.ts', "if (doc.schema !== 1) fail(name, 'schema must be 1');", '', LOADER],
   ['any fold allowed', 'hooks/ruleset.ts', "if ('fold' in r && r.fold !== 'cyr') fail(", 'if (false) fail(', LOADER],
+  ['a sentence gap crosses sentences', 'hooks/ruleset.ts', "out += kind === 'gap' ? gap(Number(arg)) : sgap(Number(arg));", 'out += gap(Number(arg));', LOADER],
   ['gaps are all nine words wide', 'hooks/ruleset.ts', 'out += gap(Number(arg));', 'out += gap(9);', LOADER],
   ['the hooks start without rules when loading fails', 'hooks/rules.ts', "const loaded = loadRuleset(fileURLToPath(new URL('./rules/', import.meta.url)));", "let loaded: ReturnType<typeof loadRuleset>;\ntry { loaded = loadRuleset(fileURLToPath(new URL('./rules/', import.meta.url))); } catch { loaded = { rules: [], squashed: [], hash: '', files: [] }; }", LOADER],
   ['the state does not carry the rule hash', 'hooks/hooks.ts', 'ruleset: RULESET_SHA256,', "ruleset: '',", LOADER],

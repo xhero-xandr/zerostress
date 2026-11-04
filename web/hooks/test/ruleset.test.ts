@@ -82,7 +82,7 @@ const BAD: Array<[string, () => Files, RegExp]> = [
   ['a view a rule cannot match on', () => withRule((r) => { r.views = ['squashed_lat']; }), /cannot match on the view/],
   ['a view listed twice', () => withRule((r) => { r.views = ['lat', 'lat']; }), /listed twice/],
   ['an unknown fold', () => withRule((r) => { r.fold = 'lat'; }), /fold can only be/],
-  ['a part without a kind', () => withRule((r) => { r.pattern = ['alpha']; }), /must start with b:, gap: or raw:/],
+  ['a part without a kind', () => withRule((r) => { r.pattern = ['alpha']; }), /must start with b:, gap:, sgap: or raw:/],
   ['a gap that is too large', () => withRule((r) => { r.pattern = ['b:alpha', 'gap:10', 'b:beta']; }), /gap needs a number/],
   ['a gap that is not a number', () => withRule((r) => { r.pattern = ['b:alpha', 'gap:x', 'b:beta']; }), /gap needs a number/],
   ['an empty part', () => withRule((r) => { r.pattern = ['b:']; }), /empty b: part/],
@@ -264,4 +264,23 @@ test('"fold": "cyr" folds the pattern like the cyrillic view (й → и, ё → 
     r.examples = { fire: ['Йод есть'], quiet: ['иод'.replace('и', 'у')] };
   })));
   assert.equal(rs.rules[0]!.re.source.includes('й'), false);
+});
+
+test('"sgap:N" stays inside one sentence; "gap:N" does not', () => {
+  const sentence = (kind: string) => withRule((r) => {
+    r.pattern = ['b:alpha', `${kind}:3`, 'b:beta'];
+    r.examples = { fire: ['alpha x beta'], quiet: ['gamma'] };
+  });
+  // the same text fires with a gap and must not with a sentence gap
+  const across = ['alpha x. beta', 'alpha x\nbeta', 'alpha x; beta', 'alpha x? beta'];
+  const withSgap = loadRuleset(write(withRule((r) => {
+    r.pattern = ['b:alpha', 'sgap:3', 'b:beta'];
+    r.examples = { fire: ['alpha x beta', 'alpha, x, beta'], quiet: across };
+  })));
+  assert.equal(withSgap.rules.length, 1);
+  assert.throws(() => loadRuleset(write(withRule((r) => {
+    r.pattern = ['b:alpha', 'gap:3', 'b:beta'];
+    r.examples = { fire: ['alpha x beta'], quiet: across };
+  }))), /a quiet example fires/);
+  assert.ok(sentence('sgap'));
 });

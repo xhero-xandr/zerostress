@@ -131,6 +131,8 @@ test('a thread that ran past its deadline is really stopped, not left spinning',
     const r = await g.inspect({ type: 'evidence', kind: 'page', mode: 'spin', path: trace });
     assert.equal(r.findings[0]!.rule, 'hook_timeout');
     assert.ok(existsSync(trace), 'the thread did run');
+    // terminate() is asynchronous: the thread may leave one last trace while it is going down
+    await new Promise((res) => setTimeout(res, 300));
     const before = statSync(trace).mtimeMs;
     await new Promise((res) => setTimeout(res, 400));
     assert.equal(statSync(trace).mtimeMs, before, 'no new trace after the deadline');
