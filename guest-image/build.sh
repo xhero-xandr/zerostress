@@ -135,7 +135,7 @@ cat >"$OUT/manifest.json" <<EOF
   "node": {"version": "$NODE_VERSION", "sha256": "$NODE_SHA256"},
   "playwright": "$PW_VERSION",
   "agent_sha256": "$(sha256sum "$AGENT_BIN" | awk '{print $1}')",
-  "collector_entry_sha256": "$(sha256sum "$COLLECTOR_ENTRY" | awk '{print $1}')",
+  "collector_entry_sha256": "$(cat "$COLLECTOR_ENTRY" "$(dirname "$COLLECTOR_ENTRY")"/lib/*.mjs 2>/dev/null | sha256sum | awk '{print $1}')",
   "image": {"file": "guest-rootfs.ext4", "sha256": "$IMG_SHA256"}
 }
 EOF

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared by the guest-image tests: boot one microVM (network slot 0) from the installed image with the stub
-# collector, talk to its agent through the vsock socket, clean up on exit. Source it, do not run it. Run as root.
+# collector (or COLLECTOR_ENTRY=...), talk to its agent through the vsock socket, clean up on exit. Source it, do not run it. Run as root.
 # The caller sets `set -uo pipefail`.
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 NODE=/opt/node/bin/node
@@ -32,7 +32,7 @@ vm_boot() {
   local t
   t=$(date +%s.%N); cp --sparse=always "$base" "$D/rootfs.ext4"
   printf 'copy %.2fs\n' "$(awk -v a="$(date +%s.%N)" -v b="$t" "BEGIN{print a-b}")"
-  bash "$HERE/../apply-overlay.sh" "$D/rootfs.ext4" "$agent" "$HERE/stub-collector.mjs" | tail -2
+  bash "$HERE/../apply-overlay.sh" "$D/rootfs.ext4" "$agent" "${COLLECTOR_ENTRY:-$HERE/stub-collector.mjs}" | tail -2
   [[ ${PIPESTATUS[0]} == 0 ]] || { echo "overlay failed"; exit 1; }
   chown $SUP:$SUP "$D/rootfs.ext4"; chmod 0600 "$D/rootfs.ext4"
 

@@ -23,6 +23,11 @@ ln -sf /etc/systemd/system/zerostress-agent.service "$M/etc/systemd/system/multi
 # collector entry point (root-owned; the unprivileged user can read but not modify it)
 install -d -m 0755 -o root -g root "$M/opt/collector"
 install -m 0644 -o root -g root "$COLLECTOR" "$M/opt/collector/collect.mjs"
+# the real collector keeps its modules in lib/ next to the entry point (the test stub is a single file)
+if [[ -d $(dirname "$COLLECTOR")/lib ]]; then
+  install -d -m 0755 -o root -g root "$M/opt/collector/lib"
+  install -m 0644 -o root -g root "$(dirname "$COLLECTOR")"/lib/*.mjs "$M/opt/collector/lib/"
+fi
 
 # DNS: static public resolvers (variant A in spec 003)
 rm -f "$M/etc/resolv.conf"

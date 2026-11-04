@@ -3,6 +3,8 @@ Description=ZeroStress guest agent (vsock job receiver)
 After=local-fs.target
 
 [Service]
+# screenshots and saved downloads of the collector go to tmpfs, owned by the job user (spec 005, 3.6)
+ExecStartPre=/usr/bin/install -d -o pw -g pw -m 0700 /run/zerostress/artifacts
 ExecStart=/usr/local/bin/zerostress-agent -port 5000 -user pw -timeout 60s -- /opt/node/bin/node /opt/collector/collect.mjs
 NoNewPrivileges=yes
 ProtectSystem=full
