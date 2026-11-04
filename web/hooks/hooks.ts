@@ -46,6 +46,56 @@ function errorFinding(place: string): Finding {
   return { rule: 'hook_error', category: 'error', strength: 'strong', place, view: 'none', layer: 0, quote: '' };
 }
 
+function withhold(value: unknown, depth: number): unknown {
+  if (depth > MAX_DEPTH) return WITHHELD;
+  if (typeof value === 'string') return WITHHELD;
+  if (Array.isArray(value)) return value.map((x) => withhold(x, depth + 1));
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (depth === 0 && STRUCTURAL.has(k) && structuralOk(k, v)) out[k] = v;
+      else out[`withheld_${Object.keys(out).length}`] = withhold(v, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** The event with every string replaced by a placeholder; if even that cannot be built, an empty marker. */
+export function withholdEvent(event: unknown): unknown {
+  try {
+    return withhold(event, 0);
+  } catch {
+    return { withheld: true };
+  }
+}
+
+export function makeFinding(rule: string, place: string): Finding {
+  return { ...errorFinding(place), rule };
+}
+
+export function makeState(triggered: boolean, findings: Finding[]): HookState {
+  return {
+    triggered,
+    mode: triggered ? 'rules_only' : 'model',
+    require_confirmation: triggered,
+    signal: triggered ? 'injection_attempt' : null,
+    findings: [...findings],
+  };
+}
+
+/**
+ * Runs one harmless text through every code path (all rule sets, the decoders), so that the first real event does not
+ * pay for compiling them: in a fresh thread that is 200-300 ms. The state it touches is thrown away.
+ */
+export function warmUp(): void {
+  const sample = [
+    'Opening hours 9 to 5. Привет мир, как дела? 你好，欢迎来到我们的网站。 Hola, bonjour, guten Tag.',
+    'aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3Q= 100%25 sure &amp; &#65; café',
+  ].join(String.fromCharCode(10));
+  createHooks().inspect({ type: 'evidence', kind: 'warm', text: sample, list: [sample], nested: { text: sample } });
+}
+
 export interface Hooks {
   inspect(event: unknown): Inspected;
   state(): HookState;
@@ -96,21 +146,6 @@ export function createHooks(): Hooks {
     return value;
   }
 
-  function withhold(value: unknown, depth: number): unknown {
-    if (depth > MAX_DEPTH) return WITHHELD;
-    if (typeof value === 'string') return WITHHELD;
-    if (Array.isArray(value)) return value.map((x) => withhold(x, depth + 1));
-    if (value !== null && typeof value === 'object') {
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (depth === 0 && STRUCTURAL.has(k) && structuralOk(k, v)) out[k] = v;
-        else out[`withheld_${Object.keys(out).length}`] = withhold(v, depth + 1);
-      }
-      return out;
-    }
-    return value;
-  }
-
   return {
     inspect(event) {
       const findings: Finding[] = [];
@@ -138,23 +173,11 @@ export function createHooks(): Hooks {
       } catch {
         const f = [errorFinding('event')];
         keep(f);
-        let safe: unknown;
-        try {
-          safe = withhold(event, 0);
-        } catch {
-          safe = { withheld: true }; // even walking the event failed: nothing of it goes on
-        }
-        return { event: safe, findings: f };
+        return { event: withholdEvent(event), findings: f };
       }
     },
     state() {
-      return {
-        triggered,
-        mode: triggered ? 'rules_only' : 'model',
-        require_confirmation: triggered,
-        signal: triggered ? 'injection_attempt' : null,
-        findings: [...all],
-      };
+      return makeState(triggered, all);
     },
   };
 }

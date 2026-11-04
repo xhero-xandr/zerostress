@@ -60,4 +60,4 @@ app/
 ```
 
 ## Команды
-Рабочий сервер описан в [docs/SERVER.md](docs/SERVER.md) (`ssh vultr`, исходники попадают на него только через `bash deploy/dev-sync.sh`). Сборка агента и образа гостя, дымовой тест и тест сети: команды в том же файле. Супервизор: `supervisor/build.sh` (проверки, тесты с `-race`, сборка), установка `deploy/006-supervisor.sh`. В `web/` пока только хуки-детекторы (`web/hooks/`, спецификация 009): `npm test` и `npm run typecheck` в `web/`, зависимости ставятся `npm ci --ignore-scripts`. Фреймворка и привратника пока нет.
+Рабочий сервер описан в [docs/SERVER.md](docs/SERVER.md) (`ssh vultr`, исходники попадают на него только через `bash deploy/dev-sync.sh`). Сборка агента и образа гостя, дымовой тест и тест сети: команды в том же файле. Супервизор: `supervisor/build.sh` (проверки, тесты с `-race`, сборка), установка `deploy/006-supervisor.sh`. В `web/` пока только хуки-детекторы (`web/hooks/`, спецификация 009): `npm test`, `npm run typecheck` и `npm run mutate` (проверка тестов мутациями) в `web/`, зависимости ставятся `npm ci --ignore-scripts`. Фреймворка и привратника пока нет.
