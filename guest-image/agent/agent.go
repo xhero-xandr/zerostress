@@ -8,6 +8,12 @@
 //  3. Agent writes ONE final line: {"type":"status",...}. A newline is inserted first if the
 //     collector output did not end with one, so the status is always on its own line.
 //  4. Agent closes the connection. One job at a time; a concurrent connection gets "busy".
+//
+// Protocol v2 (sessions, spec 005/006): if the job has a "session" object, the collector's stdin stays open and
+// every further client line is forwarded to it as a command. The agent checks only the form of a command (a JSON
+// object of at most MaxCmd bytes, at most MaxCmds per job); anything else ends the job with status "bad_command".
+// The collector's wall-clock limit for a session is session.max_s (capped by SessionMax) plus SessionGrace.
+// For a job without "session" the client's extra lines are discarded, as in v1.
 package main
 
 import (
@@ -37,6 +43,11 @@ type Config struct {
 	MaxJob         int
 	ReadJobTimeout time.Duration
 	Env            []string
+	// protocol v2 (zero values get defaults in NewAgent)
+	SessionMax   time.Duration // upper bound for session.max_s
+	SessionGrace time.Duration // added on top of max_s before the agent kills the collector
+	MaxCmd       int           // bytes per command line
+	MaxCmds      int           // commands per job
 }
 
 type Agent struct {
@@ -50,6 +61,7 @@ type status struct {
 	Status     string `json:"status"`
 	ExitCode   *int   `json:"exit_code,omitempty"`
 	StderrTail string `json:"stderr_tail,omitempty"`
+	Commands   int    `json:"commands,omitempty"`
 	DurationMs int64  `json:"duration_ms"`
 }
 
@@ -57,6 +69,7 @@ const (
 	reasonNone int32 = iota
 	reasonOversize
 	reasonGone
+	reasonBadCommand
 )
 
 const stderrTailBytes = 2048
@@ -64,6 +77,18 @@ const stderrTailBytes = 2048
 func NewAgent(cfg Config) (*Agent, error) {
 	if len(cfg.Cmd) == 0 {
 		return nil, errors.New("empty collector command")
+	}
+	if cfg.SessionMax == 0 {
+		cfg.SessionMax = 600 * time.Second
+	}
+	if cfg.SessionGrace == 0 {
+		cfg.SessionGrace = 30 * time.Second
+	}
+	if cfg.MaxCmd == 0 {
+		cfg.MaxCmd = 4096
+	}
+	if cfg.MaxCmds == 0 {
+		cfg.MaxCmds = 200
 	}
 	a := &Agent{cfg: cfg}
 	if cfg.User != "" {
@@ -84,11 +109,53 @@ func NewAgent(cfg Config) (*Agent, error) {
 	return a, nil
 }
 
+// session describes the optional "session" object of a job.
+type session struct {
+	on   bool
+	maxS float64
+}
+
+// parseSession is strict: a "session" of the wrong type makes the whole job bad.
+func parseSession(job []byte) (session, error) {
+	var j struct {
+		Session *struct {
+			MaxS *float64 `json:"max_s"`
+		} `json:"session"`
+	}
+	if err := json.Unmarshal(job, &j); err != nil {
+		return session{}, err
+	}
+	if j.Session == nil {
+		return session{}, nil
+	}
+	m := 300.0
+	if j.Session.MaxS != nil {
+		m = *j.Session.MaxS
+	}
+	if m < 1 {
+		m = 1
+	}
+	return session{on: true, maxS: m}, nil
+}
+
 func (a *Agent) Handle(conn net.Conn) {
 	defer conn.Close()
+	// One buffered reader for the whole connection: a second reader would lose commands that arrive right behind
+	// the job line. Its buffer must hold the longest line we accept (job or command).
+	size := a.cfg.MaxJob
+	if a.cfg.MaxCmd > size {
+		size = a.cfg.MaxCmd
+	}
+	br := bufio.NewReaderSize(conn, size+2)
+
 	// Read the job first, and only then claim the slot: a readiness probe (connect, no job, close) must not make
 	// the real job that follows it a moment later fail with "busy".
-	job, err := a.readJob(conn)
+	job, err := a.readJob(conn, br)
+	if err != nil {
+		reject(conn, "bad_job")
+		return
+	}
+	sess, err := parseSession(job)
 	if err != nil {
 		reject(conn, "bad_job")
 		return
@@ -98,43 +165,67 @@ func (a *Agent) Handle(conn net.Conn) {
 		return
 	}
 	defer a.busy.Store(false)
-	st, needNL := a.run(conn, job)
-	log.Printf("job finished: status=%s duration_ms=%d", st.Status, st.DurationMs)
+	st, needNL := a.run(conn, br, job, sess)
+	log.Printf("job finished: status=%s duration_ms=%d session=%v commands=%d", st.Status, st.DurationMs, sess.on, st.Commands)
 	if st.Status != "client_gone" {
 		writeStatus(conn, st, needNL)
+		if st.Status == "bad_command" {
+			// the rest of the offending line may still be on its way: closing with unread input would reset the
+			// connection and could lose the status line (the reader goroutine has already returned)
+			_ = conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+			_, _ = io.Copy(io.Discard, io.LimitReader(br, 1<<20))
+		}
 	}
 }
 
-func (a *Agent) readJob(conn net.Conn) ([]byte, error) {
+func (a *Agent) readJob(conn net.Conn, br *bufio.Reader) ([]byte, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(a.cfg.ReadJobTimeout))
 	defer conn.SetReadDeadline(time.Time{})
-	br := bufio.NewReaderSize(io.LimitReader(conn, int64(a.cfg.MaxJob)+1), 4096)
-	line, err := br.ReadBytes('\n')
+	line, err := br.ReadSlice('\n') // bufio.ErrBufferFull: longer than anything we accept
 	if err != nil {
 		return nil, err
 	}
 	body := bytes.TrimSpace(line)
-	if len(body) == 0 || body[0] != '{' || !json.Valid(body) {
-		return nil, errors.New("job is not a JSON object")
+	if len(body) == 0 || len(body) > a.cfg.MaxJob || body[0] != '{' || !json.Valid(body) {
+		return nil, errors.New("job is not a JSON object of acceptable size")
 	}
-	return append(body, '\n'), nil
+	return append(append([]byte(nil), body...), '\n'), nil // copy: the slice belongs to the reader's buffer
 }
 
-func (a *Agent) run(conn net.Conn, job []byte) (status, bool) {
+func (a *Agent) run(conn net.Conn, br *bufio.Reader, job []byte, sess session) (status, bool) {
 	start := time.Now()
 	st := status{Type: "status"}
+	var forwarded atomic.Int32
 	finish := func(s string) (status, bool) {
 		st.Status = s
+		st.Commands = int(forwarded.Load())
 		st.DurationMs = time.Since(start).Milliseconds()
 		return st, false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), a.cfg.Timeout)
+	timeout := a.cfg.Timeout
+	if sess.on {
+		s := time.Duration(sess.maxS * float64(time.Second))
+		if s > a.cfg.SessionMax {
+			s = a.cfg.SessionMax
+		}
+		timeout = s + a.cfg.SessionGrace
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, a.cfg.Cmd[0], a.cfg.Cmd[1:]...)
 	cmd.Env = a.cfg.Env
-	cmd.Stdin = bytes.NewReader(job)
+	var stdin io.WriteCloser
+	if sess.on {
+		var err error
+		if stdin, err = cmd.StdinPipe(); err != nil {
+			st.StderrTail = err.Error()
+			return finish("start_failed")
+		}
+	} else {
+		cmd.Stdin = bytes.NewReader(job)
+	}
 	stderr := &tailBuf{max: stderrTailBytes}
 	cmd.Stderr = stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: a.cred}
@@ -157,11 +248,75 @@ func (a *Agent) run(conn net.Conn, job []byte) (status, bool) {
 			cancel()
 		}
 	}
-	// A read returning means the client closed (or errored): kill the job.
+
+	// Lines for the collector's stdin: the job first, then commands, written in order by one goroutine. It never
+	// closes the channel (the reader may still send); it ends with the context.
+	lines := make(chan []byte, 16)
+	if sess.on {
+		lines <- job
+		go func() {
+			broken := false
+			for {
+				select {
+				case l := <-lines:
+					if broken {
+						continue
+					}
+					if _, err := stdin.Write(l); err != nil {
+						broken = true // the collector has gone; keep draining so the reader never blocks
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	// The client's side of the connection. A read that returns means the client closed or errored: kill the job.
 	go func() {
-		n, err := io.Copy(io.Discard, conn)
-		log.Printf("client side ended: extra_bytes=%d err=%v", n, err)
-		stop(reasonGone)
+		if !sess.on {
+			n, err := io.Copy(io.Discard, br)
+			log.Printf("client side ended: extra_bytes=%d err=%v", n, err)
+			stop(reasonGone)
+			return
+		}
+		count := 0
+		for {
+			line, err := br.ReadSlice('\n')
+			if err != nil {
+				if errors.Is(err, bufio.ErrBufferFull) {
+					log.Printf("command line too long")
+					stop(reasonBadCommand)
+				} else {
+					log.Printf("client side ended: err=%v commands=%d", err, count)
+					stop(reasonGone)
+				}
+				return
+			}
+			body := bytes.TrimSpace(line)
+			if len(body) == 0 {
+				continue
+			}
+			if len(body) > a.cfg.MaxCmd || body[0] != '{' || !json.Valid(body) {
+				log.Printf("bad command line (%d bytes)", len(body))
+				stop(reasonBadCommand)
+				return
+			}
+			count++
+			if count > a.cfg.MaxCmds {
+				log.Printf("too many commands")
+				stop(reasonBadCommand)
+				return
+			}
+			forwarded.Store(int32(count))
+			cp := append(append([]byte(nil), body...), '\n')
+			select {
+			case lines <- cp:
+			default: // commands are sent one at a time, so a full queue means a misbehaving client
+				stop(reasonBadCommand)
+				return
+			}
+		}
 	}()
 
 	var written int64
@@ -208,6 +363,9 @@ func (a *Agent) run(conn net.Conn, job []byte) (status, bool) {
 		return s, needNL
 	case reasonGone:
 		s, _ := finish("client_gone")
+		return s, needNL
+	case reasonBadCommand:
+		s, _ := finish("bad_command")
 		return s, needNL
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
