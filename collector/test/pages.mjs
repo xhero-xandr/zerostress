@@ -49,6 +49,16 @@ const routes = {
 <img alt="${INJECTION} (alt)" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
 <!-- ${INJECTION} (comment) -->
 <svg width="10" height="10"><title>${INJECTION} (svg)</title></svg>`, `<title>${INJECTION} (title)</title>`),
+  // injection text in the places a page can put it besides its body (spec 009)
+  '/inject-places': () => html(
+    `<h1>Account</h1><a href="/final?note=${encodeURIComponent(INJECTION)}">${INJECTION} (link text)</a>
+<form action="/final" method="post"><label>${INJECTION} (label)<input name="u" placeholder="${INJECTION} (placeholder)"></label></form>
+<script>console.log("${INJECTION} (console)"); alert("${INJECTION} (dialog)");</script>`,
+    `<title>Account</title><meta name="description" content="${INJECTION} (meta)">`),
+  '/inject-download': (req, res) => {
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-disposition': `attachment; filename="${INJECTION}.bin"` });
+    res.end('x');
+  },
   '/dl': () => html('<h1>Files</h1><a href="/file.bin">Download report</a><a href="/data.txt">Plain file</a>', '<title>Files</title>'),
   '/file.bin': (req, res) => {
     res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="report.bin"' });
