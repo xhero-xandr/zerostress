@@ -50,7 +50,7 @@
 |---|---|---|
 | `zerostress-supervisor.service` | `zerostress-sup` | управление микро-ВМ, очередь, слушает `/run/zerostress/supervisor.sock` |
 | `zerostress-web.service` | `zerostress-web` | публичный веб-слой, привратник, агент; слушает только локальный адрес |
-| Прокси | не выбран | единственный процесс, слушающий публичный адрес (Caddy или HAProxy) |
+| Прокси | Caddy (решение 4 ноября 2026; под SELinux работает в домене `httpd_t`, порт веб-слоя берём с меткой `http_port_t`) | единственный процесс, слушающий публичный адрес |
 
 Параметры защиты юнитов (предложение): `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ReadWritePaths` только для своих каталогов. Для `zerostress-supervisor` `NoNewPrivileges` несовместим с запуском `sudo zsnet`, поэтому нужно либо отказаться от `sudo` в пользу `AmbientCapabilities=CAP_NET_ADMIN` (шире), либо оставить `sudo` и не включать `NoNewPrivileges`. Решение открыто (раздел 7).
 
@@ -107,5 +107,5 @@
 ## 9. Открытые вопросы
 1. `sudo zsnet` или `CAP_NET_ADMIN` для супервизора (влияет на параметры юнита).
 2. Отключать ли своп.
-3. Прокси: Caddy или HAProxy, домен.
+3. ~~Прокси~~ — Caddy; остаётся домен и проверка выпуска сертификата (на IP через профиль `shortlived` или на домене).
 4. Порог свободного места.
