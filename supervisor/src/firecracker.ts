@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
@@ -63,13 +63,17 @@ export class FirecrackerVm implements VmHandle {
   private tail = Buffer.alloc(0);
   private dead = false;
   private stopping: Promise<void> | null = null;
+  private runId: string;
 
   private constructor(cfg: Config, opts: StartOptions) {
     this.cfg = cfg;
     this.apiSock = join(opts.runDir, 'fc.sock');
     this.vsockUds = join(opts.runDir, 'v.sock');
-    // the serial console is read into a small ring buffer, never to a file: a guest could flood it
-    this.proc = spawn(cfg.firecrackerPath, ['--api-sock', this.apiSock, '--id', opts.runId], {
+    this.runId = opts.runId;
+    // Firecracker runs as a systemd unit started by the root helper (cgroup limits, guaranteed network teardown).
+    // The helper blocks until the unit has ended, so the exit of this child means "the VM is gone", and the guest
+    // serial console arrives on its stdout. It is read into a small ring buffer, never to a file: a guest could flood it.
+    this.proc = spawn('/usr/bin/sudo', ['-n', cfg.zsvmPath, 'run', String(opts.slot), opts.runId, String(opts.memMib), String(opts.vcpu)], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { PATH: '/usr/bin:/bin' },
       cwd: opts.runDir,
@@ -138,14 +142,21 @@ export class FirecrackerVm implements VmHandle {
     }
   }
 
+  /**
+   * Stops the unit (SIGTERM; verified to end Firecracker in well under a second) and waits until the helper has
+   * returned, which happens only after ExecStopPost has torn the slot's network down. The slot must not be reused
+   * before that, or a late "zsnet down" could remove the network of the next VM on the same slot.
+   */
   stop(): Promise<void> {
     if (!this.stopping) {
       this.stopping = (async () => {
         if (this.dead) return;
-        this.proc.kill('SIGTERM');
-        await Promise.race([this.exited, sleep(1000)]);
-        if (!this.dead) this.proc.kill('SIGKILL');
-        await Promise.race([this.exited, sleep(3000)]);
+        await new Promise<void>((resolve) => {
+          execFile('/usr/bin/sudo', ['-n', this.cfg.zsvmPath, 'stop', this.runId], { timeout: 15_000, env: { PATH: '/usr/bin:/bin' } }, () => resolve());
+        });
+        await Promise.race([this.exited, sleep(8000)]);
+        if (!this.dead) this.proc.kill('SIGKILL'); // the sudo child only; the unit is already stopped or stuck for systemd to handle
+        await Promise.race([this.exited, sleep(2000)]);
       })();
     }
     return this.stopping;

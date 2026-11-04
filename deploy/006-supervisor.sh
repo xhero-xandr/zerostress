@@ -5,6 +5,9 @@ set -euo pipefail
 S=$(cd "$(dirname "$0")/.." && pwd)
 DEST=/opt/zerostress/supervisor
 
+# the root helper that runs microVMs as systemd units (and its sudoers rule)
+bash "$S/deploy/002-vm-runner.sh" >/dev/null
+
 # code: root-owned and read-only for the service; swapped in as a whole
 rm -rf "$DEST.new"
 install -d -m 0755 -o root -g root "$DEST.new"

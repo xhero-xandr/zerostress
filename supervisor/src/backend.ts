@@ -69,6 +69,12 @@ export class LinuxBackend implements Backend {
   /** Startup recovery (spec 006, 3.5): nothing from a previous process may survive. */
   async recoverHost(): Promise<void> {
     mkdirSync(this.cfg.runsDir, { recursive: true, mode: 0o700 });
+    try {
+      const r = await run('/usr/bin/sudo', ['-n', this.cfg.zsvmPath, 'recover'], 60_000);
+      this.log('info', 'recovery: VM units', { detail: r.stdout.trim().slice(0, 100) });
+    } catch (e) {
+      this.log('warn', 'recovery: zsvm recover failed', { detail: String(e).slice(0, 200) });
+    }
     let killed = 0;
     for (const entry of readdirSync('/proc')) {
       if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;

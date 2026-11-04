@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Root helper: run one Firecracker microVM as a systemd unit with fixed resource limits (specs 002 and 006).
+# Called by the supervisor through sudo with validated arguments only:
+#   zsvm run SLOT RUN_ID MEM_MIB VCPU   blocks until the VM unit has ended; the unit's stdout/stderr (the guest serial
+#                                      console) are connected to the caller; exit of this command == the VM is gone
+#   zsvm stop RUN_ID                    stop the unit (SIGTERM), idempotent
+#   zsvm recover                        stop every leftover zsvm-*.service (startup recovery)
+# The unit runs Firecracker as zerostress-sup; ExecStopPost tears the slot's network down even if the supervisor died.
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 077
+
+RUNS=/var/lib/zerostress/runs
+ZSNET=/opt/zerostress/bin/zsnet
+FC=/opt/zerostress/bin/firecracker
+SUPUSER=zerostress-sup
+
+die() { echo "zsvm: $*" >&2; exit 2; }
+id_ok() { [[ ${1:-} =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; }
+
+[[ $# -ge 1 ]] || die "usage: zsvm run|stop|recover"
+cmd=$1
+
+case $cmd in
+  run)
+    [[ $# -eq 5 ]] || die "usage: zsvm run SLOT RUN_ID MEM_MIB VCPU"
+    slot=$2; id=$3; mem=$4; vcpu=$5
+    [[ $slot =~ ^[0-3]$ ]] || die "slot must be 0..3"
+    id_ok "$id" || die "invalid run id"
+    [[ $mem =~ ^[0-9]+$ ]] && ((mem >= 256 && mem <= 4096)) || die "memory must be 256..4096 MiB"
+    [[ $vcpu =~ ^[1-4]$ ]] || die "vcpu must be 1..4"
+    dir=$RUNS/$id
+    [[ -d $dir && ! -L $dir ]] || die "run directory is missing or a symlink"
+    [[ $(stat -c %U "$dir") == "$SUPUSER" ]] || die "run directory has the wrong owner"
+
+    # write-bandwidth cap on the whole disk behind the state directory (io.max does not apply to partitions)
+    src=$(df --output=source "$RUNS" | tail -1)
+    disk=$(lsblk -no pkname "$src" 2>/dev/null | head -1 || true)
+    io=()
+    [[ -n $disk ]] && io=(-p "IOWriteBandwidthMax=/dev/$disk 200M")
+
+    # guest RAM + headroom for Firecracker itself and page cache (reclaimable); no swap
+    exec systemd-run --quiet --pipe --wait --collect --unit="zsvm-$id" \
+      -p User="$SUPUSER" -p SupplementaryGroups=kvm -p WorkingDirectory="$dir" \
+      -p MemoryMax="$((mem + 640))M" -p MemorySwapMax=0 -p CPUQuota="$((vcpu * 100))%" -p TasksMax=128 "${io[@]}" \
+      -p TimeoutStopSec=5 -p "ExecStopPost=+$ZSNET down $slot" \
+      -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes -p "ReadWritePaths=$dir" \
+      -p ProtectKernelModules=yes -p ProtectKernelLogs=yes -p ProtectKernelTunables=yes -p ProtectControlGroups=yes \
+      -p ProtectClock=yes -p ProtectHostname=yes -p LockPersonality=yes -p RestrictSUIDSGID=yes -p RestrictNamespaces=yes \
+      -p RestrictAddressFamilies=AF_UNIX \
+      -p DevicePolicy=closed -p "DeviceAllow=/dev/kvm rw" -p "DeviceAllow=/dev/net/tun rw" \
+      -p "DeviceAllow=/dev/null rw" -p "DeviceAllow=/dev/zero rw" -p "DeviceAllow=/dev/urandom r" \
+      "$FC" --api-sock "$dir/fc.sock" --id "$id"
+    ;;
+  stop)
+    [[ $# -eq 2 ]] || die "usage: zsvm stop RUN_ID"
+    id_ok "$2" || die "invalid run id"
+    systemctl stop "zsvm-$2.service" 2>/dev/null || true
+    ;;
+  recover)
+    [[ $# -eq 1 ]] || die "usage: zsvm recover"
+    n=0
+    while read -r unit _; do
+      [[ $unit =~ ^zsvm-[0-9a-f-]{36}\.service$ ]] || continue
+      systemctl stop "$unit" 2>/dev/null || true
+      systemctl reset-failed "$unit" 2>/dev/null || true
+      n=$((n + 1))
+    done < <(systemctl list-units --all --no-legend --plain 'zsvm-*.service')
+    echo "zsvm: stopped $n leftover unit(s)"
+    ;;
+  *) die "unknown command" ;;
+esac

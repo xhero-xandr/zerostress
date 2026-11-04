@@ -24,6 +24,7 @@ export interface Config {
   kernelPath: string;
   firecrackerPath: string;
   zsnetPath: string;
+  zsvmPath: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -65,5 +66,6 @@ export function loadConfig(env: Env = process.env): Config {
     kernelPath: env.SUP_KERNEL || join(imageDir, 'vmlinux-6.18.56'),
     firecrackerPath: env.SUP_FIRECRACKER || '/opt/zerostress/bin/firecracker',
     zsnetPath: env.SUP_ZSNET || '/opt/zerostress/bin/zsnet',
+    zsvmPath: env.SUP_ZSVM || '/opt/zerostress/bin/zsvm',
   };
 }

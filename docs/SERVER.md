@@ -7,6 +7,8 @@
 |---|---|---|
 | `/opt/zerostress/bin/firecracker` | Firecracker v1.17.0 | официальный релиз, хеш закреплён в `deploy/001-host-baseline.sh` |
 | `/opt/zerostress/bin/zsnet` | скрипт сети слотов (`up N`, `down N`, N от 0 до 3) | `deploy/zsnet`, ставит `deploy/003-network.sh` |
+| `/opt/zerostress/bin/zsvm` | root-помощник: запускает Firecracker юнитом systemd с лимитами (`run`, `stop`, `recover`) | `deploy/zsvm`, ставит `deploy/002-vm-runner.sh` (его вызывает `006-supervisor.sh`) |
+| `/opt/zerostress/supervisor`, `zerostress-supervisor.service` | код и служба супервизора | `deploy/006-supervisor.sh` |
 | `/opt/zerostress/images/` | ядро гостя, `guest-rootfs.ext4`, `manifest.json` | `guest-image/build.sh`, ставит `guest-image/install.sh` |
 | `/opt/node` | Node 24.22.2 для супервизора и тестов хоста | официальный архив, сумма проверена по `SHASUMS256.txt` |
 | `/opt/go` | Go 1.27.3, только для сборки агента | архив с go.dev, сумма проверена |
@@ -32,7 +34,8 @@ ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'   
 ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                        # установить и запустить службу супервизора
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-e2e.sh'                   # сквозной тест службы с настоящими ВМ (47 проверок)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-timeouts.sh'              # лимит агента 60 с и жёсткий потолок (около 2 минут, временно меняет юнит и восстанавливает)
-ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-probe.sh'                        # юнит systemd на ВМ: лимиты cgroup, сигналы, очистка (остановите службу супервизора на время теста)
+ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-helper.sh'                       # помощник zsvm: отклоняет всё неверное, кто может его вызывать
+ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-probe.sh'                        # разведочная проба юнита на ВМ: лимиты cgroup, сигналы, очистка (остановите службу супервизора на время теста)
 ```
 Отказы SELinux на этом сервере читаются прямо из `/var/log/audit/audit.log` и `audit.log.1` (лог ротируется при 8 МБ): `ausearch` ничего не находит даже по номеру записи.
 После сборки образа каталог `/var/tmp/zerostress-build` (около 1,6 ГБ) удаляется вручную: `rm -rf /var/tmp/zerostress-build`.

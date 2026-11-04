@@ -25,9 +25,10 @@ check() { # name, actual, expected-regex
 }
 host_clean() { # name
   sleep 1
-  local p q d
+  local p q d u
   p=$(pgrep -c firecracker); q=$(ip -br link | grep -c zstap); d=$(ls -A "$RUNS" | wc -l)
-  [[ $p == 0 && $q == 0 && $d == 0 ]] && ok "host clean after: $1" || bad "host clean after: $1" "firecracker=$p zstap=$q rundirs=$d"
+  u=$(systemctl list-units --all --no-legend --plain 'zsvm-*.service' | wc -l)
+  [[ $p == 0 && $q == 0 && $d == 0 && $u == 0 ]] && ok "host clean after: $1" || bad "host clean after: $1" "firecracker=$p zstap=$q rundirs=$d vm-units=$u"
 }
 
 echo "== controls: the detectors of this test must be able to fail"
