@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Caddy (EPEL) vs HAProxy (AppStream) on this host under SELinux Enforcing, both started by their own systemd units:
+# Caddy vs HAProxy on this host under SELinux Enforcing, both started by their own systemd units:
 # SSE streaming, a 45 s silent SSE stream, per-IP request rate limit, per-IP concurrent connection limit, SELinux denials.
+# By default the packaged binaries run (EPEL Caddy, AppStream HAProxy). To test other builds through the same units and
+# the same SELinux domains, set CADDY_BIN and/or HAPROXY_BIN (binaries labelled like the packaged ones, see below).
 # Temporarily replaces /etc/caddy/Caddyfile and /etc/haproxy/haproxy.cfg and restores them. Run as root.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -13,6 +15,9 @@ cleanup() {
   [[ -n $backend_pid ]] && kill "$backend_pid" 2>/dev/null
   [[ -f /etc/caddy/Caddyfile.orig ]] && mv -f /etc/caddy/Caddyfile.orig /etc/caddy/Caddyfile
   [[ -f /etc/haproxy/haproxy.cfg.orig ]] && mv -f /etc/haproxy/haproxy.cfg.orig /etc/haproxy/haproxy.cfg
+  rm -f /etc/systemd/system/caddy.service.d/test-bin.conf /etc/systemd/system/haproxy.service.d/test-bin.conf
+  rmdir /etc/systemd/system/caddy.service.d /etc/systemd/system/haproxy.service.d 2>/dev/null
+  systemctl daemon-reload
 }
 trap cleanup EXIT
 
@@ -61,10 +66,43 @@ backend be
 	server s1 127.0.0.1:8009
 EOF
 
+# Other builds go through drop-ins of the packaged units. The binary must carry the packaged binary's SELinux label
+# (httpd_exec_t for Caddy, haproxy_exec_t for HAProxy), otherwise it would not run in the same confined domain.
+if [[ -n ${CADDY_BIN:-} ]]; then
+  install -d /etc/systemd/system/caddy.service.d
+  cat > /etc/systemd/system/caddy.service.d/test-bin.conf <<EOF
+[Service]
+ExecStartPre=
+ExecStartPre=$CADDY_BIN validate --config /etc/caddy/Caddyfile
+ExecStart=
+ExecStart=$CADDY_BIN run --environ --config /etc/caddy/Caddyfile
+ExecReload=
+ExecReload=$CADDY_BIN reload --config /etc/caddy/Caddyfile
+EOF
+fi
+if [[ -n ${HAPROXY_BIN:-} ]]; then
+  install -d /etc/systemd/system/haproxy.service.d
+  cat > /etc/systemd/system/haproxy.service.d/test-bin.conf <<EOF
+[Service]
+ExecStartPre=
+ExecStartPre=$HAPROXY_BIN -f \$CONFIG -f \$CFGDIR -c -q \$OPTIONS
+ExecStart=
+ExecStart=$HAPROXY_BIN -Ws -f \$CONFIG -f \$CFGDIR -p \$PIDFILE \$OPTIONS
+ExecReload=
+ExecReload=$HAPROXY_BIN -f \$CONFIG -f \$CFGDIR -c -q \$OPTIONS
+ExecReload=/bin/kill -USR2 \$MAINPID
+EOF
+fi
+systemctl daemon-reload
+
 echo "== start both with their own units"
 systemctl start caddy 2>&1 | tail -2;   echo "caddy:   $(systemctl is-active caddy)"
 systemctl start haproxy 2>&1 | tail -2; echo "haproxy: $(systemctl is-active haproxy)"
 sleep 1
+for u in caddy haproxy; do
+  p=$(systemctl show -p MainPID --value $u)
+  [[ $p != 0 ]] && echo "$u runs: $(readlink /proc/$p/exe), $(ps -o label= -p $p), $($(readlink /proc/$p/exe) $([[ $u == caddy ]] && echo version || echo -v) 2>&1 | head -1 | cut -c1-60)"
+done
 echo "caddy   -> backend: $(curl -s --max-time 4 -o /dev/null -w '%{http_code}' http://127.0.0.1:8008/ping)"
 echo "haproxy -> backend: $(curl -s --max-time 4 -o /dev/null -w '%{http_code}' http://127.0.0.1:9000/ping)"
 
