@@ -56,6 +56,7 @@ export class Store {
     this.db = new DatabaseSync(path);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = FULL;
       CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY,
         url TEXT NOT NULL,

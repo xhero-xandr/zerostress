@@ -73,10 +73,32 @@ func (s *Store) persist(rec *RunRecord) error {
 		return err
 	}
 	tmp := s.path(rec.ID) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	// Written to disk before the rename and the rename made durable after it: a host crash must never bring back an
+	// older state (a run that was already started would look queued and be started again).
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path(rec.ID))
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, s.path(rec.ID)); err != nil {
+		return err
+	}
+	d, err := os.Open(s.dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 func (s *Store) Insert(rec RunRecord) error {

@@ -44,6 +44,7 @@ case $cmd in
       -p User="$SUPUSER" -p SupplementaryGroups=kvm -p WorkingDirectory="$dir" \
       -p MemoryMax="$((mem + 640))M" -p MemorySwapMax=0 -p CPUQuota="$((vcpu * 100))%" -p TasksMax=128 "${io[@]}" \
       -p TimeoutStopSec=5 -p "ExecStopPost=+$ZSNET down $slot" \
+      -p RuntimeMaxSec=900 \
       -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes -p "ReadWritePaths=$dir" \
       -p ProtectKernelModules=yes -p ProtectKernelLogs=yes -p ProtectKernelTunables=yes -p ProtectControlGroups=yes \
       -p ProtectClock=yes -p ProtectHostname=yes -p LockPersonality=yes -p RestrictSUIDSGID=yes -p RestrictNamespaces=yes \
