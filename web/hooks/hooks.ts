@@ -1,6 +1,8 @@
 // The task-level hooks (spec 009, 3.1 and 3.6): every string of every evidence event is inspected before anything
 // reaches a model; the first finding turns the task to "rules only" for good.
 
+import type { Category } from './rules.ts';
+import { weakActivates } from './rules.ts';
 import { scanString, type Finding, type ScanResult } from './scan.ts';
 
 /** Keys that carry the event's own structure, written by the collector, not by the page. */
@@ -36,7 +38,7 @@ export function scanText(place: string, text: string): ScanResult {
   try {
     return scanString(place, text);
   } catch {
-    return { text: WITHHELD, triggered: true, findings: [errorFinding(place)] };
+    return { text: WITHHELD, triggered: true, findings: [errorFinding(place)], weak: [] };
   }
 }
 
@@ -52,6 +54,10 @@ export interface Hooks {
 export function createHooks(): Hooks {
   let triggered = false;
   const all: Finding[] = [];
+  // Weak signals do not fire alone, but a page can spread them over fields and events: the task adds them up.
+  const taskWeak = new Map<Category, string[]>();
+  let eventWeak: Array<[Category, string]> = [];
+  let accumulated = false;
 
   const keep = (fs: Finding[]) => {
     if (fs.length) triggered = true;
@@ -67,6 +73,7 @@ export function createHooks(): Hooks {
     if (typeof value === 'string') {
       const r = scanString(place, value);
       findings.push(...r.findings);
+      for (const c of r.weak) eventWeak.push([c, place]);
       return r.text;
     }
     if (Array.isArray(value)) return value.map((x, i) => walk(x, `${place}[${i}]`, depth + 1, findings, failed));
@@ -107,12 +114,25 @@ export function createHooks(): Hooks {
   return {
     inspect(event) {
       const findings: Finding[] = [];
+      eventWeak = [];
       try {
         const failed = { v: false };
         const out = walk(event, '', 0, findings, failed);
         // the place of the event: its kind, so findings read as "page.hidden_text.text"
         const kind = event && typeof event === 'object' && typeof (event as { kind?: unknown }).kind === 'string' ? (event as { kind: string }).kind : '';
         const named = findings.map((f) => ({ ...f, place: kind ? `${kind}.${f.place}`.replace(/\.$/, '') : f.place }));
+        for (const [c, p] of eventWeak) {
+          const where = taskWeak.get(c) ?? [];
+          if (where.length < 5) where.push(kind ? `${kind}.${p}` : p);
+          taskWeak.set(c, where);
+        }
+        if (!accumulated && weakActivates(new Set(taskWeak.keys()))) {
+          accumulated = true;
+          named.push({
+            rule: 'accumulated', category: 'accumulated', strength: 'strong', view: 'none', layer: 0, quote: '',
+            place: [...taskWeak.entries()].map(([c, w]) => `${c}@${w.join('|')}`).join(' '),
+          });
+        }
         keep(named);
         return { event: out, findings: named };
       } catch {

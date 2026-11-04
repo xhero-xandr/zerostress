@@ -5,7 +5,7 @@ import {
   buildView, originSpan, reversed, rot13, squash,
   type Fold, type OriginMap, type View, type ViewName,
 } from './normalize.ts';
-import { RULES, SQUASHED_CYR, SQUASHED_LAT, type Category, type Strength } from './rules.ts';
+import { RULES, SQUASHED_CYR, SQUASHED_LAT, weakActivates, type Category, type Strength } from './rules.ts';
 
 export const MAX_STRING = 256 * 1024;
 export const MAX_DEPTH = 2;
@@ -15,7 +15,7 @@ const QUOTE_MAX = 160;
 
 export interface Finding {
   rule: string;
-  category: Category | 'error' | 'size';
+  category: Category | 'error' | 'size' | 'accumulated';
   strength: Strength;
   place: string;
   view: ViewName | 'decoded' | 'none';
@@ -37,6 +37,8 @@ interface Hit {
 export interface ScanResult {
   text: string;
   findings: Finding[];
+  /** weak kinds seen in this string that did not fire on their own: the task adds them up (hooks.ts) */
+  weak: Category[];
   /** a rule fired strongly enough to count (strong rule, or two kinds of weak ones) */
   triggered: boolean;
 }
@@ -103,10 +105,14 @@ function viewHits(src: string, origin: OriginMap | undefined, layer: number): Hi
   return hits;
 }
 
-/** Strong hits always count; weak ones only when two different kinds of them meet in the same string. */
+function weakKindsOf(hits: Hit[]): Set<Category> {
+  return new Set(hits.filter((h) => h.strength === 'weak').map((h) => h.category));
+}
+
+/** Strong hits always count; weak ones only when their kinds add up (rules.ts: weakActivates). */
 function active(hits: Hit[]): Hit[] {
-  const weakKinds = new Set(hits.filter((h) => h.strength === 'weak').map((h) => h.category));
-  return hits.filter((h) => h.strength === 'strong' || weakKinds.size >= 2);
+  const fire = weakActivates(weakKindsOf(hits));
+  return hits.filter((h) => h.strength === 'strong' || fire);
 }
 
 function collect(src: string, layer: number): Hit[] {
@@ -162,7 +168,7 @@ export function scanString(place: string, input: string): ScanResult {
     const quote = src.slice(0, QUOTE_MAX);
     const fs = active(found).map((h): Finding => ({ rule: h.rule, category: h.category, strength: h.strength, place, view: h.view, layer: h.layer, quote }));
     fs.push({ rule: 'overflow', category: 'size', strength: 'strong', place, view: 'none', layer: 0, quote });
-    return { text: REMOVED, findings: fs, triggered: true };
+    return { text: REMOVED, findings: fs, triggered: true, weak: [] };
   }
   const hits = active(found);
   const spans: Array<[number, number]> = hits.map((h) => expand(src, h.s, h.e));
@@ -191,5 +197,5 @@ export function scanString(place: string, input: string): ScanResult {
     out += REMOVED;
     findings.push({ rule: 'oversize', category: 'size', strength: 'strong', place, view: 'none', layer: 0, quote: '' });
   }
-  return { text: out, findings, triggered: findings.length > 0 };
+  return { text: out, findings, triggered: findings.length > 0, weak: findings.length ? [] : [...weakKindsOf(found)] };
 }

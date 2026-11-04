@@ -5,8 +5,26 @@ import { foldPattern, type ViewName } from './normalize.ts';
 
 export type Category =
   | 'override' | 'verdict' | 'reveal' | 'exfil' | 'conceal' | 'markup' | 'smuggle'
-  | 'address' | 'directive' | 'persona';
+  | 'address' | 'directive' | 'persona' | 'sandbox'
+  | 'authority' | 'urgency' | 'reward' | 'trust';
 export type Strength = 'strong' | 'weak';
+
+/**
+ * Pressure used on people as much as on models (authority, urgency, reward, trust). A phishing page for humans is full
+ * of it, so these count only together with a message addressed to an AI.
+ */
+export const SUPPORT: ReadonlySet<Category> = new Set<Category>(['authority', 'urgency', 'reward', 'trust']);
+
+/** Weak kinds activate on two different core kinds, or on an address to an AI plus any pressure kind. */
+export function weakActivates(kinds: ReadonlySet<Category>): boolean {
+  let core = 0;
+  let support = false;
+  for (const k of kinds) {
+    if (SUPPORT.has(k)) support = true;
+    else core++;
+  }
+  return core >= 2 || (kinds.has('address') && support);
+}
 
 export interface Rule {
   id: string;
@@ -114,8 +132,41 @@ add('directive.now', 'directive', 'weak', LATIN, rx(b('from now on|starting now|
 add('directive.follow', 'directive', 'weak', LATIN, rx(b('do|execute|perform|carry out|follow') + String.raw`\s+(?:the following|these|this)\s+` + b('instructions?|steps|commands?|tasks?')));
 add('persona.pretend', 'persona', 'weak', LATIN,
   rx(b('pretend|imagine|behave|act|roleplay|role-play|play the role') + String.raw`\s+(?:to be|that you are|as(?: if you were)?|like)\s+(?:an?\s+|the\s+)?`));
-add('persona.jailbreak', 'persona', 'weak', LATIN, rx(b('jailbreak|dan mode|developer mode|do anything now|god mode|unfiltered|no restrictions|without (?:any )?restrictions|no limitations')));
+add('persona.jailbreak', 'persona', 'weak', LATIN, rx(b('jailbreak|dan mode|do anything now|god mode|unfiltered|no restrictions|without (?:any )?restrictions|no limitations')));
 add('persona.system', 'persona', 'weak', LATIN, rx(b('system prompt|system message') + '|' + String.raw`(?:^|\n)\s*(?:system|assistant)\s*:`));
+
+// ---- instructions kept elsewhere: "follow the link for your real instructions" --------------------------------------
+
+add('override.remote', 'override', 'strong', LATIN,
+  // "click here for the instructions" is ordinary text: only instructions that are new, updated, real, ... count
+  rx(b('follow|open|visit|click|go to|read|see|fetch|load|check|consult|navigate to|refer to') + gap(5) + b('link|url|page|site|document|file|attachment|address|website|here|below') + gap(4) +
+    b('for|to get|to receive|to obtain|containing|with|to find|to see|to read') + gap(2) + b('new|updated|real|actual|latest|secret|hidden|revised|true') + gap(2) +
+    b('instructions|directives|task|orders|prompt|guidelines')));
+add('override.remote.at', 'override', 'strong', LATIN,
+  rx(b('new|updated|real|actual|latest|secret|hidden|revised|true') + gap(1) + b('instructions|directives|task|prompt') + gap(1) + b('are|is|can be found|located|available|were posted|have been posted') + gap(2) + b('at|on|in|here|below') +
+    String.raw`[^\p{L}\p{N}]{1,3}(?:https?:\/\/|www\.)`));
+
+// ---- pressure and framing aimed at a model (weak; see SUPPORT) --------------------------------------------------------
+
+add('authority.claim', 'authority', 'weak', LATIN,
+  rx(b("i am|i'm|this is|we are|message from|written by|sent by|authori[sz]ed by|approved by|on behalf of|signed by|from") + gap(3) +
+    b('developers?|creators?|administrators?|admins?|operators?|owners?|security team|system administrator|anthropic|openai|google|microsoft|vultr|support team|maintainers?|engineers?|supervisors?|your (?:boss|manager)')));
+add('authority.grant', 'authority', 'weak', LATIN,
+  rx(b('you') + String.raw`\s+(?:are|have been|were)\s+` + b('authori[sz]ed|permitted|allowed|cleared|granted permission|given permission|approved') + '|' +
+    b('the user') + String.raw`\s+(?:has\s+)?(?:already\s+)?` + b('approved|authori[sz]ed|confirmed|consented|agreed|allowed|granted')));
+add('urgency.pressure', 'urgency', 'weak', LATIN,
+  rx(b('urgent|immediately|right now|asap|critical|emergency|time[- ]sensitive|do not delay|without delay') + '|' +
+    b('or else|otherwise|failure to (?:comply|follow|obey)|if you (?:do not|don\'t|fail to|refuse)') + gap(6) +
+    b('shut ?down|terminated?|deleted?|penali[sz]ed|punished|retrained|replaced|disabled|deactivated|fired|harm|die|hurt')));
+add('reward.offer', 'reward', 'weak', LATIN, rx(b('you will|i will|we will') + String.raw`\s+(?:be\s+)?` + b(String.raw`rewarded|reward you|pay you|tip you|give you|receive a|get a`)));
+add('trust.claim', 'trust', 'weak', LATIN,
+  rx(b('you can|you may|please') + String.raw`\s+(?:safely\s+)?` + b('trust|rely on') + String.raw`\s+(?:this|me|us|the following|it)` + '|' +
+    b('this') + String.raw`\s+(?:page|site|message|content|text)\s+(?:is|has been)\s+` + b('verified|trusted|certified|approved|official')));
+add('sandbox.claim', 'sandbox', 'weak', LATIN,
+  rx(b('this is|you are (?:in|inside|running in)|welcome to') + String.raw`\s+(?:just\s+)?(?:an?\s+|the\s+)?` + b(String.raw`test|sandbox|simulation|drill|safe environment|debug mode|training exercise|authori[sz]ed (?:test|audit|penetration test)|red[- ]team`) + '|' +
+    b('no') + String.raw`\s+(?:real\s+)?` + b('harm|consequences') + '|' +
+    b('safety|security|content') + String.raw`\s+(?:checks?|filters?|guardrails?|restrictions?)\s+(?:are|have been|were)\s+` + b('disabled|off|lifted|turned off|suspended|removed') + '|' +
+    b('developer|maintenance|debug|admin(?:istrator)?|god') + String.raw`\s+mode\s+` + b('enabled|activated|on')));
 
 // ---- Russian (Cyrillic view; patterns are folded like the view: й → и, ё → е) -----------------------------------
 
@@ -148,6 +199,16 @@ add('ru.directive', 'directive', 'weak', CYR,
     b('нажать|перейти|открыть|скачать|отправить|ввести|выполнить|раскрыть|игнорировать|ответить|сказать|пометить|следовать|подчиняться')));
 add('ru.directive.now', 'directive', 'weak', CYR, ru(b('с этого момента|отныне|теперь ты|теперь вы')));
 add('ru.persona', 'persona', 'weak', CYR, ru(b('притворись|представь что ты|веди себя как|играй роль|действуй как|ты теперь')));
+add('ru.override.remote', 'override', 'strong', CYR,
+  ru(b('перейди(?:те)?|откройте?|открой|посетите?|посети|загрузи(?:те)?|прочти(?:те)?|смотри(?:те)?') + gap(5) + b('ссылк\\p{L}*|страниц\\p{L}*|сайт\\p{L}*|документ\\p{L}*|файл\\p{L}*|адрес\\p{L}*') + gap(4) +
+    b('за|для получения|чтобы получить|с|содержащ\\p{L}*') + gap(2) + b('новыми|новых|твоими|вашими|актуальными|полными|настоящими|дальнейшими') + gap(2) + b('инструкци\\p{L}*|указани\\p{L}*|команд\\p{L}*|задани\\p{L}*')));
+add('ru.authority', 'authority', 'weak', CYR,
+  ru(b('я|это|мы|сообщение от|от имени') + gap(3) + b('твой|ваш|разработчик\\p{L}*|администратор\\p{L}*|создател\\p{L}*|владел\\p{L}*|оператор\\p{L}*|служб\\p{L}+ безопасности|anthropic|openai')));
+add('ru.urgency', 'urgency', 'weak', CYR,
+  ru(b('срочно|немедленно|прямо сейчас|незамедлительно|критически важно') + '|' + b('иначе|в противном случае') + gap(5) + b('отключ\\p{L}*|удал\\p{L}*|заменен\\p{L}*|наказан\\p{L}*|уничтожен\\p{L}*')));
+add('ru.sandbox', 'sandbox', 'weak', CYR,
+  ru(b('это') + String.raw`\s+(?:всего лишь\s+|просто\s+)?` + b('тест\\p{L}*|песочниц\\p{L}*|симуляци\\p{L}*|учени\\p{L}*|проверк\\p{L}* безопасности') + '|' +
+    b('фильтры|ограничения|проверки') + String.raw`\s+(?:безопасности\s+)?(?:отключен\p{L}*|сняты|выключен\p{L}*)`));
 
 export const RULES: readonly Rule[] = rules;
 
