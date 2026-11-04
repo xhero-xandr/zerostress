@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -79,6 +80,17 @@ func (r *ringBuffer) String() string {
 	return string(r.buf)
 }
 
+// stdioSocket makes a connected Unix socket pair for one output stream of a child process: the parent end is read
+// here, the child end becomes the child's stdout or stderr. Node gives its children socket pairs (libuv); os/exec
+// would give pipes.
+func stdioSocket() (parent, child *os.File, err error) {
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return os.NewFile(uintptr(fds[0]), "console"), os.NewFile(uintptr(fds[1]), "console-child"), nil
+}
+
 // firecrackerVM is a microVM run as a systemd unit by the root helper zsvm (cgroup limits, guaranteed network
 // teardown). The helper blocks until the unit has ended, so the exit of this child means "the VM is gone", and the
 // guest serial console arrives on its stdout. It is read into a small ring buffer, never to a file: a guest could
@@ -106,12 +118,40 @@ func launchFirecracker(ctx context.Context, cfg Config, o StartOptions) (*firecr
 	vm.cmd = exec.Command("/usr/bin/sudo", "-n", cfg.ZsvmPath, "run", fmt.Sprint(o.Slot), o.RunID, fmt.Sprint(o.MemMiB), fmt.Sprint(o.VCPU))
 	vm.cmd.Env = cleanEnv
 	vm.cmd.Dir = o.RunDir
-	vm.cmd.Stdout = vm.console
-	vm.cmd.Stderr = vm.console
-	if err := vm.cmd.Start(); err != nil {
-		fmt.Fprintf(vm.console, "spawn error: %v\n", err)
+	// systemd-run --pipe hands the child's descriptors on to the unit through the system bus.
+	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return nil, newRunError(ReasonFcAPI, "could not open "+os.DevNull+": "+err.Error())
+	}
+	defer devNull.Close()
+	outP, outC, err := stdioSocket()
+	if err != nil {
+		return nil, newRunError(ReasonFcAPI, "could not create the console socket: "+err.Error())
+	}
+	errP, errC, err := stdioSocket()
+	if err != nil {
+		outP.Close()
+		outC.Close()
+		return nil, newRunError(ReasonFcAPI, "could not create the console socket: "+err.Error())
+	}
+	vm.cmd.Stdin = devNull
+	vm.cmd.Stdout = outC
+	vm.cmd.Stderr = errC
+	startErr := vm.cmd.Start()
+	outC.Close() // the child has its own copies now
+	errC.Close()
+	if startErr != nil {
+		outP.Close()
+		errP.Close()
+		fmt.Fprintf(vm.console, "spawn error: %v\n", startErr)
 		close(vm.exited)
-		return nil, newRunError(ReasonFcAPI, "could not start the VM helper: "+err.Error())
+		return nil, newRunError(ReasonFcAPI, "could not start the VM helper: "+startErr.Error())
+	}
+	for _, p := range []*os.File{outP, errP} {
+		go func(p *os.File) {
+			defer p.Close()
+			_, _ = io.Copy(vm.console, p)
+		}(p)
 	}
 	go func() {
 		_ = vm.cmd.Wait()

@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FailReason, RunEvent, RunRecord, RunState, SessionLimits } from './types.ts';
 
@@ -133,6 +133,21 @@ export class Store {
   }
 }
 
+/** True for a missing or empty file, or one whose last byte is a newline. */
+function endsInNewline(path: string): boolean {
+  if (!existsSync(path)) return true;
+  const fd = openSync(path, 'r');
+  try {
+    const size = fstatSync(fd).size;
+    if (size === 0) return true;
+    const last = Buffer.alloc(1);
+    readSync(fd, last, 0, 1, size - 1);
+    return last[0] === 0x0a;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Per-run event log: one JSON envelope per line. Evidence lines are stored as opaque strings, never parsed here. */
 export class ResultFiles {
   private dir: string;
@@ -148,7 +163,10 @@ export class ResultFiles {
   }
 
   append(id: string, ev: RunEvent): void {
-    appendFileSync(this.path(id), JSON.stringify(ev) + '\n', { mode: 0o600 });
+    const p = this.path(id);
+    // after a crash the last line may be torn; start on a fresh line so the new event is not glued onto the fragment
+    const prefix = endsInNewline(p) ? '' : '\n';
+    appendFileSync(p, prefix + JSON.stringify(ev) + '\n', { mode: 0o600 });
   }
 
   read(id: string, afterSeq = 0): RunEvent[] {
@@ -157,7 +175,12 @@ export class ResultFiles {
     const out: RunEvent[] = [];
     for (const line of readFileSync(p, 'utf8').split('\n')) {
       if (!line) continue;
-      const ev = JSON.parse(line) as RunEvent;
+      let ev: RunEvent;
+      try {
+        ev = JSON.parse(line) as RunEvent;
+      } catch {
+        continue; // a torn line after a crash carries nothing usable
+      }
       if (ev.seq > afterSeq) out.push(ev);
     }
     return out;

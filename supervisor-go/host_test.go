@@ -973,3 +973,26 @@ func TestHost_PrepareDiskFailsWithDiskCopyWhenTheImageIsMissing(t *testing.T) {
 	err := NewLinuxBackend(cfg, nil).PrepareDisk(hostTCtx(t, 30*time.Second), filepath.Join(dir, "runs", "r2"))
 	hostTRunError(t, err, ReasonDiskCopy)
 }
+
+// stdioSocket must give a connected pair: what the child writes to its end is read from the parent's end, and the
+// parent sees end-of-file once the child's end is closed. (That the pair is a socket and not a pipe is the point: see
+// launchFirecracker. Only a real run on the host proves systemd-run accepts it; deploy/test/supervisor-e2e.sh does.)
+func TestHost_StdioSocketIsAConnectedPair(t *testing.T) {
+	parent, child, err := stdioSocket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parent.Close()
+	if _, err := child.Write([]byte("hello console\n")); err != nil {
+		t.Fatal(err)
+	}
+	child.Close()
+	b, err := io.ReadAll(parent)
+	if err != nil || string(b) != "hello console\n" {
+		t.Fatalf("read %q, %v", b, err)
+	}
+	var st syscall.Stat_t
+	if err := syscall.Fstat(int(parent.Fd()), &st); err != nil || st.Mode&syscall.S_IFMT != syscall.S_IFSOCK {
+		t.Fatalf("not a socket: mode %o, %v", st.Mode, err)
+	}
+}
