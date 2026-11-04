@@ -34,13 +34,18 @@ type Config struct {
 	StateDir         string
 	RunsDir          string
 	ResultsDir       string
-	RecordsDir       string
-	ImageDir         string
-	ImagePath        string
-	KernelPath       string
-	FirecrackerPath  string
-	ZsnetPath         string
-	ZsvmPath          string
+	ArtifactsDir     string
+	// MaxArtifactBytes is the total of one run, MaxArtifacts the number of files, ArtifactFetchTimeout the time for one.
+	MaxArtifactBytes     int64
+	MaxArtifacts         int
+	ArtifactFetchTimeout time.Duration
+	RecordsDir           string
+	ImageDir             string
+	ImagePath            string
+	KernelPath           string
+	FirecrackerPath      string
+	ZsnetPath            string
+	ZsvmPath             string
 }
 
 var digitsRe = regexp.MustCompile(`^\d+$`)
@@ -98,22 +103,27 @@ func LoadConfig(env map[string]string) (Config, error) {
 		SessionGrace:     sec(get("SUP_SESSION_GRACE_S", 30, 1, 120)),
 		ApprovalTTL:      sec(get("SUP_APPROVAL_TTL_S", 300, 10, 3600)),
 		// the agent forwards at most 200 lines per job (004, 8e): keep room for the supervisor's own close
-		CommandMax:      get("SUP_COMMAND_MAX", 190, 1, 199),
-		CommandTimeout:  sec(get("SUP_COMMAND_TIMEOUT_S", 30, 1, 120)),
-		ShutdownGrace:   10 * time.Second,
-		Keepalive:       15 * time.Second,
-		VsockPort:       5000,
-		SocketPath:      envStr(env, "SUP_SOCKET", "/run/zerostress/supervisor.sock"),
-		StateDir:        stateDir,
-		RunsDir:         filepath.Join(stateDir, "runs"),
-		ResultsDir:      filepath.Join(stateDir, "results"),
-		RecordsDir:      filepath.Join(stateDir, "records"),
-		ImageDir:        imageDir,
-		ImagePath:       filepath.Join(imageDir, "guest-rootfs.ext4"),
-		KernelPath:      envStr(env, "SUP_KERNEL", filepath.Join(imageDir, "vmlinux-6.18.56")),
-		FirecrackerPath: envStr(env, "SUP_FIRECRACKER", "/opt/zerostress/bin/firecracker"),
-		ZsnetPath:        envStr(env, "SUP_ZSNET", "/opt/zerostress/bin/zsnet"),
-		ZsvmPath:         envStr(env, "SUP_ZSVM", "/opt/zerostress/bin/zsvm"),
+		CommandMax:     get("SUP_COMMAND_MAX", 190, 1, 199),
+		CommandTimeout: sec(get("SUP_COMMAND_TIMEOUT_S", 30, 1, 120)),
+		ShutdownGrace:  10 * time.Second,
+		Keepalive:      15 * time.Second,
+		VsockPort:      5000,
+		SocketPath:     envStr(env, "SUP_SOCKET", "/run/zerostress/supervisor.sock"),
+		StateDir:       stateDir,
+		RunsDir:        filepath.Join(stateDir, "runs"),
+		ResultsDir:     filepath.Join(stateDir, "results"),
+		ArtifactsDir:   filepath.Join(stateDir, "artifacts"),
+		RecordsDir:     filepath.Join(stateDir, "records"),
+		// the guest holds at most this much (the collector's own limit) and hands over at most this many files
+		MaxArtifactBytes:     32 << 20,
+		MaxArtifacts:         16,
+		ArtifactFetchTimeout: 20 * time.Second,
+		ImageDir:             imageDir,
+		ImagePath:            filepath.Join(imageDir, "guest-rootfs.ext4"),
+		KernelPath:           envStr(env, "SUP_KERNEL", filepath.Join(imageDir, "vmlinux-6.18.56")),
+		FirecrackerPath:      envStr(env, "SUP_FIRECRACKER", "/opt/zerostress/bin/firecracker"),
+		ZsnetPath:            envStr(env, "SUP_ZSNET", "/opt/zerostress/bin/zsnet"),
+		ZsvmPath:             envStr(env, "SUP_ZSVM", "/opt/zerostress/bin/zsvm"),
 	}
 	return c, firstErr
 }

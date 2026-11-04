@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"path/filepath"
 	"regexp"
@@ -43,8 +44,10 @@ type Deps struct {
 	Config  Config
 	Store   *Store
 	Results *ResultFiles
-	Backend Backend
-	Log     Logger
+	// Artifacts is optional: without it artifact events are passed on as they are and nothing is fetched.
+	Artifacts *ArtifactFiles
+	Backend   Backend
+	Log       Logger
 	// Now returns Unix milliseconds. Tests may replace it.
 	Now         func() int64
 	FreeGB      func() float64
@@ -73,15 +76,16 @@ type activeRun struct {
 }
 
 type Supervisor struct {
-	cfg     Config
-	store   *Store
-	results *ResultFiles
-	backend Backend
-	log     Logger
-	now     func() int64
-	freeGB  func() float64
-	imageSH func() string
-	sweep   time.Duration
+	cfg       Config
+	store     *Store
+	results   *ResultFiles
+	artifacts *ArtifactFiles
+	backend   Backend
+	log       Logger
+	now       func() int64
+	freeGB    func() float64
+	imageSH   func() string
+	sweep     time.Duration
 
 	mu          sync.Mutex // guards everything below
 	pool        *SlotPool
@@ -98,7 +102,7 @@ type Supervisor struct {
 
 func NewSupervisor(d Deps) *Supervisor {
 	s := &Supervisor{
-		cfg: d.Config, store: d.Store, results: d.Results, backend: d.Backend, log: d.Log,
+		cfg: d.Config, store: d.Store, results: d.Results, artifacts: d.Artifacts, backend: d.Backend, log: d.Log,
 		now: d.Now, freeGB: d.FreeGB, imageSH: d.ImageSHA256, sweep: d.SweepEvery,
 		pool:      NewSlotPool(d.Config.Concurrency),
 		active:    map[string]*activeRun{},
@@ -570,6 +574,9 @@ func (s *Supervisor) sweepQueue() {
 func (s *Supervisor) removeExpiredLocked() {
 	for _, id := range s.store.Expired(s.now()) {
 		s.results.Delete(id)
+		if s.artifacts != nil {
+			s.artifacts.Delete(id)
+		}
 		s.store.Delete(id)
 		delete(s.seqs, id)
 		delete(s.sessions, id)
@@ -673,6 +680,65 @@ func (s *Supervisor) execute(rec RunRecord, slot int, ctx context.Context, cance
 		}
 	}
 
+	// Artifacts the collector announces are fetched from the guest while the VM is alive (spec 005, 3.6). The event the
+	// collector wrote is only a claim: it names the file and the size to expect, and everything published about the
+	// file is measured here. Fetches run beside the stream and are all finished before the VM is stopped.
+	var fetches sync.WaitGroup
+	var artMu sync.Mutex
+	artSeen := map[string]bool{}
+	artFiles, artBytes := 0, int64(0)
+	artifactLine := func(line string) {
+		if s.artifacts == nil || len(line) > controlLineMax || !strings.Contains(line, `"artifact"`) {
+			return
+		}
+		var o map[string]any
+		if json.Unmarshal([]byte(line), &o) != nil || o["type"] != "evidence" || o["kind"] != "artifact" || o["saved"] != true {
+			return
+		}
+		name, _ := o["file"].(string)
+		declared, isNum := o["bytes"].(float64)
+		if !artifactNameRe.MatchString(name) || !isNum || declared != math.Trunc(declared) || declared < 1 || declared > float64(s.cfg.MaxArtifactBytes) {
+			s.log("warn", "artifact announcement ignored", map[string]any{"run_id": id})
+			return
+		}
+		need := int64(declared)
+		b := vmForCommands.Load()
+		artMu.Lock()
+		if artSeen[name] || b == nil {
+			artMu.Unlock()
+			return
+		}
+		artSeen[name] = true
+		if artFiles >= s.cfg.MaxArtifacts || artBytes+need > s.cfg.MaxArtifactBytes {
+			artMu.Unlock()
+			s.emit(id, "artifact", toJSON(ArtifactInfo{Name: name, Error: ArtLimit}))
+			return
+		}
+		artFiles++
+		artBytes += need
+		artMu.Unlock()
+		fetches.Add(1)
+		go func() {
+			defer fetches.Done()
+			timeout := s.cfg.ArtifactFetchTimeout
+			if timeout <= 0 {
+				timeout = 20 * time.Second
+			}
+			fctx, fcancel := context.WithTimeout(ctx, timeout)
+			defer fcancel()
+			info, code := s.artifacts.Put(id, name, need, func(w io.Writer, max int64) (int64, error) {
+				return b.vm.FetchArtifact(fctx, name, w, max)
+			})
+			if code != "" {
+				info = ArtifactInfo{Name: name, Error: code}
+				if ctx.Err() == nil {
+					s.log("warn", "artifact not stored", map[string]any{"run_id": id, "name": name, "error": code})
+				}
+			}
+			s.emit(id, "artifact", toJSON(info))
+		}()
+	}
+
 	// failed turns an error from a step into the run's failure: the cause of an aborted run beats the step's own error.
 	failed := func(err error, fallback FailReason) error {
 		if ctx.Err() != nil {
@@ -741,6 +807,7 @@ func (s *Supervisor) execute(rec RunRecord, slot int, ctx context.Context, cance
 			s.emit(id, "evidence", line)
 			evidence++
 			controlLine(line)
+			artifactLine(line)
 		})
 		if runErr != nil {
 			return failed(runErr, ReasonAgentError)
@@ -803,6 +870,7 @@ func (s *Supervisor) execute(rec RunRecord, slot int, ctx context.Context, cance
 	}
 
 	// ---- teardown: always, whatever happened above ----
+	fetches.Wait() // the guest is still there; a cancelled run aborts its fetches at once, a normal one waits a moment
 	hard.Stop()
 	destroying.Store(true)
 	if sess != nil {

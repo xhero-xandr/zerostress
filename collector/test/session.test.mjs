@@ -112,6 +112,8 @@ test('download saves the file only on this command; size and SHA-256 match', asy
   const art = c.kinds('artifact').at(-1);
   const content = Buffer.from('BINARY-CONTENT-0123456789');
   assert.equal(art.bytes, content.length);
+  assert.match(art.file, /^[0-9a-f]{16}\.bin$/);
+  assert.ok(c.files().includes(art.file));
   assert.equal(art.sha256, createHash('sha256').update(content).digest('hex'));
   assert.equal(art.saved, true);
   await close(c);

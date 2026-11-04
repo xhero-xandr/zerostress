@@ -16,6 +16,8 @@ func main() {
 	sessionGrace := flag.Duration("session-grace", 30*time.Second, "added to session.max_s before the collector is killed")
 	maxCmd := flag.Int("max-cmd", 4096, "max bytes of one command line (session jobs)")
 	maxCmds := flag.Int("max-cmds", 200, "max commands per job (session jobs)")
+	artifactDir := flag.String("artifact-dir", defaultArtifactDir, "directory the collector writes artifacts to")
+	maxArtifact := flag.Int64("max-artifact", defaultMaxArtifact, "max bytes of one artifact handed to the host")
 	flag.Parse()
 
 	cmd := flag.Args()
@@ -33,6 +35,8 @@ func main() {
 		SessionGrace:   *sessionGrace,
 		MaxCmd:         *maxCmd,
 		MaxCmds:        *maxCmds,
+		ArtifactDir:    *artifactDir,
+		MaxArtifact:    *maxArtifact,
 		Env: []string{
 			"PATH=/opt/node/bin:/usr/bin:/bin",
 			"HOME=/home/pw",

@@ -14,6 +14,9 @@
 // object of at most MaxCmd bytes, at most MaxCmds per job); anything else ends the job with status "bad_command".
 // The collector's wall-clock limit for a session is session.max_s (capped by SessionMax) plus SessionGrace.
 // For a job without "session" the client's extra lines are discarded, as in v1.
+//
+// Artifact hand-over (spec 005, 3.6): a connection whose first line is {"op":"artifact","name":...} is not a job. It
+// is served from the artifact directory while a job runs and does not take the job slot (artifact.go).
 package main
 
 import (
@@ -48,12 +51,16 @@ type Config struct {
 	SessionGrace time.Duration // added on top of max_s before the agent kills the collector
 	MaxCmd       int           // bytes per command line
 	MaxCmds      int           // commands per job
+	// artifact hand-over (artifact.go)
+	ArtifactDir string
+	MaxArtifact int64
 }
 
 type Agent struct {
-	cfg  Config
-	busy atomic.Bool
-	cred *syscall.Credential
+	cfg     Config
+	busy    atomic.Bool
+	readers atomic.Int32 // open artifact hand-overs
+	cred    *syscall.Credential
 }
 
 type status struct {
@@ -89,6 +96,12 @@ func NewAgent(cfg Config) (*Agent, error) {
 	}
 	if cfg.MaxCmds == 0 {
 		cfg.MaxCmds = 200
+	}
+	if cfg.ArtifactDir == "" {
+		cfg.ArtifactDir = defaultArtifactDir
+	}
+	if cfg.MaxArtifact == 0 {
+		cfg.MaxArtifact = defaultMaxArtifact
 	}
 	a := &Agent{cfg: cfg}
 	if cfg.User != "" {
@@ -153,6 +166,16 @@ func (a *Agent) Handle(conn net.Conn) {
 	job, err := a.readJob(conn, br)
 	if err != nil {
 		reject(conn, "bad_job")
+		return
+	}
+	// A hand-over request is not a job: it must not take the job slot, and it is served while a session is running.
+	var req artifactRequest
+	if json.Unmarshal(job, &req) == nil && req.Op != "" {
+		if req.Op != "artifact" {
+			reject(conn, "bad_job")
+			return
+		}
+		a.serveArtifact(conn, req.Name)
 		return
 	}
 	sess, err := parseSession(job)

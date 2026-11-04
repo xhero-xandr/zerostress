@@ -40,6 +40,9 @@ test('a plain page: ordered, well-formed events, summary last, exit 0', async ()
   assert.equal(shot.saved, true);
   assert.equal(shot.mime, 'image/png');
   assert.equal(r.filesAtExit.length, 1);
+  assert.equal(shot.file, r.filesAtExit[0], 'the announced file name is the name on disk (the host fetches it by that name)');
+  assert.match(shot.file, /^[0-9a-f]{16}\.png$/);
+  assert.equal(shot.file.slice(0, 16), shot.sha256.slice(0, 16));
   assert.equal(r.artifactBytes[r.filesAtExit[0]], shot.bytes, 'the file on disk has the size that was reported');
   const sum = r.first('summary');
   assert.equal(sum.final_url, `${pages.origin}/`);

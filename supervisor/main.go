@@ -45,8 +45,13 @@ func main() {
 		log("error", "cannot create results directory", map[string]any{"detail": err.Error()})
 		os.Exit(1)
 	}
+	artifacts, err := NewArtifactFiles(cfg.ArtifactsDir)
+	if err != nil {
+		log("error", "cannot create artifacts directory", map[string]any{"detail": err.Error()})
+		os.Exit(1)
+	}
 	sup := NewSupervisor(Deps{
-		Config: cfg, Store: store, Results: results, Backend: NewLinuxBackend(cfg, log), Log: log,
+		Config: cfg, Store: store, Results: results, Artifacts: artifacts, Backend: NewLinuxBackend(cfg, log), Log: log,
 		FreeGB: freeGBOf(cfg.StateDir), ImageSHA256: imageSHAFrom(cfg.ImageDir),
 	})
 	if err := sup.Start(context.Background()); err != nil {

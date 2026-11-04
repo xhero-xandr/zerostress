@@ -265,6 +265,10 @@ func (v *firecrackerVM) Send(line string) error {
 	return w(line)
 }
 
+func (v *firecrackerVM) FetchArtifact(ctx context.Context, name string, dst io.Writer, max int64) (int64, error) {
+	return fetchAgentArtifact(ctx, v.vsockUDS, v.cfg.VsockPort, name, dst, max, v.cfg.ArtifactFetchTimeout)
+}
+
 func (v *firecrackerVM) Exited() <-chan struct{} { return v.exited }
 
 func (v *firecrackerVM) Console() string { return v.console.String() }

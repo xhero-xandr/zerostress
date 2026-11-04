@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 )
 
@@ -122,6 +123,9 @@ type VM interface {
 	RunJob(ctx context.Context, job string, onLine func(string)) error
 	// Send writes one more line to the open agent connection (session commands).
 	Send(line string) error
+	// FetchArtifact copies the named artifact from the guest into dst, at most max bytes (spec 005, 3.6). It uses its
+	// own connection, so it works while a job or session is running.
+	FetchArtifact(ctx context.Context, name string, dst io.Writer, max int64) (int64, error)
 	// Exited is closed when the Firecracker process is gone, for any reason.
 	Exited() <-chan struct{}
 	// Stop ends the VM (SIGTERM, then SIGKILL after a short grace) and returns when it is gone.

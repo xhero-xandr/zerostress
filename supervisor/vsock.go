@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"regexp"
 	"sync"
@@ -140,6 +142,54 @@ func (s *agentStream) write(line string) error {
 	_ = s.c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	_, err := s.c.conn.Write([]byte(line + "\n"))
 	return err
+}
+
+// fetchAgentArtifact asks the guest agent for one artifact over a fresh connection (spec 005, 3.6): one request line, a
+// header line, then exactly the announced number of bytes. At most max bytes are accepted; the whole transfer is
+// bounded by timeout. The bytes are written to dst as they arrive.
+func fetchAgentArtifact(ctx context.Context, uds string, port int, name string, dst io.Writer, max int64, timeout time.Duration) (int64, error) {
+	c, err := connectAgent(ctx, uds, port, 2*time.Second)
+	if err != nil {
+		return 0, err
+	}
+	defer c.conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = c.conn.Close() })
+	defer stop()
+	if timeout <= 0 {
+		timeout = 20 * time.Second
+	}
+	_ = c.conn.SetDeadline(time.Now().Add(timeout))
+	req, _ := json.Marshal(map[string]string{"op": "artifact", "name": name})
+	if _, err := c.conn.Write(append(req, '\n')); err != nil {
+		return 0, ctxOr(ctx, err)
+	}
+	line, err := c.br.ReadSlice('\n')
+	if err != nil {
+		return 0, ctxOr(ctx, errors.New("no reply header"))
+	}
+	var h struct {
+		Type  string `json:"type"`
+		OK    bool   `json:"ok"`
+		Bytes int64  `json:"bytes"`
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(line, &h) != nil || h.Type != "artifact" {
+		return 0, errors.New("bad reply header")
+	}
+	if !h.OK {
+		if h.Error == "not_found" {
+			return 0, &fetchError{ArtNotInGuest}
+		}
+		return 0, errors.New("the agent refused: " + clip(h.Error, 40))
+	}
+	if h.Bytes < 0 || h.Bytes > max {
+		return 0, &fetchError{ArtTooLarge}
+	}
+	n, err := io.CopyN(dst, c.br, h.Bytes)
+	if err != nil {
+		return n, ctxOr(ctx, errors.New("transfer ended early"))
+	}
+	return n, nil
 }
 
 func ctxOr(ctx context.Context, err error) error {

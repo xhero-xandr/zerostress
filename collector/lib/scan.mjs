@@ -25,7 +25,9 @@ export const ARTIFACT_TOTAL_MAX = 32 * 1024 * 1024;
  * travel in the event stream. `state.artifactBytes` enforces the total limit of the run.
  */
 export async function saveArtifact(emitter, artifactDir, state, { name, mime, data, ext }) {
-  const info = { id: sha256(data).slice(0, 16), name: cut(name, 255), bytes: data.length, sha256: sha256(data), mime };
+  const digest = sha256(data);
+  const id = digest.slice(0, 16);
+  const info = { id, file: `${id}.${ext}`, name: cut(name, 255), bytes: data.length, sha256: digest, mime };
   state.artifactBytes ??= 0;
   if (state.artifactBytes + data.length > ARTIFACT_TOTAL_MAX) {
     emitter.emit('artifact', { ...info, saved: false, error: 'artifact_limit' });

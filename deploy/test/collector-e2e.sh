@@ -23,6 +23,8 @@ echo "real collector laid over the installed image (temporarily)"
 
 post_session() { api -X POST "${JSON[@]}" -d "{\"kind\":\"url\",\"url\":\"$1\",\"session\":$2}" http://localhost/v1/runs; }
 cmd() { api -X POST "${JSON[@]}" -w ' %{http_code}' -d "$2" "http://localhost/v1/runs/$1/commands"; }
+art_event() { grep -A1 '^event: artifact' <<<"$1" | grep '^data:' | sed 's/^data: //'; }
+fetch_art() { api -D "$3" -o "$4" "http://localhost/v1/runs/$1/artifacts/$2"; }   # id name header-file body-file
 live_events() { curl -sS -N --max-time "${2:-1}" --unix-socket "$SOCK" "http://localhost/v1/runs/$1/events" 2>/dev/null || true; }
 wait_event() { local end=$((SECONDS + $3)); while ((SECONDS < end)); do grep -qE "$2" <<<"$(live_events "$1" 1)" && return 0; done; return 1; }
 
@@ -42,6 +44,26 @@ check "links evidence" "$ev" '"kind":"links"'
 check "screenshot reported as an artifact" "$ev" '"kind":"artifact".*"saved":true'
 check "the collector's own summary arrived" "$ev" '"kind":"summary"'
 check "final status ok" "$(view "$id")" '"reason":null|"state":"done"'
+
+echo "== the screenshot reaches the host (agent hand-over, checked and stored by the supervisor)"
+claim=$(grep -A1 '^event: evidence' <<<"$ev" | grep '"kind":"artifact"' | head -1)
+art=$(art_event "$ev" | head -1)
+check "the host published the file it fetched" "$art" '"saved":true'
+name=$(field "$art" name)
+check "named by 16 hex digits and .png" "$name" '^[0-9a-f]{16}\.png$'
+check "the collector announced the same file" "$claim" "\"file\":\"$name\""
+fetch_art "$id" "$name" /var/tmp/zs-art.hdr /var/tmp/zs-art.png
+check "served with 200" "$(head -1 /var/tmp/zs-art.hdr)" ' 200'
+check "served as image/png, no sniffing" "$(tr -d '\r' </var/tmp/zs-art.hdr)" 'Content-Type: image/png'
+check "no content sniffing allowed" "$(cat /var/tmp/zs-art.hdr)" 'X-Content-Type-Options: nosniff'
+check "it is a real PNG" "$(head -c 8 /var/tmp/zs-art.png | od -An -tx1 | tr -d ' \n')" '^89504e470d0a1a0a$'
+check "the size is what the event says" "$(stat -c %s /var/tmp/zs-art.png)" "^$(grep -o '"bytes":[0-9]*' <<<"$art" | cut -d: -f2)$"
+check "the hash is what the event says" "$(sha256sum /var/tmp/zs-art.png | cut -d' ' -f1)" "^$(field "$art" sha256)$"
+check "the screenshot is not empty (more than 1 KiB)" "$(( $(stat -c %s /var/tmp/zs-art.png) > 1024 ))" '^1$'
+check "an unknown name is 404" "$(api -o /dev/null -w '%{http_code}' "http://localhost/v1/runs/$id/artifacts/0000000000000000.png")" '^404$'
+check "a path is 404" "$(api -o /dev/null -w '%{http_code}' "http://localhost/v1/runs/$id/artifacts/..%2F..%2Fetc%2Fpasswd")" '^404$'
+check "another run's file is not served under this id" "$(api -o /dev/null -w '%{http_code}' "http://localhost/v1/runs/11111111-1111-1111-1111-111111111111/artifacts/$name")" '^404$'
+rm -f /var/tmp/zs-art.png /var/tmp/zs-art.hdr
 host_clean "plain run"
 
 echo "== a session: scan, then commands through the supervisor, then close"
@@ -54,8 +76,29 @@ r=$(cmd "$id" "{\"cmd\":\"open_link\",\"id\":\"o1\",\"snap\":1,\"ref\":\"$ref\"}
 check "open_link accepted" "${r##* }" '^202$'
 check "the collector answered ok" "$(wait_event "$id" '"command_id":"o1".*"status":"done"' 40 && echo yes)" '^yes$'
 check "the second page was read" "$(live_events "$id" 2)" '"title":"Example Domains"'
-r=$(cmd "$id" '{"cmd":"download","id":"d1","snap":2,"ref":"e1"}')
+r=$(cmd "$id" '{"cmd":"screenshot","id":"s1"}')
+check "screenshot accepted" "${r##* }" '^202$'
+check "the collector answered ok" "$(wait_event "$id" '"command_id":"s1".*"status":"done"' 40 && echo yes)" '^yes$'
+n=0; for _ in $(seq 20); do n=$(grep -c '^event: artifact' <<<"$(live_events "$id" 1)"); ((n >= 2)) && break; done
+check "a second artifact reached the host during the session (two published)" "$n" '^[2-9]$'
+dref=$(grep '"kind":"links"' <<<"$(live_events "$id" 2)" | tail -1 | grep -o '"ref":"[a-z0-9]*"' | head -1 | cut -d'"' -f4)
+check "a link ref on the second page" "$dref" '^(f[0-9]+)?e[0-9]+$'
+r=$(cmd "$id" "{\"cmd\":\"download\",\"id\":\"d1\",\"snap\":2,\"ref\":\"$dref\"}")
 check "download is held for a human (202, awaiting_approval)" "$r" '"status":"awaiting_approval".* 202$'
+sleep 1
+check "nothing was fetched before the approval" "$(grep -c '"kind":"download"' <<<"$(live_events "$id" 1)")" '^0$'
+sha=$(field "${r% *}" command_sha256)
+check "the approval is accepted" "$(api -X POST "${JSON[@]}" -w ' %{http_code}' -d "{\"command_id\":\"d1\",\"command_sha256\":\"$sha\"}" "http://localhost/v1/runs/$id/approvals" | awk '{print $NF}')" '^202$'
+check "the download ran in the guest" "$(wait_event "$id" '"command_id":"d1".*"status":"done"' 40 && echo yes)" '^yes$'
+n=0; for _ in $(seq 20); do n=$(grep -c '^event: artifact' <<<"$(live_events "$id" 1)"); ((n >= 3)) && break; done
+check "the downloaded file reached the host (three published)" "$n" '^[3-9]$'
+bin=$(art_event "$(live_events "$id" 2)" | grep '\.bin"' | head -1)
+check "published as a .bin the host measured" "$bin" '"saved":true.*"mime":"application/octet-stream"|"mime":"application/octet-stream".*"saved":true'
+binname=$(field "$bin" name)
+fetch_art "$id" "$binname" /var/tmp/zs-art.hdr /var/tmp/zs-art.bin
+check "a download is served as an opaque octet-stream" "$(tr -d '\r' </var/tmp/zs-art.hdr)" 'Content-Type: application/octet-stream'
+check "its hash matches the event" "$(sha256sum /var/tmp/zs-art.bin | cut -d' ' -f1)" "^$(field "$bin" sha256)$"
+rm -f /var/tmp/zs-art.hdr /var/tmp/zs-art.bin
 r=$(cmd "$id" '{"cmd":"close","id":"bye"}')
 check "close accepted" "${r##* }" '^202$'
 check "run finishes done" "$(wait_state "$id" '^(done|failed)$' 60)" '^done$'

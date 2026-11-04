@@ -353,6 +353,8 @@ func (a *API) run(w http.ResponseWriter, r *http.Request, id string, rest []stri
 			return
 		}
 		send(w, http.StatusAccepted, map[string]string{"command_id": rest[1], "status": "rejected"})
+	case len(rest) == 2 && rest[0] == "artifacts":
+		a.artifact(w, r, id, rest[1])
 	case len(rest) == 1 && rest[0] == "events":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, "GET")
@@ -366,6 +368,32 @@ func (a *API) run(w http.ResponseWriter, r *http.Request, id string, rest []stri
 	default:
 		send(w, http.StatusNotFound, errBody{Error: "not found"})
 	}
+}
+
+// artifact serves one stored artifact of a run. The bytes come from a hostile page, so the response says what they are
+// and forbids sniffing; a file is never shown as anything but its fixed type.
+func (a *API) artifact(w http.ResponseWriter, r *http.Request, id, name string) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, "GET")
+		return
+	}
+	if _, ok := a.sup.Get(id); !ok || a.sup.artifacts == nil {
+		send(w, http.StatusNotFound, errBody{Error: "not found"})
+		return
+	}
+	fh, size, ok := a.sup.artifacts.Open(id, name)
+	if !ok {
+		send(w, http.StatusNotFound, errBody{Error: "not found"})
+		return
+	}
+	defer fh.Close()
+	w.Header().Set("Content-Type", artifactMime(name))
+	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.CopyN(w, fh, size)
 }
 
 // events streams the run's events as SSE: the stored ones after Last-Event-ID, then live ones, until a terminal state.

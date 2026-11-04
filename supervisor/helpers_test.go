@@ -72,6 +72,10 @@ type Script struct {
 	Silent    bool // never answer commands (the supervisor's command timeout must fire)
 	SendFails bool // writing a command to the guest fails
 	ReplyWait time.Duration
+	// Artifacts are the files the fake guest holds, by name. FetchDelay slows a transfer down; a transfer that is cut
+	// off by the run's context fails like the real one.
+	Artifacts  map[string][]byte
+	FetchDelay time.Duration
 }
 
 type pushItem struct {
@@ -224,6 +228,28 @@ func (v *FakeVM) Send(line string) error {
 		}
 	})
 	return nil
+}
+
+func (v *FakeVM) FetchArtifact(ctx context.Context, name string, dst io.Writer, max int64) (int64, error) {
+	if v.script.FetchDelay > 0 {
+		select {
+		case <-time.After(v.script.FetchDelay):
+		case <-ctx.Done():
+			return 0, context.Cause(ctx)
+		}
+	}
+	if v.dead.Load() {
+		return 0, fmt.Errorf("the VM is gone")
+	}
+	data, ok := v.script.Artifacts[name]
+	if !ok {
+		return 0, &fetchError{ArtNotInGuest}
+	}
+	if int64(len(data)) > max {
+		return 0, &fetchError{ArtTooLarge}
+	}
+	n, err := dst.Write(data)
+	return int64(n), err
 }
 
 func (v *FakeVM) Exited() <-chan struct{} { return v.exited }
