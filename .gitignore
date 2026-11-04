@@ -25,3 +25,4 @@ runs/
 .idea/
 .DS_Store
 Thumbs.db
+zerostress-supervisor

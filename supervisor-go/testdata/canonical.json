@@ -1,0 +1,1688 @@
+{
+ "valid": [
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a"
+   },
+   "canonical": "{\"cmd\":\"snapshot\",\"id\":\"a\"}",
+   "sha256": "1b6274761e96e5b8d995edfc2ceaec102f5f886da6ad2d8094feb72822fa101c"
+  },
+  {
+   "input": {
+    "id": "a",
+    "cmd": "snapshot"
+   },
+   "canonical": "{\"cmd\":\"snapshot\",\"id\":\"a\"}",
+   "sha256": "1b6274761e96e5b8d995edfc2ceaec102f5f886da6ad2d8094feb72822fa101c"
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "A-z_0-9"
+   },
+   "canonical": "{\"cmd\":\"snapshot\",\"id\":\"A-z_0-9\"}",
+   "sha256": "1e549f000b93d1b147b60ac70bacd4d143bac963a6b0ac4ddc4f5c42880dc5c9"
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "canonical": "{\"cmd\":\"snapshot\",\"id\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+   "sha256": "fa17029640a7f047f845b634b2128c845467eb4b8c7ca807080dbb14a711aed7"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": -5000
+   },
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":-5000,\"id\":\"a\"}",
+   "sha256": "5a0bd187ecaf41a6a5c8d5127201e1e2dd61d1d19fab394779975abc24af3255"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 5000
+   },
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":5000,\"id\":\"a\"}",
+   "sha256": "e681b710c25770360da4d68206ba54fd43822643337f4167944533a30667c3f3"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 0
+   },
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":0,\"id\":\"a\"}",
+   "sha256": "650dcec3504b754dbc4f86ba7767fd34de7e3e86666f55c9e90b2e80ff5b5d8f"
+  },
+  {
+   "input": {
+    "dy": 100,
+    "id": "a",
+    "cmd": "scroll"
+   },
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":100,\"id\":\"a\"}",
+   "sha256": "cee68da5f0e6eba3180b41a40a6ea100601123ed4d51c9a3eee61f24f8357372"
+  },
+  {
+   "input": {
+    "id": "a",
+    "cmd": "scroll",
+    "dy": 100
+   },
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":100,\"id\":\"a\"}",
+   "sha256": "cee68da5f0e6eba3180b41a40a6ea100601123ed4d51c9a3eee61f24f8357372"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 0
+   },
+   "raw": "{\"cmd\":\"scroll\",\"id\":\"a\",\"dy\":-0}",
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":0,\"id\":\"a\"}",
+   "sha256": "650dcec3504b754dbc4f86ba7767fd34de7e3e86666f55c9e90b2e80ff5b5d8f"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 100
+   },
+   "raw": "{\"cmd\":\"scroll\",\"id\":\"a\",\"dy\":1e2}",
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":100,\"id\":\"a\"}",
+   "sha256": "cee68da5f0e6eba3180b41a40a6ea100601123ed4d51c9a3eee61f24f8357372"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 100
+   },
+   "raw": "{\"cmd\":\"scroll\",\"id\":\"a\",\"dy\":100.0}",
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":100,\"id\":\"a\"}",
+   "sha256": "cee68da5f0e6eba3180b41a40a6ea100601123ed4d51c9a3eee61f24f8357372"
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 5000
+   },
+   "raw": "{\"dy\":5E+3,\"cmd\":\"scroll\",\"id\":\"a\"}",
+   "canonical": "{\"cmd\":\"scroll\",\"dy\":5000,\"id\":\"a\"}",
+   "sha256": "e681b710c25770360da4d68206ba54fd43822643337f4167944533a30667c3f3"
+  },
+  {
+   "input": {
+    "cmd": "wait",
+    "id": "a",
+    "ms": 0
+   },
+   "canonical": "{\"cmd\":\"wait\",\"id\":\"a\",\"ms\":0}",
+   "sha256": "244f7d7274ef1d67ada577da7c038c52e9eecaf578b05cde085785697d5e5725"
+  },
+  {
+   "input": {
+    "cmd": "wait",
+    "id": "a",
+    "ms": 5000
+   },
+   "canonical": "{\"cmd\":\"wait\",\"id\":\"a\",\"ms\":5000}",
+   "sha256": "5c622f8f2f0f88b08f6645f75bb6c74df428807eed339164c8c78e6bf60ef8db"
+  },
+  {
+   "input": {
+    "ms": 250,
+    "cmd": "wait",
+    "id": "w"
+   },
+   "canonical": "{\"cmd\":\"wait\",\"id\":\"w\",\"ms\":250}",
+   "sha256": "23ff0a1b4ade68c9b79cafd2355bb5754b922a0ba19c873032275401fe848bc6"
+  },
+  {
+   "input": {
+    "cmd": "screenshot",
+    "id": "a"
+   },
+   "canonical": "{\"cmd\":\"screenshot\",\"id\":\"a\"}",
+   "sha256": "b33e1169e6526eae324670ee8f395d0596030b6399ed6097e0eff90ca4b4dfcd"
+  },
+  {
+   "input": {
+    "cmd": "screenshot",
+    "id": "a",
+    "full": true
+   },
+   "canonical": "{\"cmd\":\"screenshot\",\"full\":true,\"id\":\"a\"}",
+   "sha256": "5041681ea9599e9d315ca592fac187fb6ee42f571066c1bdae3b7f8ac284a285"
+  },
+  {
+   "input": {
+    "full": false,
+    "id": "a",
+    "cmd": "screenshot"
+   },
+   "canonical": "{\"cmd\":\"screenshot\",\"full\":false,\"id\":\"a\"}",
+   "sha256": "4b14e3aeae231f45f3abf50fee98612b2aca3a21992f25890bc4a44551663076"
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 3,
+    "ref": "e7"
+   },
+   "canonical": "{\"cmd\":\"open_link\",\"id\":\"a\",\"ref\":\"e7\",\"snap\":3}",
+   "sha256": "fc8bae1a5567e4817b93a02f0c5a706f5aee067051b1ab685ec95cc27613e9e4"
+  },
+  {
+   "input": {
+    "ref": "f1e3",
+    "snap": 3,
+    "id": "a",
+    "cmd": "open_link"
+   },
+   "canonical": "{\"cmd\":\"open_link\",\"id\":\"a\",\"ref\":\"f1e3\",\"snap\":3}",
+   "sha256": "5bbac214d91ba7060ff1213417cdf6c02861ef7d4fe45721f625695b1dbe85a6"
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 0,
+    "ref": "e0"
+   },
+   "canonical": "{\"cmd\":\"open_link\",\"id\":\"a\",\"ref\":\"e0\",\"snap\":0}",
+   "sha256": "f4563a4a464c4bd904499138b701b217af938b6614dbdc99aba27d9e62d09928"
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1000000000,
+    "ref": "f9999e999999999"
+   },
+   "canonical": "{\"cmd\":\"open_link\",\"id\":\"a\",\"ref\":\"f9999e999999999\",\"snap\":1000000000}",
+   "sha256": "bfb8d824a7d42da9743440c1e5bd6f2e9bac0da800b9c17d132ac6c48006a98c"
+  },
+  {
+   "input": {
+    "cmd": "back",
+    "id": "a"
+   },
+   "canonical": "{\"cmd\":\"back\",\"id\":\"a\"}",
+   "sha256": "438bb9f0d7b02480cfe8ce4023842660dac1b64db972f2bd78b923afbe6504d6"
+  },
+  {
+   "input": {
+    "cmd": "close",
+    "id": "a"
+   },
+   "canonical": "{\"cmd\":\"close\",\"id\":\"a\"}",
+   "sha256": "da0e14586df4e1675ee785ecf2a7136168193456a5cfc248f86d462026b8cc0b"
+  },
+  {
+   "input": {
+    "cmd": "close",
+    "id": "idle-close_"
+   },
+   "canonical": "{\"cmd\":\"close\",\"id\":\"idle-close_\"}",
+   "sha256": "71482d0396751d5688b9b087b691518e49b964d5524d55ec80ab9c19d34ed121"
+  },
+  {
+   "input": {
+    "cmd": "download",
+    "id": "a",
+    "snap": 1,
+    "ref": "e2"
+   },
+   "canonical": "{\"cmd\":\"download\",\"id\":\"a\",\"ref\":\"e2\",\"snap\":1}",
+   "sha256": "cf012de44cb911e1f543cbe931bfb9d91a2f679a51bd3e889715d85ef710d7c1"
+  },
+  {
+   "input": {
+    "ref": "e2",
+    "snap": 1,
+    "id": "a",
+    "cmd": "download"
+   },
+   "canonical": "{\"cmd\":\"download\",\"id\":\"a\",\"ref\":\"e2\",\"snap\":1}",
+   "sha256": "cf012de44cb911e1f543cbe931bfb9d91a2f679a51bd3e889715d85ef710d7c1"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "a",
+    "snap": 1,
+    "form": "e4",
+    "values": {}
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e4\",\"id\":\"a\",\"snap\":1,\"values\":{}}",
+   "sha256": "0f95c5ca01dab1d4f69d2c6cc6373533bd9a5b19b30610672122ed5f7bd040a2"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "a",
+    "snap": 1,
+    "form": "e4",
+    "values": {
+     "e5": "x",
+     "e6": "y"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e4\",\"id\":\"a\",\"snap\":1,\"values\":{\"e5\":\"x\",\"e6\":\"y\"}}",
+   "sha256": "433454623a7cee75a519a2e30ab249e54e340ecbfe76d71d65513b7968cd5058"
+  },
+  {
+   "input": {
+    "values": {
+     "e6": "b",
+     "e5": "a"
+    },
+    "cmd": "submit_form",
+    "id": "x",
+    "form": "e4",
+    "snap": 2
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e4\",\"id\":\"x\",\"snap\":2,\"values\":{\"e5\":\"a\",\"e6\":\"b\"}}",
+   "sha256": "386625f900828882822d1f584c7a4f7b02883d2f8dbf404cbedcf63733fd53c4"
+  },
+  {
+   "input": {
+    "snap": 2,
+    "form": "e4",
+    "id": "x",
+    "cmd": "submit_form",
+    "values": {
+     "e5": "a",
+     "e6": "b"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e4\",\"id\":\"x\",\"snap\":2,\"values\":{\"e5\":\"a\",\"e6\":\"b\"}}",
+   "sha256": "386625f900828882822d1f584c7a4f7b02883d2f8dbf404cbedcf63733fd53c4"
+  },
+  {
+   "input": {
+    "id": "x",
+    "values": {
+     "e10": "10",
+     "e2": "2",
+     "e1": "1",
+     "f1e1": "frame"
+    },
+    "snap": 2,
+    "form": "f2e4",
+    "cmd": "submit_form"
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"f2e4\",\"id\":\"x\",\"snap\":2,\"values\":{\"e1\":\"1\",\"e10\":\"10\",\"e2\":\"2\",\"f1e1\":\"frame\"}}",
+   "sha256": "847d05f2145835e3b06660c5544adcc4052c05dff6a604ca8312f4e8681db54a"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "Привет, мир"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"Привет, мир\"}}",
+   "sha256": "f5639231a5df6f7a650310ab2b92267dd98baf2b0c083a39f955086b10ec3202"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "Привет 日本語 😀",
+     "e3": "日本語のテキスト",
+     "e4": "emoji 😀🎉👍🏽"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"Привет 日本語 😀\",\"e3\":\"日本語のテキスト\",\"e4\":\"emoji 😀🎉👍🏽\"}}",
+   "sha256": "98893ad64016d5116f3312840b595bea8be85fe5b3206c2c792f13b1f88c2e64"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "\""
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"\\\"\"}}",
+   "sha256": "d0678d6c5fe7b5a9b06b5d205db1d45314d9be7417054fd70047e04012855f0f"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "\\"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"\\\\\"}}",
+   "sha256": "96dfd90388e043fef45ff93c5082f76a1ff33810d7a648ead036afa2a3498541"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "/"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"/\"}}",
+   "sha256": "f64f72c6523706b5ae20eb297c9323eee15c5d2cf800e67b6e06df05e7f9c3ac"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "\\\"\\\\\"/"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"\\\\\\\"\\\\\\\\\\\"/\"}}",
+   "sha256": "b6c30148b94a0cce1e5ed92629b1fce2b0c8c2ddb1c82f9f68992a488c519191"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a b"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"a b\"}}",
+   "sha256": "dda154a800514b434d400c6b4084e645c84c8cdfd84a3fb03d631574b4d7bfb0"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a b"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"a b\"}}",
+   "sha256": "3e50745af70e50285a5e8bee40e9db5cf85d744ea52ae62b4f9f49caa46a7ba7"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a~b"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"a~b\"}}",
+   "sha256": "ea584a951e876e53634d46a4d3cd7d3f49e1149f88ede99be1c089ee30487b68"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "<script>alert(1)</script>"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"<script>alert(1)</script>\"}}",
+   "sha256": "496234676ab87d7ebd3617226a3025191cd1c233716237358e432dd5d60e8309"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a&b>c<d"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"a&b>c<d\"}}",
+   "sha256": "f66b94b4582e1995eadb10157465e8e1d2568bf48f64e38e6da4395c88390c50"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": " nbsp ­ soft ​ zwsp ﻿ bom ÿ"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\" nbsp ­ soft ​ zwsp ﻿ bom ÿ\"}}",
+   "sha256": "37e1abaefe8aaab988574bc925223489331ecb388ea981663ee028cf72d9d4f3"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a b  c"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"a b  c\"}}",
+   "sha256": "0b8f38511c841306b4402ea39046b1a5968c879845dfb56e6b3d1ea038d87639"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": ""
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"\"}}",
+   "sha256": "6472b3ad6fc822dd901eafb5b5a788016d803400b01f73149a559697d02ca39a"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}}",
+   "sha256": "5528399ce294c404026ea66436509ecbb16255a58935c7f362a8a0833a38defc"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"}}",
+   "sha256": "fed010f25c84e76996ba628dca48766489b769c0455441b3bebe271e51d09217"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "é日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"é日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\"}}",
+   "sha256": "b541284f8bad86c56c9cfdd69e27619c0e26bc941e209fb1cd0eccf63d971770"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e0": "v",
+     "e1": "v",
+     "e2": "v",
+     "e3": "v",
+     "e4": "v",
+     "e5": "v",
+     "e6": "v",
+     "e7": "v",
+     "e8": "v",
+     "e9": "v",
+     "e10": "v",
+     "e11": "v",
+     "e12": "v",
+     "e13": "v",
+     "e14": "v",
+     "e15": "v",
+     "e16": "v",
+     "e17": "v",
+     "e18": "v",
+     "e19": "v"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e0\":\"v\",\"e1\":\"v\",\"e10\":\"v\",\"e11\":\"v\",\"e12\":\"v\",\"e13\":\"v\",\"e14\":\"v\",\"e15\":\"v\",\"e16\":\"v\",\"e17\":\"v\",\"e18\":\"v\",\"e19\":\"v\",\"e2\":\"v\",\"e3\":\"v\",\"e4\":\"v\",\"e5\":\"v\",\"e6\":\"v\",\"e7\":\"v\",\"e8\":\"v\",\"e9\":\"v\"}}",
+   "sha256": "f92b350e7566cbe523196d1a335a172106d5826412ef946d61d5a927b52f5da7"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "U_1-2",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "  \"\\/<>&"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"U_1-2\",\"snap\":4,\"values\":{\"e2\":\"  \\\"\\\\/<>&\"}}",
+   "sha256": "a3046d2e5af90eec3273ebfa0d80961ed91ef4183c0ef6e0cbffadbb814b0c03"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "http://user:pa$$@example.test/?a=1&b=2#frag"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e2\":\"http://user:pa$$@example.test/?a=1&b=2#frag\"}}",
+   "sha256": "ac43d2da2e444dfd2c03eee9d3847234ba3bf41a4cbf84b1cd688fa974ea3b9b"
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e3": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e4": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e5": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e6": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e7": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e8": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e9": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e10": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e11": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e12": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   },
+   "canonical": "{\"cmd\":\"submit_form\",\"form\":\"e1\",\"id\":\"f\",\"snap\":4,\"values\":{\"e10\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e11\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e12\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"e2\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e3\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e4\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e5\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e6\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e7\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e8\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\",\"e9\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\"}}",
+   "sha256": "c9d591649766401616e4e88d28189ed14d58dac6220efb83d74ffd174ac3dabb"
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "b"
+   },
+   "raw": "{\"cmd\":\"snapshot\",\"id\":\"a\",\"id\":\"b\"}",
+   "canonical": "{\"cmd\":\"snapshot\",\"id\":\"b\"}",
+   "sha256": "a1fb634829deb576af7be6255d03ae00b27ada47eacdc28a9c37e4f9b928b7b7"
+  }
+ ],
+ "invalid": [
+  {
+   "input": null,
+   "error": "command must be a JSON object",
+   "ordered": true
+  },
+  {
+   "input": 5,
+   "error": "command must be a JSON object",
+   "ordered": true
+  },
+  {
+   "input": "snapshot",
+   "error": "command must be a JSON object",
+   "ordered": true
+  },
+  {
+   "input": [],
+   "error": "command must be a JSON object",
+   "ordered": true
+  },
+  {
+   "input": [
+    {
+     "cmd": "snapshot",
+     "id": "a"
+    }
+   ],
+   "error": "command must be a JSON object",
+   "ordered": true
+  },
+  {
+   "input": true,
+   "error": "command must be a JSON object",
+   "ordered": true
+  },
+  {
+   "input": {},
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": 5,
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": null,
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "eval",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "goto",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "click",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "constructor",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "__proto__",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "toString",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "hasOwnProperty",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "SNAPSHOT",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot ",
+    "id": "a"
+   },
+   "error": "unknown command type",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": ""
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a b"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a/b"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a.b"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "é"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": 5
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": null
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a\n"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a "
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot"
+   },
+   "error": "id must match [A-Za-z0-9_-]{1,64}",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a",
+    "extra": 1
+   },
+   "error": "unknown field: extra",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 1,
+    "ms": 2
+   },
+   "error": "unknown field: ms",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a"
+   },
+   "error": "missing field: dy",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "ref": "e1"
+   },
+   "error": "missing field: snap",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1
+   },
+   "error": "missing field: ref",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "a",
+    "snap": 1,
+    "form": "e1"
+   },
+   "error": "missing field: values",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "download",
+    "id": "a",
+    "snap": 1,
+    "ref": "e1",
+    "url": "https://evil.test/"
+   },
+   "error": "unknown field: url",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 1
+   },
+   "error": "unknown field: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a"
+   },
+   "raw": "{\"cmd\":\"snapshot\",\"id\":\"a\",\"__proto__\":{\"x\":1}}",
+   "error": "unknown field: __proto__",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "snapshot",
+    "id": "a",
+    "ms": 5
+   },
+   "error": "unknown field: ms",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "close",
+    "id": "a",
+    "full": true
+   },
+   "error": "unknown field: full",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 5001
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": -5001
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 1.5
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": "10"
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": null
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": true
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": [
+     1
+    ]
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "scroll",
+    "id": "a",
+    "dy": 0.1
+   },
+   "error": "dy must be an integer from -5000 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "wait",
+    "id": "a",
+    "ms": -1
+   },
+   "error": "ms must be an integer from 0 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "wait",
+    "id": "a",
+    "ms": 5001
+   },
+   "error": "ms must be an integer from 0 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "wait",
+    "id": "a",
+    "ms": 1000000000000
+   },
+   "error": "ms must be an integer from 0 to 5000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": -1,
+    "ref": "e1"
+   },
+   "error": "snap must be an integer from 0 to 1000000000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1000000000000,
+    "ref": "e1"
+   },
+   "error": "snap must be an integer from 0 to 1000000000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1000000001,
+    "ref": "e1"
+   },
+   "error": "snap must be an integer from 0 to 1000000000",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "screenshot",
+    "id": "a",
+    "full": "yes"
+   },
+   "error": "full must be true or false",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "screenshot",
+    "id": "a",
+    "full": 1
+   },
+   "error": "full must be true or false",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "screenshot",
+    "id": "a",
+    "full": null
+   },
+   "error": "full must be true or false",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": ""
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "7"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e-1"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "E7"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": " e7"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e7 "
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e7;x"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "a1"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "f1"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e1e2"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "f99999e1"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e1234567890"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e7\n"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": "e١"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": 5
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": null
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "open_link",
+    "id": "a",
+    "snap": 1,
+    "ref": [
+     "e1"
+    ]
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "download",
+    "id": "a",
+    "snap": 1,
+    "ref": "x"
+   },
+   "error": "ref must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "a",
+    "snap": 1,
+    "form": "form-1",
+    "values": {}
+   },
+   "error": "form must be an element reference like e7",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e0": "x",
+     "e1": "x",
+     "e2": "x",
+     "e3": "x",
+     "e4": "x",
+     "e5": "x",
+     "e6": "x",
+     "e7": "x",
+     "e8": "x",
+     "e9": "x",
+     "e10": "x",
+     "e11": "x",
+     "e12": "x",
+     "e13": "x",
+     "e14": "x",
+     "e15": "x",
+     "e16": "x",
+     "e17": "x",
+     "e18": "x",
+     "e19": "x",
+     "e20": "x"
+    }
+   },
+   "error": "values must have at most 20 fields",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   },
+   "error": "values values must be strings of at most 100 characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    }
+   },
+   "error": "values values must be strings of at most 100 characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a\nb"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a\u0000b"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a\u001fb"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "ab"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "ab"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "ab"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "ab"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a\tb"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a\rb"
+    }
+   },
+   "error": "values values must not contain control characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": 5
+    }
+   },
+   "error": "values values must be strings of at most 100 characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": null
+    }
+   },
+   "error": "values values must be strings of at most 100 characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": [
+      "x"
+     ]
+    }
+   },
+   "error": "values values must be strings of at most 100 characters",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "name": "x"
+    }
+   },
+   "error": "values keys must be element references",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "": "x"
+    }
+   },
+   "error": "values keys must be element references",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "ok",
+     "name": "x"
+    }
+   },
+   "error": "values keys must be element references",
+   "ordered": false
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": 5,
+     "e3": "a\nb"
+    }
+   },
+   "error": "values values must be strings of at most 100 characters",
+   "ordered": false
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": [
+     "x"
+    ]
+   },
+   "error": "values must be an object",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": null
+   },
+   "error": "values must be an object",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": "e2"
+   },
+   "error": "values must be an object",
+   "ordered": true
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e2": "a"
+    },
+    "extra1": 1,
+    "extra2": 2
+   },
+   "error": "unknown field: extra1",
+   "ordered": false
+  },
+  {
+   "input": {
+    "cmd": "submit_form",
+    "id": "f",
+    "snap": 4,
+    "form": "e1",
+    "values": {
+     "e0": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e1": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e2": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e3": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e4": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e5": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e6": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e7": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e8": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e9": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e10": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e11": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e12": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e13": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e14": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e15": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e16": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e17": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e18": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日",
+     "e19": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
+    }
+   },
+   "error": "command is longer than 4096 bytes",
+   "ordered": true
+  }
+ ]
+}
