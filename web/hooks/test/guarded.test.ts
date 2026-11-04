@@ -139,10 +139,25 @@ test('a thread that ran past its deadline is really stopped, not left spinning',
   }
 });
 
-test('the thread is warmed up before it says ready: the first event does not pay for compiling the rules', async () => {
-  // cold, the first mixed-script event takes 300 ms or more in a fresh thread; warmed up it takes a few milliseconds
-  const g = open({ timeoutMs: 200 });
-  const r = await g.inspect({ type: 'evidence', kind: 'page', text: 'Привет мир 你好 aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3Q= %41%42 Opening hours' });
-  assert.deepEqual(r.findings, []);
-  assert.equal(g.state().triggered, false);
+test('the thread is warmed up before it says ready: the first event does not pay for cold code paths', async () => {
+  // Compared on this machine, so a slow machine does not matter: the first mixed-script event in a fresh thread
+  // against the same event in a thread that skipped the warm-up (cold code paths cost tens of milliseconds).
+  const event = { type: 'evidence', kind: 'page', text: 'Привет мир 你好 aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3Q= %41%42 Opening hours' };
+  const first = async (workerUrl?: URL) => {
+    const g = open({ timeoutMs: 5000, workerUrl });
+    await g.inspect({ type: 'evidence', kind: 'page', text: 'x' }); // the thread is up (start-up and warm-up are not timed)
+    const t0 = process.hrtime.bigint();
+    await g.inspect(event);
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    await g.close();
+    return ms;
+  };
+  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+  const warm: number[] = [];
+  const cold: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    warm.push(await first());
+    cold.push(await first(new URL('./workers/cold.ts', import.meta.url)));
+  }
+  assert.ok(median(warm) + 25 < median(cold), `warm ${median(warm).toFixed(0)} ms, cold ${median(cold).toFixed(0)} ms`);
 });

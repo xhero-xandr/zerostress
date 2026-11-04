@@ -2,6 +2,7 @@
 // [label, file, text to find (exactly once), replacement, test files (default: hooks.test.ts)]
 const HOOKS = ['hooks/test/hooks.test.ts'];
 const GUARDED = ['hooks/test/guarded.test.ts'];
+const LOADER = ['hooks/test/ruleset.test.ts'];
 
 export const MUTATIONS = [
   // normalisation
@@ -22,10 +23,10 @@ export const MUTATIONS = [
   ['no base64 tokens', 'hooks/decode.ts', 'for (const m of src.matchAll(B64)) {', 'for (const m of []) {'],
   ['no tag-character tokens', 'hooks/decode.ts', 'for (const m of src.matchAll(TAGS)) {', 'for (const m of []) {'],
   // activation
-  ['one core kind fires alone', 'hooks/rules.ts', 'return core >= 2 ||', 'return core >= 1 ||'],
-  ['two core kinds never fire', 'hooks/rules.ts', 'return core >= 2 ||', 'return false ||'],
-  ['pressure kinds count as core', 'hooks/rules.ts', 'if (SUPPORT.has(k)) support = true;\n    else core++;', 'core++;'],
-  ['address + pressure does not fire', 'hooks/rules.ts', "(kinds.has('address') && support)", 'false'],
+  ['one core kind fires alone', 'hooks/kinds.ts', 'return core >= 2 ||', 'return core >= 1 ||'],
+  ['two core kinds never fire', 'hooks/kinds.ts', 'return core >= 2 ||', 'return false ||'],
+  ['pressure kinds count as core', 'hooks/kinds.ts', 'if (SUPPORT.has(k)) support = true;\n    else core++;', 'core++;'],
+  ['address + pressure does not fire', 'hooks/kinds.ts', "(kinds.has('address') && support)", 'false'],
   // scanning one string
   ['no unescape layer', 'hooks/scan.ts', 'if (un && un.text.length <= MAX_STRING)', 'if (false)'],
   ['no encoded-token layer', 'hooks/scan.ts', 'if (layer < MAX_DEPTH) {', 'if (false) {'],
@@ -47,6 +48,34 @@ export const MUTATIONS = [
   ['error path does not count', 'hooks/hooks.ts', 'const f = [errorFinding(\'event\')];\n        keep(f);', 'const f = [errorFinding(\'event\')];'],
   ['mode stays model', 'hooks/hooks.ts', "mode: triggered ? 'rules_only' : 'model',", "mode: 'model',"],
   ['confirmation not required', 'hooks/hooks.ts', 'require_confirmation: triggered,', 'require_confirmation: false,'],
+  // the rule loader (ruleset.ts): every check that keeps a damaged or careless rule set out
+  ['examples need not fire', 'hooks/ruleset.ts', 'for (const t of fire) if (!matchesOn(re, views, t)) fail(', 'for (const t of fire) if (false) fail(', LOADER],
+  ['quiet examples may fire', 'hooks/ruleset.ts', 'for (const t of quiet) if (matchesOn(re, views, t)) fail(', 'for (const t of quiet) if (false) fail(', LOADER],
+  ['a pattern may match the empty string', 'hooks/ruleset.ts', "if (new RegExp(source, 'u').test('')) fail(", 'if (false) fail(', LOADER],
+  ['nested unbounded repeats allowed', 'hooks/ruleset.ts', 'if (NESTED_REPEAT.test(source)) fail(', 'if (false) fail(', LOADER],
+  ['duplicate ids allowed', 'hooks/ruleset.ts', "if (seen.has(id)) fail(here, 'duplicate rule id');", '', LOADER],
+  ['unknown fields allowed', 'hooks/ruleset.ts', 'if (!required.includes(k) && !optional.includes(k)) fail(', 'if (false) fail(', LOADER],
+  ['missing fields allowed', 'hooks/ruleset.ts', 'for (const k of required) if (!(k in o)) fail(', 'for (const k of required) if (false) fail(', LOADER],
+  ['any category allowed', 'hooks/ruleset.ts', '!(CATEGORIES as readonly string[]).includes(r.category)', 'false', LOADER],
+  ['any view allowed', 'hooks/ruleset.ts', 'if (!MATCH_VIEWS.includes(v)) fail(', 'if (false) fail(', LOADER],
+  ['a view may repeat', 'hooks/ruleset.ts', 'if (new Set(views).size !== views.length) fail(', 'if (false) fail(', LOADER],
+  ['any gap allowed', 'hooks/ruleset.ts', 'if (!/^[0-9]$/.test(arg)) fail(', 'if (false) fail(', LOADER],
+  ['unknown macros allowed', 'hooks/ruleset.ts', 'if (v === undefined) return fail(', 'if (false) return fail(', LOADER],
+  ['macro cycles allowed', 'hooks/ruleset.ts', 'if (depth > LIMITS.macroDepth) return fail(', 'if (false) return fail(', LOADER],
+  ['any file name allowed', 'hooks/ruleset.ts', "if (name !== 'macros.json' &&", "if (false && name !== 'macros.json' &&", LOADER],
+  ['links and directories allowed', 'hooks/ruleset.ts', 'if (!st.isFile()) fail(', 'if (false) fail(', LOADER],
+  ['any file size allowed', 'hooks/ruleset.ts', 'if (st.size > LIMITS.fileBytes) fail(', 'if (false) fail(', LOADER],
+  ['the hash ignores file names', 'hooks/ruleset.ts', 'hash.update(name).update(', 'hash.update(', LOADER],
+  ['short squashed phrases allowed', 'hooks/ruleset.ts', 'if (ph.length < LIMITS.squashedMin) fail(', 'if (false) fail(', LOADER],
+  ['any squashed characters allowed', 'hooks/ruleset.ts', 'if (!/^[\\p{L}\\p{N}]+$/u.test(ph)) fail(', 'if (false) fail(', LOADER],
+  ['a squashed id may equal a rule id', 'hooks/ruleset.ts', 'for (const s of squashed) if (seen.has(s.id)) fail(', 'for (const s of squashed) if (false) fail(', LOADER],
+  ['any number of rules allowed', 'hooks/ruleset.ts', 'if (rules.length === 0 || rules.length > LIMITS.rules) fail(', 'if (false) fail(', LOADER],
+  ['macros file not required', 'hooks/ruleset.ts', "if (!docs.has('macros.json')) fail(", 'if (false) fail(', LOADER],
+  ['any schema allowed in a rules file', 'hooks/ruleset.ts', "if (doc.schema !== 1) fail(name, 'schema must be 1');", '', LOADER],
+  ['any fold allowed', 'hooks/ruleset.ts', "if ('fold' in r && r.fold !== 'cyr') fail(", 'if (false) fail(', LOADER],
+  ['gaps are all nine words wide', 'hooks/ruleset.ts', 'out += gap(Number(arg));', 'out += gap(9);', LOADER],
+  ['the hooks start without rules when loading fails', 'hooks/rules.ts', "const loaded = loadRuleset(fileURLToPath(new URL('./rules/', import.meta.url)));", "let loaded: ReturnType<typeof loadRuleset>;\ntry { loaded = loadRuleset(fileURLToPath(new URL('./rules/', import.meta.url))); } catch { loaded = { rules: [], squashed: [], hash: '', files: [] }; }", LOADER],
+  ['the state does not carry the rule hash', 'hooks/hooks.ts', 'ruleset: RULESET_SHA256,', "ruleset: '',", LOADER],
   // the guarded thread (the deadline, the crashes, the state it keeps)
   ['no deadline', 'hooks/guarded.ts', "const timer = setTimeout(() => fail('hook_timeout'), timeoutMs);", "const timer = setTimeout(() => fail('hook_timeout'), 600_000);", GUARDED],
   ['a late thread is not killed', 'hooks/guarded.ts', '          void w.terminate();\n        }\n        resolve(r);', '        }\n        resolve(r);', GUARDED],

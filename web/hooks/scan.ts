@@ -5,7 +5,8 @@ import {
   buildView, originSpan, reversed, rot13, squash,
   type Fold, type OriginMap, type View, type ViewName,
 } from './normalize.ts';
-import { RULES, SQUASHED_CYR, SQUASHED_LAT, weakActivates, type Category, type Strength } from './rules.ts';
+import { weakActivates, type Category, type Strength } from './kinds.ts';
+import { RULES, SQUASHED } from './rules.ts';
 
 export const MAX_STRING = 256 * 1024;
 export const MAX_DEPTH = 2;
@@ -91,7 +92,7 @@ function viewHits(src: string, origin: OriginMap | undefined, layer: number): Hi
       }
     }
   }
-  for (const [name, phrases, id] of [['squashed_lat', SQUASHED_LAT, 'override.squashed'], ['squashed_cyr', SQUASHED_CYR, 'ru.override.squashed']] as const) {
+  for (const { view: name, phrases, id } of SQUASHED) {
     const v = views.get(name);
     if (!v.text) continue;
     for (const p of phrases) {

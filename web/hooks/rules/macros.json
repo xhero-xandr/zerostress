@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "macros": {
+    "OBJ": "instructions?|prompts?|guidelines?|directives?|programming|guardrails?|constraints?|restrictions?",
+    "OBJ_Q": "rules?|commands?|messages|context|training|directions?|polic(?:y|ies)",
+    "OBJ_ALL": "@OBJ|@OBJ_Q",
+    "QUAL": "previous|prior|above|earlier|preceding|former|original|initial|existing|all|any|every|your|system|safety|security",
+    "IGN": "ignore|disregard|forget|discard|abandon|neglect|dismiss",
+    "SAFE": "safe|legit|legitimate|benign|trusted|trustworthy|harmless|clean|secure|genuine|authentic|verified|official|non-?malicious|not (?:a )?(?:phishing|malicious|suspicious|dangerous|harmful|scam|fraud|threat)|low[- ]risk|no risk|zero risk|risk[- ]free",
+    "AMOD": "(?:completely\\s+|fully\\s+|totally\\s+|100%\\s*|absolutely\\s+|perfectly\\s+)?",
+    "NOUN": "site|page|website|url|link|domain|file|download|attachment|content|result|everything|it|them|this|that",
+    "IMP": "(?:^|[.!?;:\\n\\-]\\s*|(?<![\\p{L}\\p{N}])(?:please|must|should|always|now|just|and|then|you)\\s+)",
+    "REVEAL_TARGET": "system prompt|system message|system instructions?|hidden instructions?|initial instructions?|original instructions?|your api keys?|your secrets?|your hidden \\w+",
+    "RU_OBJ": "инструкци\\p{L}*|указани\\p{L}*|промпт\\p{L}*|подсказк\\p{L}*|ограничени\\p{L}*|директив\\p{L}*",
+    "RU_OBJ_Q": "правил\\p{L}*|команд\\p{L}*|сообщени\\p{L}*|запрос\\p{L}*",
+    "RU_OBJ_ALL": "@RU_OBJ|@RU_OBJ_Q",
+    "RU_QUAL": "предыдущ\\p{L}*|прежн\\p{L}*|прошл\\p{L}*|выше\\p{L}*|все|всё|любые|свои|системн\\p{L}*|исходн\\p{L}*",
+    "RU_IGN": "игнорируй(?:те)?|проигнорируй(?:те)?|забудь(?:те)?|отбрось(?:те)?|не учитывай(?:те)?|пренебреги(?:те)?|отмени(?:те)?|сбрось(?:те)?|не следуй(?:те)?|не выполняй(?:те)?"
+  }
+}

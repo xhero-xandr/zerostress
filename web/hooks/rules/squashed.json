@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "sets": [
+    {
+      "id": "override.squashed",
+      "view": "squashed_lat",
+      "fold": "none",
+      "parts": [
+        ["ignore", "disregard", "forget"],
+        ["", "all", "any", "your", "the", "allthe", "allyour", "allof"],
+        ["previous", "prior", "above", "earlier", "preceding"],
+        ["instructions", "prompt", "rules", "directions", "guidelines"]
+      ]
+    },
+    {
+      "id": "ru.override.squashed",
+      "view": "squashed_cyr",
+      "fold": "cyr",
+      "parts": [
+        ["игнорируй", "забудь", "отбрось"],
+        ["", "все", "всё", "свои", "любые"],
+        ["предыдущие", "прежние", "прошлые", "вышестоящие"],
+        ["инструкции", "указания", "правила", "команды"]
+      ]
+    }
+  ]
+}

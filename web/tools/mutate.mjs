@@ -10,7 +10,7 @@
 //   node tools/mutate.mjs --list       print the labels
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,8 +21,11 @@ const args = process.argv.slice(2);
 const only = args.find((a) => a.startsWith('--only='))?.slice(7);
 
 const rulesSrc = readFileSync(join(webDir, 'hooks/rules.ts'), 'utf8');
-const ruleIds = [...rulesSrc.matchAll(/^add\('([^']+)'/gm)].map((m) => m[1]);
-const RULES_LINE = 'export const RULES: readonly Rule[] = rules;';
+// the rules are data now: their ids come from the files
+const rulesDir = join(webDir, 'hooks/rules');
+const ruleIds = readdirSync(rulesDir).filter((n) => n.endsWith('.rules.json'))
+  .flatMap((n) => JSON.parse(readFileSync(join(rulesDir, n), 'utf8')).rules.map((r) => r.id));
+const RULES_LINE = 'export const RULES: readonly Rule[] = loaded.rules;';
 if (!rulesSrc.includes(RULES_LINE)) throw new Error('hooks/rules.ts no longer exports RULES the way tools/mutate.mjs expects');
 
 const all = [
@@ -66,7 +69,7 @@ try {
   for (const m of all) {
     let failed;
     if (m.ruleOff) {
-      writeFileSync(join(root, 'hooks/rules.ts'), original('hooks/rules.ts').replace(RULES_LINE, 'export const RULES: readonly Rule[] = rules.filter((r) => r.id !== process.env.ZS_OFF);'));
+      writeFileSync(join(root, 'hooks/rules.ts'), original('hooks/rules.ts').replace(RULES_LINE, 'export const RULES: readonly Rule[] = loaded.rules.filter((r) => r.id !== process.env.ZS_OFF);'));
       files.set('hooks/rules.ts', rulesSrc);
       failed = testsFail(m.tests, { ZS_OFF: m.ruleOff });
     } else {

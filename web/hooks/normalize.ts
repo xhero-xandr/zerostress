@@ -130,3 +130,19 @@ export function originSpan(v: { start: number[]; end: number[] }, from: number, 
 export function foldPattern(s: string): string {
   return s.normalize('NFKD').replace(/\p{M}/gu, '');
 }
+
+/** The view `name` of a text on its own (no origin map): used where only the matching matters, not the cutting. */
+export function viewOf(text: string, name: ViewName): View {
+  switch (name) {
+    case 'lat': case 'leet': case 'cyr': case 'raw':
+      return buildView(text, name);
+    case 'squashed_lat':
+      return squash(buildView(text, 'lat'), name);
+    case 'squashed_cyr':
+      return squash(buildView(text, 'cyr'), name);
+    case 'rot13':
+      return rot13(buildView(text, 'lat'));
+    case 'reversed':
+      return reversed(buildView(text, 'lat'));
+  }
+}

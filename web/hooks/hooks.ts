@@ -1,8 +1,8 @@
 // The task-level hooks (spec 009, 3.1 and 3.6): every string of every evidence event is inspected before anything
 // reaches a model; the first finding turns the task to "rules only" for good.
 
-import type { Category } from './rules.ts';
-import { weakActivates } from './rules.ts';
+import { weakActivates, type Category } from './kinds.ts';
+import { RULESET_SHA256 } from './rules.ts';
 import { scanString, type Finding, type ScanResult } from './scan.ts';
 
 /** Keys that carry the event's own structure, written by the collector, not by the page. */
@@ -26,6 +26,8 @@ export interface HookState {
   /** signal for the rules that raise the risk (spec 008); null while nothing was found */
   signal: 'injection_attempt' | null;
   findings: Finding[];
+  /** SHA-256 of the rule files that produced this state: kept with the run */
+  ruleset: string;
 }
 
 export interface Inspected {
@@ -81,6 +83,7 @@ export function makeState(triggered: boolean, findings: Finding[]): HookState {
     require_confirmation: triggered,
     signal: triggered ? 'injection_attempt' : null,
     findings: [...findings],
+    ruleset: RULESET_SHA256,
   };
 }
 
