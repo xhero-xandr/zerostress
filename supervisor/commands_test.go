@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// Port of supervisor/test/commands.test.ts. Numbers are float64 because that is what encoding/json decodes into any.
+// Numbers are float64 because that is what encoding/json decodes into any.
 
 type cmdTMap = map[string]any
 
@@ -121,7 +121,7 @@ func TestCommands_IDMustMatchPattern(t *testing.T) {
 	for _, id := range []any{"", "a b", "a/b", "a.b", "é", strings.Repeat("x", 65), 5.0, nil, "a\n"} {
 		cmdTBad(t, cmdTMap{"cmd": "snapshot", "id": id}, "id must match")
 	}
-	cmdTBad(t, cmdTMap{"cmd": "snapshot"}, "id must match") // undefined in the TS test
+	cmdTBad(t, cmdTMap{"cmd": "snapshot"}, "id must match")
 	cmdTOk(t, cmdTMap{"cmd": "snapshot", "id": "A-z_0-9"})
 	cmdTOk(t, cmdTMap{"cmd": "snapshot", "id": strings.Repeat("x", 64)})
 }
@@ -292,9 +292,9 @@ func TestCommands_DigestComparisonIsStrict(t *testing.T) {
 	}
 }
 
-// Conformance with the TypeScript supervisor: the fixture was produced by running supervisor/src/commands.ts over the
-// inputs (see testdata/gen-canonical.mjs). The approval hash is a hash of these bytes, so any drift is a break.
-func TestCommands_CanonicalFormMatchesTypeScript(t *testing.T) {
+// Conformance fixture: testdata/canonical.json was produced by the first (TypeScript) implementation over the
+// inputs (the generator is gone with that implementation). The approval hash is a hash of these bytes, so any drift is a break.
+func TestCommands_CanonicalFormMatchesFixture(t *testing.T) {
 	data, err := os.ReadFile("testdata/canonical.json")
 	if err != nil {
 		t.Fatal(err)
@@ -359,10 +359,10 @@ func TestCommands_CanonicalFormMatchesTypeScript(t *testing.T) {
 			t.Errorf("invalid #%d %.80s accepted", i, c.Input)
 			continue
 		}
-		// with several offending keys the TS validator reports the first in insertion order and Go the first in
+		// with several offending keys Go reports the first in
 		// sorted order, since a decoded map has no order: such cases only have to be rejected
 		if c.Ordered && problem != c.Error {
-			t.Errorf("invalid #%d %.80s: error %q, TypeScript says %q", i, c.Input, problem, c.Error)
+			t.Errorf("invalid #%d %.80s: error %q, fixture says %q", i, c.Input, problem, c.Error)
 		}
 	}
 }

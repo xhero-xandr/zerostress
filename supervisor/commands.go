@@ -15,7 +15,7 @@ import (
 
 // Session commands (spec 005, 3.3; spec 006, 3.8). The supervisor accepts only this fixed set with checked
 // parameters. What it sends to the guest is the canonical form, so the SHA-256 an approval is bound to is the SHA-256
-// of exactly the bytes that reach the collector. The canonical form is byte-identical to the TypeScript supervisor's.
+// of exactly the bytes that reach the collector. The canonical form is pinned by testdata/canonical.json.
 
 type Risk string
 

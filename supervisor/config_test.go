@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Port of supervisor/test/config.test.ts, plus the boundaries of every session setting.
+// The boundaries of every session setting.
 
 func TestConfig_SessionSettingsDefaults(t *testing.T) {
 	c, err := LoadConfig(map[string]string{})
@@ -68,7 +68,7 @@ func TestConfig_OutOfRangeOrMalformedValuesStopTheService(t *testing.T) {
 		{"SUP_COMMAND_TIMEOUT_S": "121"},
 		{"SUP_SESSION_SLOTS": "one"},
 		{"SUP_COMMAND_MAX": "1.5"},
-		// not in the TS test, same rules
+		// same rules
 		{"SUP_SESSION_GRACE_S": "0"},
 		{"SUP_SESSION_GRACE_S": "121"},
 		{"SUP_COMMAND_MAX": "99999999999999999999"},

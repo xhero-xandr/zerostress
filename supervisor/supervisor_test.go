@@ -528,7 +528,7 @@ func TestCore_LogsNeverContainTheFullURL(t *testing.T) {
 	}
 }
 
-// Language difference: the TypeScript read() throws on a bad id; the Go Read returns nothing and Append returns an error.
+// The Read returns nothing and Append returns an error.
 func TestCore_RunIDsAreValidatedBeforeTheyReachAPath(t *testing.T) {
 	h := newHarness(t, map[string]Script{}, nil)
 	if got := h.Results.Read("../../etc/passwd", 0); got != nil {

@@ -650,7 +650,7 @@ func TestSessions_ShutdownWhileOpenVoidsCommandsAndLeavesNothingBehind(t *testin
 	h.Backend.AssertClean(t)
 }
 
-// Not in the TypeScript suite: commands and approvals that arrive from many goroutines at once (the HTTP layer does
+// Commands and approvals that arrive from many goroutines at once (the HTTP layer does
 // this) must neither race nor lose or double-send a command. Run with -race.
 func TestSessions_ConcurrentSubmissionsSendEachCommandOnce(t *testing.T) {
 	h := newHarness(t, map[string]Script{"*": sessionsTScript()}, sessionsTBoot300)

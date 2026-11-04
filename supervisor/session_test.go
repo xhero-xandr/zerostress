@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Port of supervisor/test/session.test.ts. The session calls Send, Emit and Abort from timer goroutines, so the
+// The session calls Send, Emit and Abort from timer goroutines, so the
 // recorders below are guarded by a mutex of their own (never held while calling into the session).
 
 type sessTH struct {
@@ -367,7 +367,7 @@ func TestSession_ApprovalNotUsedInTimeExpires(t *testing.T) {
 func TestSession_ExpiryEnforcedAtApprovalTimeWhenTimerHasNotFired(t *testing.T) {
 	var clock atomic.Int64
 	clock.Store(1000)
-	// The real timer must not fire during the test (the TS test uses 100 ms and a synchronous body); a long TTL keeps
+	// The real timer must not fire during the test; a long TTL keeps
 	// that true on a slow machine, and the fake clock jumps past it.
 	h := sessTMake(t, func(o *SessionOptions) {
 		o.ApprovalTTL = 5 * time.Second
@@ -607,7 +607,7 @@ func TestSession_IdleClosesSessionItself(t *testing.T) {
 }
 
 func TestSession_IdleClockRestartsAfterEachCommandStoppedWhileInFlight(t *testing.T) {
-	// 100 ms instead of the 60 ms of the TS test: the check 30 ms after the result needs room on a loaded machine
+	// 100 ms: the check 30 ms after the result needs room on a loaded machine
 	h := sessTMake(t, func(o *SessionOptions) { o.Idle = 100 * time.Millisecond })
 	h.s.MarkReady()
 	h.accepted(sessTSnap("a"))

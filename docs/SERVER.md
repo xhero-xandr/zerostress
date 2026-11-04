@@ -8,9 +8,9 @@
 | `/opt/zerostress/bin/firecracker` | Firecracker v1.17.0 | официальный релиз, хеш закреплён в `deploy/001-host-baseline.sh` |
 | `/opt/zerostress/bin/zsnet` | скрипт сети слотов (`up N`, `down N`, N от 0 до 3) | `deploy/zsnet`, ставит `deploy/003-network.sh` |
 | `/opt/zerostress/bin/zsvm` | root-помощник: запускает Firecracker юнитом systemd с лимитами (`run`, `stop`, `recover`) | `deploy/zsvm`, ставит `deploy/002-vm-runner.sh` (его вызывает `006-supervisor.sh`) |
-| `/opt/zerostress/supervisor`, `zerostress-supervisor.service` | код и служба супервизора | `deploy/006-supervisor.sh` |
+| `/opt/zerostress/supervisor/zerostress-supervisor`, `zerostress-supervisor.service` | бинарник и служба супервизора | `supervisor/build.sh`, затем `deploy/006-supervisor.sh` |
 | `/opt/zerostress/images/` | ядро гостя, `guest-rootfs.ext4`, `manifest.json` | `guest-image/build.sh`, ставит `guest-image/install.sh` |
-| `/opt/node` | Node 24.22.2 для супервизора и тестов хоста | официальный архив, сумма проверена по `SHASUMS256.txt` |
+| `/opt/node` | Node 24.22.2 только для вспомогательных скриптов тестов хоста (супервизору не нужен) | официальный архив, сумма проверена по `SHASUMS256.txt` |
 | `/opt/go` | Go 1.27.3, только для сборки агента | архив с go.dev, сумма проверена |
 | `/opt/zerostress-src` | копия рабочего дерева (без git) | `deploy/dev-sync.sh` с локальной машины |
 | `/var/lib/zerostress/runs` | каталоги запусков, на каждый запуск свой, после него удаляется | супервизор (тесты создают и убирают сами) |
@@ -22,7 +22,7 @@
 
 Проект называется ZeroStress. 4 ноября 2026 сервер приведён к этому имени целиком: учётные записи переименованы на месте (uid, gid и владельцы файлов сохранились), каталоги перенесены, а юнит, sudoers, правила `sysctl`, `tmpfiles`, `udev` и SELinux, зона и политика `firewalld` и таблица nftables пересозданы скриптами из репозитория. Образ гостя пересобран под новое имя агента.
 
-Из служб проекта работает только `zerostress-supervisor` (TypeScript или Go, см. `IMPL` в `deploy/006-supervisor.sh`); веб-слоя и прокси пока нет. Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
+Из служб проекта работает только `zerostress-supervisor` (Go, статический бинарник); веб-слоя и прокси пока нет. Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
 
 ## Как работать
 ```
@@ -34,6 +34,7 @@ ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                  
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/session.sh'                     # сессии агента v2 по настоящему vsock (сначала build-agent.sh: dev-sync стирает бинарник)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'        # совместимость параметров юнита с SELinux (см. спецификацию 006)
+ssh vultr 'sudo -u linuxuser bash /opt/zerostress-src/supervisor/build.sh'            # проверки, тесты с -race и сборка супервизора
 ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                        # установить и запустить службу супервизора
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-e2e.sh'                   # сквозной тест службы с настоящими ВМ (47 проверок)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-timeouts.sh'              # лимит агента 60 с и жёсткий потолок (около 2 минут, временно меняет юнит и восстанавливает)
@@ -49,3 +50,6 @@ ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-probe.sh'                  
 
 ## Правило порядка
 Всё, что создают тесты (ВМ, интерфейсы `zstap*`, каталоги запусков, loop-монтирования), они убирают сами через `trap`. Если запуск прервали, проверка: `pgrep firecracker`, `ip -br link | grep zstap`, `ls /var/lib/zerostress/runs`, `losetup -a`: везде должно быть пусто.
+
+## Домен
+`zerostress.space`, DNS через Cloudflare с проксированием (проверено 4 ноября 2026: имя отдаёт адреса Cloudflare). Caddy и сертификат на сервере ещё не настроены; режим TLS между Cloudflare и сервером (Full strict с сертификатом Cloudflare Origin или обычный Let's Encrypt) выбираем при настройке прокси, см. docs/TOOLS.md, раздел 8.
