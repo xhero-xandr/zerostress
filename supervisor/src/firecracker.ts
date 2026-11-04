@@ -64,6 +64,7 @@ export class FirecrackerVm implements VmHandle {
   private dead = false;
   private stopping: Promise<void> | null = null;
   private runId: string;
+  private writer: ((line: string) => void) | null = null;
 
   private constructor(cfg: Config, opts: StartOptions) {
     this.cfg = cfg;
@@ -135,11 +136,20 @@ export class FirecrackerVm implements VmHandle {
 
   async runJob(job: string, onLine: (line: string) => void, signal: AbortSignal): Promise<void> {
     try {
-      await runAgentJob(this.vsockUds, this.cfg.vsockPort, job, onLine, this.cfg.maxEvidenceBytes, signal);
+      await runAgentJob(this.vsockUds, this.cfg.vsockPort, job, onLine, this.cfg.maxEvidenceBytes, signal, (w) => {
+        this.writer = w;
+      });
     } catch (e) {
       if (signal.aborted) throw signal.reason;
       throw new RunError('agent_error', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.writer = null;
     }
+  }
+
+  send(line: string): void {
+    if (!this.writer) throw new Error('no open agent connection');
+    this.writer(line);
   }
 
   /**

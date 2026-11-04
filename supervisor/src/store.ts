@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import type { FailReason, RunEvent, RunRecord, RunState } from './types.ts';
+import type { FailReason, RunEvent, RunRecord, RunState, SessionLimits } from './types.ts';
 
 export const RUN_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -22,10 +22,13 @@ interface Row {
   partial: number;
   events: number;
   expiresAt: number;
+  sessionIdleMs: number | null;
+  sessionMaxMs: number | null;
 }
 
 const COLUMNS = `id, url, state, reason, slot, created_at AS createdAt, started_at AS startedAt,
-  finished_at AS finishedAt, agent_status AS agentStatus, partial, events, expires_at AS expiresAt`;
+  finished_at AS finishedAt, agent_status AS agentStatus, partial, events, expires_at AS expiresAt,
+  session_idle_ms AS sessionIdleMs, session_max_ms AS sessionMaxMs`;
 
 const PATCHABLE: Record<string, string> = {
   state: 'state',
@@ -41,7 +44,9 @@ const PATCHABLE: Record<string, string> = {
 export type RunPatch = Partial<Pick<RunRecord, 'state' | 'reason' | 'slot' | 'startedAt' | 'finishedAt' | 'agentStatus' | 'partial' | 'events'>>;
 
 function toRecord(r: Row): RunRecord {
-  return { ...r, partial: r.partial === 1 };
+  const { sessionIdleMs, sessionMaxMs, ...rest } = r;
+  const session = sessionIdleMs !== null && sessionMaxMs !== null ? { idleMs: sessionIdleMs, maxMs: sessionMaxMs } : null;
+  return { ...rest, partial: r.partial === 1, session };
 }
 
 export class Store {
@@ -69,12 +74,17 @@ export class Store {
       CREATE INDEX IF NOT EXISTS runs_state ON runs (state, created_at);
       CREATE INDEX IF NOT EXISTS runs_expires ON runs (expires_at);
     `);
+    // databases created before sessions existed lack the limit columns
+    const have = new Set((this.db.prepare('PRAGMA table_info(runs)').all() as unknown as { name: string }[]).map((c) => c.name));
+    for (const col of ['session_idle_ms', 'session_max_ms']) {
+      if (!have.has(col)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${col} INTEGER`);
+    }
   }
 
-  insert(id: string, url: string, createdAt: number, expiresAt: number): void {
+  insert(id: string, url: string, createdAt: number, expiresAt: number, session: SessionLimits | null = null): void {
     this.db
-      .prepare('INSERT INTO runs (id, url, state, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-      .run(id, url, 'queued', createdAt, expiresAt);
+      .prepare('INSERT INTO runs (id, url, state, created_at, expires_at, session_idle_ms, session_max_ms) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, url, 'queued', createdAt, expiresAt, session?.idleMs ?? null, session?.maxMs ?? null);
   }
 
   get(id: string): RunRecord | undefined {
@@ -104,7 +114,7 @@ export class Store {
   /** Runs that were in flight when the process died. */
   inFlight(): RunRecord[] {
     const rows = this.db
-      .prepare(`SELECT ${COLUMNS} FROM runs WHERE state IN ('preparing', 'booting', 'running', 'destroying') ORDER BY created_at`)
+      .prepare(`SELECT ${COLUMNS} FROM runs WHERE state IN ('preparing', 'booting', 'running', 'session', 'destroying') ORDER BY created_at`)
       .all() as unknown as Row[];
     return rows.map(toRecord);
   }

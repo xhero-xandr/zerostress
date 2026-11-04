@@ -1,6 +1,9 @@
+import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { createApi } from '../src/api.ts';
 import { loadConfig } from '../src/config.ts';
 import type { Config } from '../src/config.ts';
 import type { Logger } from '../src/logger.ts';
@@ -50,13 +53,27 @@ export interface Script {
   hang?: boolean;
   /** The VM dies right before this line (index) is delivered. */
   crashAtLine?: number;
+  /** Session scripts: called for every command line the supervisor sends. Default: answer with cmd_result, end the stream on close. */
+  onCommand?: (cmd: Record<string, unknown>, vm: FakeVm) => void;
+  /** Session scripts: never answer commands (the supervisor's command timeout must fire). */
+  silent?: boolean;
+  /** Session scripts: writing a command to the guest fails. */
+  sendFails?: boolean;
+  replyDelayMs?: number;
 }
 
 export const OK_STATUS = '{"type":"status","status":"ok","exit_code":0,"duration_ms":5}';
 export const status = (s: string) => `{"type":"status","status":"${s}","duration_ms":5}`;
+export const SESSION_READY = '{"type":"evidence","v":1,"kind":"session_ready"}';
+export const cmdResult = (id: string, ok = true, error?: string) =>
+  JSON.stringify({ type: 'evidence', v: 1, kind: 'cmd_result', id, ok, ...(error ? { error } : {}) });
 
-class FakeVm implements VmHandle {
+export class FakeVm implements VmHandle {
   exited: Promise<void>;
+  /** Lines the supervisor wrote after the job (session commands). */
+  sent: string[] = [];
+  private onLine: ((line: string) => void) | null = null;
+  private endStream: (() => void) | null = null;
   private kill!: () => void;
   private dead = false;
   private script: Script;
@@ -87,8 +104,34 @@ class FakeVm implements VmHandle {
     await sleep(1);
   }
 
+  /** Guest -> supervisor line, as if the collector had printed it. */
+  push(line: string): void {
+    this.onLine?.(line);
+  }
+
+  /** The collector exits: last line (default: ok status), then the connection closes. */
+  finish(statusLine = OK_STATUS): void {
+    this.push(statusLine);
+    this.endStream?.();
+  }
+
+  send(line: string): void {
+    if (this.script.sendFails) throw new Error('socket closed');
+    if (!this.onLine || this.dead) throw new Error('no open agent connection');
+    this.sent.push(line);
+    const cmd = JSON.parse(line) as Record<string, unknown>;
+    if (this.script.onCommand) return this.script.onCommand(cmd, this);
+    if (this.script.silent) return;
+    setTimeout(() => {
+      if (this.dead) return;
+      this.push(cmdResult(String(cmd.id)));
+      if (cmd.cmd === 'close') this.finish();
+    }, this.script.replyDelayMs ?? 2);
+  }
+
   async runJob(job: string, onLine: (l: string) => void, signal: AbortSignal): Promise<void> {
     this.job = job;
+    this.onLine = onLine;
     const lines = this.script.lines ?? [];
     for (let i = 0; i < lines.length; i++) {
       if (signal.aborted || this.dead) return;
@@ -101,10 +144,12 @@ class FakeVm implements VmHandle {
     }
     if (this.script.hang) {
       await new Promise<void>((r) => {
+        this.endStream = r;
         signal.addEventListener('abort', () => r(), { once: true });
         void this.exited.then(r);
       });
     }
+    this.onLine = null;
   }
 
   async stop(): Promise<void> {
@@ -123,6 +168,7 @@ export class FakeBackend implements Backend {
   slotsUp = new Set<number>();
   dirs = new Set<string>();
   vms = new Set<FakeVm>();
+  vmByRun = new Map<string, FakeVm>();
   maxVms = 0;
   started: string[] = [];
   lastJob = '';
@@ -156,6 +202,7 @@ export class FakeBackend implements Backend {
     if (script.start === 'fail') throw new RunError('fc_api', 'PUT /boot-source returned 400');
     const vm = new FakeVm(this, script);
     this.vms.add(vm);
+    this.vmByRun.set(opts.runId, vm);
     this.maxVms = Math.max(this.maxVms, this.vms.size);
     this.started.push(opts.runId);
     const origRun = vm.runJob.bind(vm);
@@ -209,6 +256,34 @@ export function harness(scripts: Record<string, Script>, over: Partial<Config> =
 }
 
 export const URL_OF = (path: string) => `https://example.test${path}`;
+
+/** Starts the supervisor and an HTTP server on a loopback port; always tears both down, even when an assertion fails. */
+export async function withApi(h: Harness, fn: (base: string) => Promise<void>): Promise<void> {
+  await h.sup.start();
+  const server = createApi(h.sup, h.config);
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+  } finally {
+    await h.sup.shutdown();
+    server.closeAllConnections();
+    server.close();
+  }
+}
+
+export async function sse(url: string, headers: Record<string, string> = {}): Promise<{ id: number; event: string; data: string }[]> {
+  const res = await fetch(url, { headers });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/);
+  const text = await res.text(); // the server ends the stream on a terminal state
+  return text
+    .split('\n\n')
+    .filter((f) => f.startsWith('id:'))
+    .map((f) => {
+      const m = /^id: (\d+)\nevent: (\w+)\ndata: (.*)$/s.exec(f)!;
+      return { id: Number(m[1]), event: m[2]!, data: m[3]! };
+    });
+}
 
 export async function finished(h: Harness, id: string, ms = 3000) {
   return waitFor(() => {

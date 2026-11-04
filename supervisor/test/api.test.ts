@@ -1,40 +1,10 @@
 import assert from 'node:assert/strict';
-import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
-import { createApi, validateSubmit } from '../src/api.ts';
-import { OK_STATUS, finished, harness, status, waitFor } from './helpers.ts';
-import type { Harness } from './helpers.ts';
-
-/** Starts the supervisor and an HTTP server on a loopback port; always tears both down, even when an assertion fails. */
-async function withApi(h: Harness, fn: (base: string) => Promise<void>): Promise<void> {
-  await h.sup.start();
-  const server = createApi(h.sup, h.config);
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  try {
-    await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-  } finally {
-    await h.sup.shutdown();
-    server.closeAllConnections();
-    server.close();
-  }
-}
+import { validateSubmit } from '../src/api.ts';
+import { OK_STATUS, finished, harness, sse, status, waitFor, withApi } from './helpers.ts';
 
 const post = (base: string, body: unknown, raw = false) =>
   fetch(`${base}/v1/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: raw ? (body as string) : JSON.stringify(body) });
-
-async function sse(url: string, headers: Record<string, string> = {}): Promise<{ id: number; event: string; data: string }[]> {
-  const res = await fetch(url, { headers });
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/);
-  const text = await res.text(); // the server ends the stream on a terminal state
-  return text
-    .split('\n\n')
-    .filter((f) => f.startsWith('id:'))
-    .map((f) => {
-      const m = /^id: (\d+)\nevent: (\w+)\ndata: (.*)$/s.exec(f)!;
-      return { id: Number(m[1]), event: m[2]!, data: m[3]! };
-    });
-}
 
 test('validateSubmit accepts http(s) URLs and rejects everything else', () => {
   assert.equal(validateSubmit({ kind: 'url', url: 'https://example.com/a?b=c' }).ok, true);
@@ -132,7 +102,16 @@ test('health reports slots, queue and the image checksum', async () => {
   const h = harness({}, { concurrency: 2 }, { imageSha256: () => 'abc123', freeGb: () => 94.7 });
   await withApi(h, async (base) => {
     const body = (await (await fetch(`${base}/v1/health`)).json()) as Record<string, unknown>;
-    assert.deepEqual(body, { ok: true, version: '0.1.0', concurrency: 2, running: 0, queued: 0, free_gb: 94, image_sha256: 'abc123' });
+    assert.deepEqual(body, {
+      ok: true,
+      version: '0.2.0',
+      concurrency: 2,
+      running: 0,
+      queued: 0,
+      sessions: { running: 0, limit: 1 },
+      free_gb: 94,
+      image_sha256: 'abc123',
+    });
     assert.equal((await fetch(`${base}/v1/health`, { method: 'POST' })).status, 405);
   });
 });

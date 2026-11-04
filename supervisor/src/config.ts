@@ -11,6 +11,14 @@ export interface Config {
   minFreeGb: number;
   resultTtlMs: number;
   maxEvidenceBytes: number;
+  /** Interactive sessions (spec 006, 3.7-3.8). */
+  sessionSlots: number;
+  sessionIdleMs: number;
+  sessionMaxMs: number;
+  sessionGraceMs: number;
+  approvalTtlMs: number;
+  commandMax: number;
+  commandTimeoutMs: number;
   shutdownGraceMs: number;
   keepaliveMs: number;
   vsockPort: number;
@@ -53,6 +61,14 @@ export function loadConfig(env: Env = process.env): Config {
     minFreeGb: int(env, 'SUP_MIN_FREE_GB', 20, 0, 1000),
     resultTtlMs: int(env, 'SUP_RESULT_TTL_H', 24, 1, 24 * 30) * 3600 * 1000,
     maxEvidenceBytes: 2 * 1024 * 1024,
+    sessionSlots: int(env, 'SUP_SESSION_SLOTS', 1, 0, 4),
+    sessionIdleMs: int(env, 'SUP_SESSION_IDLE_S', 60, 5, 120) * 1000,
+    sessionMaxMs: int(env, 'SUP_SESSION_MAX_S', 300, 30, 600) * 1000,
+    sessionGraceMs: int(env, 'SUP_SESSION_GRACE_S', 30, 1, 120) * 1000,
+    approvalTtlMs: int(env, 'SUP_APPROVAL_TTL_S', 300, 10, 3600) * 1000,
+    // the agent forwards at most 200 lines per job (004, 8e): keep room for the supervisor's own close
+    commandMax: int(env, 'SUP_COMMAND_MAX', 190, 1, 199),
+    commandTimeoutMs: int(env, 'SUP_COMMAND_TIMEOUT_S', 30, 1, 120) * 1000,
     shutdownGraceMs: 10_000,
     keepaliveMs: 15_000,
     vsockPort: 5000,

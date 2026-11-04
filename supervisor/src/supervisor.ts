@@ -3,14 +3,24 @@ import { join } from 'node:path';
 import type { Config } from './config.ts';
 import { nullLogger, urlInfo } from './logger.ts';
 import type { Logger } from './logger.ts';
+import { SessionCommands, isOpenStatus } from './session.ts';
+import type { ApproveResult, RejectResult, SubmitResult } from './session.ts';
 import { SlotPool } from './slots.ts';
 import { ResultFiles, Store } from './store.ts';
 import { RunError, isTerminal } from './types.ts';
-import type { Backend, FailReason, RunEvent, RunRecord, RunState, VmHandle } from './types.ts';
+import type { Backend, FailReason, RunEvent, RunRecord, RunState, SessionLimits, VmHandle } from './types.ts';
 
 export class QueueFullError extends Error {}
 export class DrainingError extends Error {}
 export class LowDiskError extends Error {}
+export class SessionsDisabledError extends Error {}
+
+/** The agent's own status line is a few dozen bytes; a longer line can never be one. */
+const STATUS_LINE_MAX = 512;
+/** Only short collector lines can be `session_ready` or `cmd_result`. */
+const CONTROL_LINE_MAX = 4096;
+
+export type NotFound = { ok: false; code: 'not_found'; error: string };
 
 export interface Deps {
   config: Config;
@@ -37,6 +47,9 @@ export interface RunView {
   partial: boolean;
   events: number;
   expires_at: string;
+  /** Present for interactive sessions. */
+  session?: { idle_s: number; max_s: number };
+  commands?: { total: number; awaiting_approval: number };
 }
 
 type Listener = (ev: RunEvent) => void;
@@ -92,6 +105,9 @@ export class Supervisor {
   private pool: SlotPool;
   private queue: string[] = [];
   private active = new Map<string, Active>();
+  /** Command state of sessions; kept after the run ends (everything voided) so the totals stay readable. */
+  private sessions = new Map<string, SessionCommands>();
+  private sessionRuns = 0;
   private listeners = new Map<string, Set<Listener>>();
   private seqs = new Map<string, number>();
   private draining = false;
@@ -116,6 +132,7 @@ export class Supervisor {
   async start(): Promise<void> {
     await this.backend.recoverHost();
     for (const rec of this.store.inFlight()) {
+      this.voidDanglingCommands(rec.id);
       this.setState(rec, 'failed', { reason: 'supervisor_restart', finishedAt: this.now() });
     }
     for (const rec of this.store.queued()) this.queue.push(rec.id);
@@ -141,14 +158,15 @@ export class Supervisor {
 
   // ---- API used by the HTTP layer -----------------------------------------------------------------
 
-  submit(url: string): { run_id: string; state: RunState; position: number | null } {
+  submit(url: string, session: SessionLimits | null = null): { run_id: string; state: RunState; position: number | null } {
     if (this.draining) throw new DrainingError('shutting down');
     if (this.freeGb() < this.config.minFreeGb) throw new LowDiskError('not enough free disk space');
+    if (session && this.config.sessionSlots === 0) throw new SessionsDisabledError('sessions are disabled');
     if (this.queue.length >= this.config.queueMax) throw new QueueFullError('queue is full');
 
     const id = randomUUID();
     const created = this.now();
-    this.store.insert(id, url, created, created + this.config.resultTtlMs);
+    this.store.insert(id, url, created, created + this.config.resultTtlMs, session);
     this.seqs.set(id, 0);
     const rec = this.store.get(id)!;
     this.queue.push(id);
@@ -201,13 +219,39 @@ export class Supervisor {
   health(): Record<string, unknown> {
     return {
       ok: true,
-      version: '0.1.0',
+      version: '0.2.0',
       concurrency: this.config.concurrency,
       running: this.active.size,
       queued: this.queue.length,
+      sessions: { running: this.sessionRuns, limit: this.config.sessionSlots },
       free_gb: Number.isFinite(this.freeGb()) ? Math.floor(this.freeGb()) : null,
       image_sha256: this.imageSha256(),
     };
+  }
+
+  // ---- session commands (spec 006, 3.8) -------------------------------------------------------------------
+
+  private liveSession(id: string): SessionCommands | NotFound {
+    if (!this.store.get(id)) return { ok: false, code: 'not_found', error: 'no such run' };
+    // a run without a live session (one-shot, still starting, finished) answers like a session that is not accepting
+    return this.sessions.get(id) ?? ({ ok: false, code: 'not_found', error: 'no such session' } as NotFound);
+  }
+
+  submitCommand(id: string, body: unknown): SubmitResult | NotFound {
+    if (!this.store.get(id)) return { ok: false, code: 'not_found', error: 'no such run' };
+    const s = this.sessions.get(id);
+    if (!s) return { ok: false, code: 'not_session', error: 'the run is not a session' };
+    return s.submit(body);
+  }
+
+  approveCommand(id: string, commandId: string, sha256: unknown): ApproveResult | NotFound {
+    const s = this.liveSession(id);
+    return s instanceof SessionCommands ? s.approve(commandId, sha256) : s;
+  }
+
+  rejectCommand(id: string, commandId: string): RejectResult | NotFound {
+    const s = this.liveSession(id);
+    return s instanceof SessionCommands ? s.reject(commandId) : s;
   }
 
   // ---- queue ---------------------------------------------------------------------------------------
@@ -230,7 +274,13 @@ export class Supervisor {
     while (this.queue.length > 0) {
       const slot = this.pool.acquire();
       if (slot === null) break;
-      const id = this.queue.shift()!;
+      // FIFO, except that a session waits for a free session slot while plain runs pass it
+      const qi = this.queue.findIndex((queued) => this.eligible(queued));
+      if (qi < 0) {
+        this.pool.release(slot);
+        break;
+      }
+      const id = this.queue.splice(qi, 1)[0]!;
       moved = true;
       const rec = this.store.get(id);
       if (!rec || rec.state !== 'queued') {
@@ -243,10 +293,17 @@ export class Supervisor {
         continue;
       }
       const ctl = new AbortController();
+      if (rec.session) this.sessionRuns++;
       const done = this.execute(rec, slot, ctl);
       this.active.set(id, { ctl, done });
     }
     if (moved) this.announcePositions();
+  }
+
+  private eligible(id: string): boolean {
+    const rec = this.store.get(id);
+    if (!rec || rec.state !== 'queued') return true; // dropped by the caller
+    return !rec.session || this.sessionRuns < this.config.sessionSlots;
   }
 
   private sweepQueue(): void {
@@ -268,6 +325,7 @@ export class Supervisor {
       this.results.delete(id);
       this.store.delete(id);
       this.seqs.delete(id);
+      this.sessions.delete(id);
     }
   }
 
@@ -290,13 +348,58 @@ export class Supervisor {
       reason: 'internal',
       agentStatus: null,
     };
-    const hard = setTimeout(() => ctl.abort(new RunError('timeout', 'hard timeout')), this.config.hardTimeoutMs);
+    // A session lives for its own time, and the supervisor keeps a ceiling of its own that does not depend on the collector.
+    const hardMs = rec.session ? this.config.bootTimeoutMs + rec.session.maxMs + this.config.sessionGraceMs : this.config.hardTimeoutMs;
+    const hard = setTimeout(() => ctl.abort(new RunError('timeout', 'hard timeout')), hardMs);
+    let vmForCommands: VmHandle | null = null;
+    const sess = rec.session
+      ? new SessionCommands({
+          idleMs: rec.session.idleMs,
+          commandMax: this.config.commandMax,
+          commandTimeoutMs: this.config.commandTimeoutMs,
+          approvalTtlMs: this.config.approvalTtlMs,
+          now: this.now,
+          send: (line) => {
+            if (!vmForCommands) throw new Error('no VM');
+            vmForCommands.send(line);
+          },
+          emit: (data) => {
+            // the log gets ids, type, status and hash, never parameters (they may carry typed-in values)
+            this.log('info', 'command', { run_id: id, command_id: data.command_id, cmd: data.cmd, status: data.status, command_sha256: data.command_sha256 });
+            this.emit(id, 'command', JSON.stringify(data));
+          },
+          abort: (e) => ctl.abort(e),
+        })
+      : null;
+    if (sess) this.sessions.set(id, sess);
 
     const flushHeld = () => {
       if (held !== null) {
         this.emit(id, 'evidence', held);
         evidence++;
         held = null;
+      }
+    };
+
+    /**
+     * Collector lines that drive the session. They are evidence like any other (already published); here they only
+     * move the command state, and only in the shapes the collector produces (spec 005, 3.5).
+     */
+    const controlLine = (line: string) => {
+      if (!sess || line.length > CONTROL_LINE_MAX) return;
+      if (!line.includes('"session_ready"') && !line.includes('"cmd_result"')) return;
+      let o: { type?: unknown; kind?: unknown; id?: unknown; ok?: unknown; error?: unknown };
+      try {
+        o = JSON.parse(line) as typeof o;
+      } catch {
+        return;
+      }
+      if (typeof o !== 'object' || o === null || o.type !== 'evidence') return;
+      if (o.kind === 'session_ready') {
+        if (sess.markReady()) this.setState(this.store.get(id) ?? rec, 'session', {});
+      } else if (o.kind === 'cmd_result' && typeof o.id === 'string' && typeof o.ok === 'boolean') {
+        // the error code comes from the guest: only a short lowercase token is passed on
+        sess.onResult(o.id, o.ok, typeof o.error === 'string' && /^[a-z0-9_]{1,40}$/.test(o.error) ? o.error : undefined);
       }
     };
 
@@ -318,9 +421,18 @@ export class Supervisor {
         if (!destroying) ctl.abort(this.draining ? new RunError('supervisor_restart') : new RunError('fc_crashed', 'firecracker exited'));
       });
       await raceAbort(vm.waitReady(this.config.bootTimeoutMs, sig), sig);
+      vmForCommands = vm;
 
       this.setState(rec, 'running', {});
-      const job = JSON.stringify({ schema: 1, run_id: id, kind: 'url', url: rec.url });
+      // The guest gets only the total time. Idle time belongs to the supervisor (it alone knows when a human is
+      // deciding about a risky command), which sends a normal close when the session has been idle for too long.
+      const job = JSON.stringify({
+        schema: 1,
+        run_id: id,
+        kind: 'url',
+        url: rec.url,
+        ...(rec.session ? { session: { max_s: Math.max(1, Math.ceil(rec.session.maxMs / 1000)) } } : {}),
+      });
       await raceAbort(
         vm.runJob(
           job,
@@ -331,7 +443,15 @@ export class Supervisor {
               return;
             }
             flushHeld();
-            held = line;
+            // Only a line that looks like a status line is held back, until the next line shows whether it was the
+            // last one. Everything else is published at once, so a session's evidence is live, not one line late.
+            if (line.length <= STATUS_LINE_MAX && parseStatus(line) !== null) {
+              held = line;
+              return;
+            }
+            this.emit(id, 'evidence', line);
+            evidence++;
+            controlLine(line);
           },
           sig,
         ),
@@ -363,6 +483,7 @@ export class Supervisor {
     } finally {
       clearTimeout(hard);
       destroying = true;
+      sess?.end(); // open commands are voided and published before the run leaves the session
       this.setState(this.store.get(id) ?? rec, 'destroying', {});
       try {
         if (vmP) await (await vmP.catch(() => null))?.stop();
@@ -382,6 +503,7 @@ export class Supervisor {
         this.log('error', 'removeRunDir failed', { run_id: id, detail: String(e).slice(0, 200) });
       }
       this.pool.release(slot);
+      if (rec.session) this.sessionRuns--;
       this.active.delete(id);
       this.setState(this.store.get(id) ?? rec, outcome.state, {
         reason: outcome.reason,
@@ -437,7 +559,31 @@ export class Supervisor {
       partial: rec.partial,
       events: this.seqs.get(rec.id) ?? rec.events,
       expires_at: new Date(rec.expiresAt).toISOString(),
+      ...(rec.session
+        ? {
+            session: { idle_s: Math.round(rec.session.idleMs / 1000), max_s: Math.round(rec.session.maxMs / 1000) },
+            ...(this.sessions.has(rec.id) ? { commands: this.sessions.get(rec.id)!.counts() } : {}),
+          }
+        : {}),
     };
+  }
+
+  /** After a restart the commands of a dead session can no longer run: say so in its event log. */
+  private voidDanglingCommands(id: string): void {
+    const last = new Map<string, Record<string, unknown>>();
+    for (const ev of this.results.read(id)) {
+      if (ev.type !== 'command') continue;
+      try {
+        const d = JSON.parse(ev.data) as Record<string, unknown>;
+        if (typeof d.command_id === 'string') last.set(d.command_id, d);
+      } catch {
+        /* a damaged line carries nothing to void */
+      }
+    }
+    for (const d of last.values()) {
+      if (!isOpenStatus(String(d.status))) continue;
+      this.emit(id, 'command', JSON.stringify({ command_id: d.command_id, cmd: d.cmd, status: 'voided', risk: d.risk, command_sha256: d.command_sha256 }));
+    }
   }
 }
 

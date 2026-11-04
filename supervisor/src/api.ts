@@ -3,8 +3,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Config } from './config.ts';
 import { nullLogger } from './logger.ts';
 import type { Logger } from './logger.ts';
+import { COMMAND_ID_RE } from './commands.ts';
 import { RUN_ID_RE } from './store.ts';
-import { DrainingError, LowDiskError, QueueFullError } from './supervisor.ts';
+import { DrainingError, LowDiskError, QueueFullError, SessionsDisabledError } from './supervisor.ts';
 import type { Supervisor } from './supervisor.ts';
 import { isTerminal } from './types.ts';
 import type { RunEvent, RunState } from './types.ts';
@@ -12,13 +13,34 @@ import type { RunEvent, RunState } from './types.ts';
 const MAX_BODY = 64 * 1024;
 const MAX_URL = 2048;
 
-export type Validated = { ok: true; url: string } | { ok: false; error: string };
+export interface SessionRequest {
+  idleS?: number;
+  maxS?: number;
+}
+
+export type Validated = { ok: true; url: string; session?: SessionRequest } | { ok: false; error: string };
+
+function validateSession(v: unknown): { ok: true; session: SessionRequest } | { ok: false; error: string } {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return { ok: false, error: 'session must be a JSON object' };
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) if (k !== 'idle_s' && k !== 'max_s') return { ok: false, error: `unknown session field: ${k.slice(0, 40)}` };
+  const out: SessionRequest = {};
+  if (Object.hasOwn(o, 'idle_s')) {
+    if (typeof o.idle_s !== 'number' || !Number.isInteger(o.idle_s) || o.idle_s < 5 || o.idle_s > 120) return { ok: false, error: 'session.idle_s must be an integer from 5 to 120' };
+    out.idleS = o.idle_s;
+  }
+  if (Object.hasOwn(o, 'max_s')) {
+    if (typeof o.max_s !== 'number' || !Number.isInteger(o.max_s) || o.max_s < 30 || o.max_s > 600) return { ok: false, error: 'session.max_s must be an integer from 30 to 600' };
+    out.maxS = o.max_s;
+  }
+  return { ok: true, session: out };
+}
 
 /** Shape check only. Which hosts are acceptable (SSRF) is the gatekeeper's job in the web layer; the host firewall backs it up. */
 export function validateSubmit(body: unknown): Validated {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return { ok: false, error: 'body must be a JSON object' };
   const o = body as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (k !== 'kind' && k !== 'url') return { ok: false, error: `unknown field: ${k.slice(0, 40)}` };
+  for (const k of Object.keys(o)) if (k !== 'kind' && k !== 'url' && k !== 'session') return { ok: false, error: `unknown field: ${k.slice(0, 40)}` };
   if (o.kind !== 'url') return { ok: false, error: 'kind must be "url"' };
   if (typeof o.url !== 'string' || o.url.length === 0) return { ok: false, error: 'url must be a non-empty string' };
   if (o.url.length > MAX_URL) return { ok: false, error: `url is longer than ${MAX_URL} characters` };
@@ -31,6 +53,11 @@ export function validateSubmit(body: unknown): Validated {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { ok: false, error: 'only http and https are allowed' };
   if (!parsed.hostname) return { ok: false, error: 'url has no host' };
+  if (Object.hasOwn(o, 'session')) {
+    const s = validateSession(o.session);
+    if (!s.ok) return s;
+    return { ok: true, url: o.url, session: s.session };
+  }
   return { ok: true, url: o.url };
 }
 
@@ -60,6 +87,34 @@ function readBody(req: IncomingMessage): Promise<{ ok: true; text: string } | { 
     req.on('error', () => resolve({ ok: false, tooLarge: false }));
   });
 }
+
+/** Reads and parses a JSON body; on failure the error response has already been sent. */
+async function jsonBody(req: IncomingMessage, res: ServerResponse): Promise<{ ok: true; json: unknown } | { ok: false }> {
+  const body = await readBody(req);
+  if (!body.ok) {
+    if (body.tooLarge) send(res, 413, { error: 'request body too large' }, { connection: 'close' });
+    else send(res, 400, { error: 'unreadable body' });
+    return { ok: false };
+  }
+  try {
+    return { ok: true, json: JSON.parse(body.text) };
+  } catch {
+    send(res, 400, { error: 'body is not valid JSON' });
+    return { ok: false };
+  }
+}
+
+const COMMAND_STATUS: Record<string, number> = {
+  not_found: 404,
+  bad_command: 400,
+  not_session: 409,
+  duplicate_id: 409,
+  limit: 429,
+  not_waiting: 409,
+  hash_mismatch: 409,
+  expired: 410,
+  too_late: 409,
+};
 
 function sseFrame(ev: RunEvent): string {
   // a raw CR or LF inside data would end the SSE field; JSON lines never contain them, anything else is neutralised
@@ -137,25 +192,21 @@ export function createApi(sup: Supervisor, config: Config, log: Logger = nullLog
 
     if (parts[1] === 'runs' && parts.length === 2) {
       if (method !== 'POST') return send(res, 405, { error: 'method not allowed' }, { allow: 'POST' });
-      const body = await readBody(req);
-      if (!body.ok) {
-        return body.tooLarge
-          ? send(res, 413, { error: 'request body too large' }, { connection: 'close' })
-          : send(res, 400, { error: 'unreadable body' });
-      }
-      let json: unknown;
-      try {
-        json = JSON.parse(body.text);
-      } catch {
-        return send(res, 400, { error: 'body is not valid JSON' });
-      }
-      const v = validateSubmit(json);
+      const body = await jsonBody(req, res);
+      if (!body.ok) return;
+      const v = validateSubmit(body.json);
       if (!v.ok) return send(res, 400, { error: v.error });
       try {
-        return send(res, 202, sup.submit(v.url));
+        const limits = v.session
+          ? {
+              idleMs: v.session.idleS !== undefined ? v.session.idleS * 1000 : config.sessionIdleMs,
+              maxMs: v.session.maxS !== undefined ? v.session.maxS * 1000 : config.sessionMaxMs,
+            }
+          : null;
+        return send(res, 202, { ...sup.submit(v.url, limits), ...(limits ? { session: true } : {}) });
       } catch (e) {
         if (e instanceof QueueFullError) return send(res, 429, { error: 'queue is full' }, { 'retry-after': '10' });
-        if (e instanceof DrainingError || e instanceof LowDiskError) return send(res, 503, { error: e.message }, { 'retry-after': '30' });
+        if (e instanceof DrainingError || e instanceof LowDiskError || e instanceof SessionsDisabledError) return send(res, 503, { error: e.message }, { 'retry-after': '30' });
         throw e;
       }
     }
@@ -174,6 +225,38 @@ export function createApi(sup: Supervisor, config: Config, log: Logger = nullLog
           return send(res, 202, { run_id: id, result: r });
         }
         return send(res, 405, { error: 'method not allowed' }, { allow: 'GET, DELETE' });
+      }
+      if (parts.length === 4 && parts[3] === 'commands') {
+        if (method !== 'POST') return send(res, 405, { error: 'method not allowed' }, { allow: 'POST' });
+        const body = await jsonBody(req, res);
+        if (!body.ok) return;
+        const r = sup.submitCommand(id, body.json);
+        if (!r.ok) return send(res, COMMAND_STATUS[r.code] ?? 400, { error: r.error, code: r.code });
+        return send(res, 202, { command_id: r.command_id, status: r.status, command_sha256: r.command_sha256 });
+      }
+      if (parts.length === 4 && parts[3] === 'approvals') {
+        if (method !== 'POST') return send(res, 405, { error: 'method not allowed' }, { allow: 'POST' });
+        const body = await jsonBody(req, res);
+        if (!body.ok) return;
+        const o = body.json;
+        if (typeof o !== 'object' || o === null || Array.isArray(o)) return send(res, 400, { error: 'body must be a JSON object' });
+        for (const k of Object.keys(o)) {
+          if (k !== 'command_id' && k !== 'command_sha256') return send(res, 400, { error: `unknown field: ${k.slice(0, 40)}` });
+        }
+        const { command_id: commandId, command_sha256: sha } = o as Record<string, unknown>;
+        if (typeof commandId !== 'string' || !COMMAND_ID_RE.test(commandId)) return send(res, 400, { error: 'command_id is missing or malformed' });
+        if (typeof sha !== 'string') return send(res, 400, { error: 'command_sha256 must be a string' });
+        const r = sup.approveCommand(id, commandId, sha);
+        if (!r.ok) return send(res, COMMAND_STATUS[r.code] ?? 400, { error: r.error, code: r.code });
+        return send(res, 202, { command_id: commandId, status: 'approved' });
+      }
+      if (parts.length === 5 && parts[3] === 'commands') {
+        if (method !== 'DELETE') return send(res, 405, { error: 'method not allowed' }, { allow: 'DELETE' });
+        const commandId = parts[4]!;
+        if (!COMMAND_ID_RE.test(commandId)) return send(res, 404, { error: 'not found' });
+        const r = sup.rejectCommand(id, commandId);
+        if (!r.ok) return send(res, COMMAND_STATUS[r.code] ?? 400, { error: r.error, code: r.code });
+        return send(res, 202, { command_id: commandId, status: 'rejected' });
       }
       if (parts.length === 4 && parts[3] === 'events') {
         if (method !== 'GET') return send(res, 405, { error: 'method not allowed' }, { allow: 'GET' });

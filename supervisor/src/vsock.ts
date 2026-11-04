@@ -97,6 +97,8 @@ export async function runAgentJob(
   onLine: (line: string) => void,
   maxLine: number,
   signal?: AbortSignal,
+  /** Called once the connection is open with a function that writes further lines (session commands). */
+  onOpen?: (write: (line: string) => void) => void,
 ): Promise<void> {
   const { sock, rest } = await connectAgent(uds, port, 2000, signal);
   return new Promise<void>((resolve, reject) => {
@@ -126,6 +128,10 @@ export async function runAgentJob(
     sock.on('close', () => finish());
     sock.on('error', () => finish()); // a reset ends the stream; the caller looks at the last line
     sock.write(job + '\n');
+    onOpen?.((line) => {
+      if (done || sock.destroyed || !sock.writable) throw new Error('the agent connection is closed');
+      sock.write(line + '\n');
+    });
     if (rest.length) feed(rest);
   });
 }

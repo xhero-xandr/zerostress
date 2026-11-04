@@ -1,4 +1,4 @@
-export type RunState = 'queued' | 'preparing' | 'booting' | 'running' | 'destroying' | 'done' | 'failed';
+export type RunState = 'queued' | 'preparing' | 'booting' | 'running' | 'session' | 'destroying' | 'done' | 'failed';
 
 export type FailReason =
   | 'queue_timeout'
@@ -28,6 +28,11 @@ export class RunError extends Error {
   }
 }
 
+export interface SessionLimits {
+  idleMs: number;
+  maxMs: number;
+}
+
 export interface RunRecord {
   id: string;
   url: string;
@@ -35,6 +40,8 @@ export interface RunRecord {
   reason: FailReason | null;
   slot: number | null;
   createdAt: number;
+  /** Interactive session limits in milliseconds, null for a one-shot run. */
+  session: SessionLimits | null;
   startedAt: number | null;
   finishedAt: number | null;
   agentStatus: string | null;
@@ -46,7 +53,7 @@ export interface RunRecord {
 /** A stored event. `data` is a single-line string: JSON for state/status, the raw guest line for evidence. */
 export interface RunEvent {
   seq: number;
-  type: 'state' | 'evidence' | 'status';
+  type: 'state' | 'evidence' | 'status' | 'command';
   data: string;
 }
 
@@ -62,8 +69,10 @@ export interface StartOptions {
 export interface VmHandle {
   /** Resolves when the guest agent accepts connections; rejects with boot_timeout or fc_crashed. */
   waitReady(timeoutMs: number, signal: AbortSignal): Promise<void>;
-  /** Sends the job line and streams guest lines until the connection closes. Never half-closes. */
+  /** Sends the job line and streams guest lines until the connection closes. Never half-closes. Commands go through send(). */
   runJob(job: string, onLine: (line: string) => void, signal: AbortSignal): Promise<void>;
+  /** Writes one more line to the open agent connection (session commands). Throws when there is none. */
+  send(line: string): void;
   /** Resolves when the Firecracker process is gone, for any reason. */
   readonly exited: Promise<void>;
   /** SIGTERM, then SIGKILL after a short grace; resolves when the process is gone. */
