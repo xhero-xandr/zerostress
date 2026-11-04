@@ -7,13 +7,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib-vm.sh"
 vm_boot session "${1:-}" "${2:-}"
 
 SESS='{"mode":"session","session":{"idle_s":60,"max_s":120}}'
-ids() { grep '"kind":"command"' <<<"$1" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' '; }
+ids() { grep '"kind":"echo"' <<<"$1" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' '; }
 
 echo "== commands reach the collector in order"
 out=$(run "$SESS" '{"cmd":"wait","id":"a","ms":10}' '{"cmd":"scroll","id":"b","dy":300}' '{"cmd":"close","id":"c"}')
 check "ids in order" "$(ids "$out")" '^a b c $'
 check "command bytes unchanged" "$out" '"raw":"\{\\"cmd\\":\\"scroll\\",\\"id\\":\\"b\\",\\"dy\\":300\}"'
 check "status ok, three commands" "$out" '"status":"ok".*"commands":3'
+check "session_ready comes before the first echo" "$(grep -n 'session_ready\|"kind":"echo"' <<<"$out" | head -1)" 'session_ready'
+check "one cmd_result per command" "$(grep -c '"kind":"cmd_result"' <<<"$out")" '^3$'
 
 echo "== pipelined: job and commands in one write"
 out=$(run "$SESS" '{"cmd":"wait","id":"p1","ms":1}' '{"cmd":"wait","id":"p2","ms":1}' '{"cmd":"close","id":"p3"}' --burst)
@@ -39,7 +41,7 @@ out=$(run '{"mode":"hello"}' '{"cmd":"scroll","id":"z"}')
 check "plain job ignores commands, no command events" "$(ids "$out")" '^$'
 
 echo "== browser in the guest"
-out=$(run "$SESS" '{"cmd":"snapshot","id":"s1"}' '{"cmd":"close","id":"s2"}')
+out=$(run '{"mode":"session","browser":true,"session":{"idle_s":60,"max_s":120}}' '{"cmd":"snapshot","id":"s1"}' '{"cmd":"close","id":"s2"}')
 check "snapshot event present" "$out" '"kind":"snapshot"'
 check "aria snapshot has refs" "$out" '\[ref=e[0-9]+\]'
 check "ref resolves through aria-ref= to the link href" "$out" '"href":"https://example.com/x"'

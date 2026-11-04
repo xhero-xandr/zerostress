@@ -1,6 +1,7 @@
 // Test double for the evidence collector (spec 005 replaces it). Contract: job JSON on the first stdin line,
 // NDJSON events on stdout. A job with a "session" object keeps stdin open and delivers one command per line.
 // Modes: default (hello), "fetch" (HTTP GET of job.url), "sleep", "flood", "whoami", "chromium", "sys", "session".
+// For the supervisor (which sends kind:"url") the mode rides in the URL: ?stub=session&hang_on=wait (see below).
 import { readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -19,6 +20,7 @@ if (!mode && job.kind === 'url') {
   const u = new URL(job.url);
   mode = u.searchParams.get('stub') ?? 'fetch';
   if (u.searchParams.has('ms')) job.ms = Number(u.searchParams.get('ms'));
+  if (u.searchParams.has('hang_on')) job.hang_on = u.searchParams.get('hang_on');
 }
 mode ??= 'hello';
 
@@ -102,8 +104,14 @@ switch (mode) {
     emit({ type: 'event', kind: 'whoami', out: execFileSync('/usr/bin/id', ['-un']).toString().trim() });
     break;
   case 'session': {
-    // Echoes every command (raw, so byte-exact forwarding can be checked). "snapshot" starts the browser on a fixed
-    // page and reports the aria snapshot, whether a ref from it resolves, and the guest memory in use; "close" ends.
+    // Speaks the session protocol of spec 005 (evidence lines: session_ready, cmd_result) without a browser, so the
+    // supervisor can be tested end to end. Every command is echoed raw (byte-exact forwarding can be checked).
+    // Knobs: job.hang_on = a command type that is never answered; job.browser = true makes "snapshot" start the
+    // browser on a fixed page and report the aria snapshot, whether a ref from it resolves, and the guest memory.
+    // "wait" sleeps, "open_link" with ref e999 fails with ref_not_found, "close" ends the session.
+    const ev = (o) => emit({ type: 'evidence', v: 1, ...o });
+    ev({ kind: 'nav', via: 'stub' });
+    ev({ kind: 'session_ready' });
     let browser;
     let page;
     for (;;) {
@@ -112,9 +120,14 @@ switch (mode) {
       const raw = next.value;
       if (!raw.trim()) continue;
       let cmd;
-      try { cmd = JSON.parse(raw); } catch { emit({ type: 'event', kind: 'bad_line', raw }); continue; }
-      emit({ type: 'event', kind: 'command', id: cmd.id, cmd: cmd.cmd, raw });
-      if (cmd.cmd === 'snapshot') {
+      try { cmd = JSON.parse(raw); } catch { ev({ kind: 'bad_line', raw }); continue; }
+      ev({ kind: 'echo', id: cmd.id, cmd: cmd.cmd, raw });
+      if (cmd.cmd === job.hang_on) continue;
+      let ok = true;
+      let error;
+      if (cmd.cmd === 'wait') await new Promise((r) => setTimeout(r, cmd.ms));
+      if (cmd.cmd === 'open_link' && cmd.ref === 'e999') { ok = false; error = 'ref_not_found'; }
+      if (cmd.cmd === 'snapshot' && job.browser === true) {
         const before = memInfoMib();
         if (!browser) {
           const { chromium } = await import('playwright');
@@ -134,6 +147,7 @@ switch (mode) {
           browser_pss_mib: browserPssMib(),
         });
       }
+      ev({ kind: 'cmd_result', id: cmd.id, ok, ...(error ? { error } : {}) });
       if (cmd.cmd === 'close') break;
     }
     await browser?.close();

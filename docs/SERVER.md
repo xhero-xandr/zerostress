@@ -35,6 +35,7 @@ ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'   
 ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                        # установить и запустить службу супервизора
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-e2e.sh'                   # сквозной тест службы с настоящими ВМ (47 проверок)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-timeouts.sh'              # лимит агента 60 с и жёсткий потолок (около 2 минут, временно меняет юнит и восстанавливает)
+ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-sessions-e2e.sh'          # сессии: команды, подтверждения, простой, слоты, падения (около 3 минут; нужен образ с актуальной заглушкой)
 ssh vultr '/opt/node/bin/node --disable-warning=ExperimentalWarning /opt/zerostress-src/deploy/test/bench-concurrency.mjs'   # замер параллельности с Chromium (около 3 минут, временно меняет юнит и восстанавливает)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-helper.sh'                       # помощник zsvm: отклоняет всё неверное, кто может его вызывать
 ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-probe.sh'                        # разведочная проба юнита на ВМ: лимиты cgroup, сигналы, очистка (остановите службу супервизора на время теста)
