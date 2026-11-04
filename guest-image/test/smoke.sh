@@ -2,62 +2,8 @@
 # Smoke test of the guest image: overlay -> boot with vsock -> agent -> stub collector. Run as root on the host.
 # Usage: smoke.sh BASE_IMAGE AGENT_BIN   (defaults: the installed image, guest-image/agent/zerostress-agent)
 set -uo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd)
-BASE=${1:-/opt/zerostress/images/guest-rootfs.ext4}
-AGENT=${2:-$HERE/../agent/zerostress-agent}
-D=/var/lib/zerostress/runs/smoke
-NODE=/opt/node/bin/node
-SUP=zerostress-sup
-UDS=$D/v.sock
-UNIT=fc-smoke
-fail=0
-
-q() { sudo -u $SUP sudo -n /opt/zerostress/bin/zsnet "$@"; }
-cleanup() {
-  systemctl stop $UNIT 2>/dev/null
-  q down 0 2>/dev/null
-  rm -rf "$D"
-}
-trap cleanup EXIT
-cleanup
-
-install -d -m 0700 -o $SUP -g $SUP "$D"
-echo "== copy + overlay"
-t=$(date +%s.%N); cp --sparse=always "$BASE" "$D/rootfs.ext4"
-printf 'copy %.2fs\n' "$(awk -v a="$(date +%s.%N)" -v b="$t" "BEGIN{print a-b}")"
-bash "$HERE/../apply-overlay.sh" "$D/rootfs.ext4" "$AGENT" "$HERE/stub-collector.mjs" | tail -2
-[[ ${PIPESTATUS[0]} == 0 ]] || { echo "overlay failed"; exit 1; }
-chown $SUP:$SUP "$D/rootfs.ext4"; chmod 0600 "$D/rootfs.ext4"
-
-cat >"$D/vm.json" <<J
-{"boot-source":{"kernel_image_path":"/opt/zerostress/images/vmlinux-6.18.56",
-  "boot_args":"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.0.2::172.16.0.1:255.255.255.252::eth0:off:1.1.1.1"},
- "drives":[{"drive_id":"rootfs","path_on_host":"$D/rootfs.ext4","is_root_device":true,"is_read_only":false}],
- "network-interfaces":[{"iface_id":"net1","guest_mac":"06:00:AC:10:00:02","host_dev_name":"zstap0"}],
- "vsock":{"guest_cid":3,"uds_path":"$UDS"},
- "machine-config":{"vcpu_count":2,"mem_size_mib":1024}}
-J
-chown $SUP:$SUP "$D/vm.json"
-
-echo "== boot"
-q up 0 || exit 1
-t0=$(date +%s.%N)
-systemd-run -q --collect --unit=$UNIT -p User=$SUP -p RuntimeMaxSec=240 \
-  -p StandardOutput=file:$D/serial.log -p StandardError=file:$D/err.log \
-  /opt/zerostress/bin/firecracker --no-api --config-file "$D/vm.json"
-
-ready=0
-for i in $(seq 1 60); do
-  if sudo -u $SUP $NODE "$HERE/vsock-client.mjs" "$UDS" 5000 '{}' --probe 2>/dev/null; then ready=1; break; fi
-  sleep 0.25
-done
-printf 'agent ready after %.1fs (ready=%s)\n' "$(awk -v a="$(date +%s.%N)" -v b="$t0" "BEGIN{print a-b}")" "$ready"
-[[ $ready == 1 ]] || { tail -30 "$D/serial.log"; exit 1; }
-
-run() { sudo -u $SUP $NODE "$HERE/vsock-client.mjs" "$UDS" 5000 "$1" 2>"$D/c.err"; }
-check() { # name, output, regex
-  if grep -qE "$3" <<<"$2"; then echo "PASS  $1"; else echo "FAIL  $1"; echo "$2" | cut -c1-200 | head -5; fail=1; fi
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib-vm.sh"
+vm_boot smoke "${1:-}" "${2:-}"
 
 echo "== scenarios"
 out=$(run '{"mode":"hello"}');  check "hello + status ok" "$out" '"status":"ok"'

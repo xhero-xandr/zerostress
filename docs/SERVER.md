@@ -30,6 +30,7 @@ ssh vultr 'AGENT_BIN=/opt/zerostress-src/guest-image/agent/zerostress-agent bash
 ssh vultr 'bash /opt/zerostress-src/guest-image/install.sh'                          # установить образ в /opt/zerostress/images
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                       # дымовой тест образа, Chromium и сеть
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
+ssh vultr 'bash /opt/zerostress-src/guest-image/test/session.sh'                     # сессии агента v2 по настоящему vsock (сначала build-agent.sh: dev-sync стирает бинарник)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'        # совместимость параметров юнита с SELinux (см. спецификацию 006)
 ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                        # установить и запустить службу супервизора
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-e2e.sh'                   # сквозной тест службы с настоящими ВМ (47 проверок)
