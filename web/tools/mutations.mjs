@@ -4,6 +4,7 @@ const HOOKS = ['hooks/test/hooks.test.ts'];
 const GUARDED = ['hooks/test/guarded.test.ts'];
 const LOADER = ['hooks/test/ruleset.test.ts'];
 const SIGNALS = ['agent/test/signals.test.ts'];
+const GATE = ['agent/test/gatekeeper.test.ts'];
 
 export const MUTATIONS = [
   // normalisation
@@ -121,6 +122,31 @@ export const MUTATIONS = [
   ["look-alike letters are not read", "agent/domain.ts", "LOOKS_LIKE[c] ?? c", "c", SIGNALS],
   ["one alphabet counts as mixed", "agent/domain.ts", "if (latin && other) return true;", "if (latin || other) return true;", SIGNALS],
   ["no site belongs to its brand", "agent/lists.ts", "return brand.slds.includes(sld(host));", "return false;", SIGNALS],
+  // the command form and the gatekeeper (agent/commands.ts, agent/gatekeeper.ts, spec 008, 5)
+  ["the form check accepts a long line", "agent/commands.ts", "Buffer.byteLength(line) > 4096", "Buffer.byteLength(line) > 4096000", GATE],
+  ["unknown fields are accepted", "agent/commands.ts", "if (Object.keys(o).some((k) => !allowed.has(k))) return", "if (false) return", GATE],
+  ["missing fields are accepted", "agent/commands.ts", "if (!Object.hasOwn(o, k) || !check(o[k])) return", "if (false) return", GATE],
+  ["bad optional fields are accepted", "agent/commands.ts", "if (Object.hasOwn(o, k) && !check(o[k])) return", "if (false) return", GATE],
+  ["inherited command names are accepted", "agent/commands.ts", "Object.hasOwn(COMMANDS, o.cmd)", "o.cmd in COMMANDS", GATE],
+  ["any id is accepted", "agent/commands.ts", "typeof id === 'string' && ID.test(id) ? id : undefined", "typeof id === 'string' ? id : undefined", GATE],
+  ["scroll has no limit", "agent/commands.ts", "scroll: { risk: 'safe', required: [['dy', int(-5000, 5000)]]", "scroll: { risk: 'safe', required: [['dy', int(-5000000, 5000000)]]", GATE],
+  ["control characters pass in form values", "agent/commands.ts", "&& !CONTROL.test(o[k] as string)", "", GATE],
+  ["a download counts as safe", "agent/commands.ts", "download: { risk: 'risky'", "download: { risk: 'safe'", GATE],
+  ["the model may submit forms", "agent/gatekeeper.ts", "  download: ['ref'],\n});", "  download: ['ref'],\n  submit_form: ['form', 'values'],\n});", GATE],
+  ["the model may close the session", "agent/gatekeeper.ts", "  back: [],\n  download: ['ref'],", "  back: [],\n  close: [],\n  download: ['ref'],", GATE],
+  ["unknown proposal fields are accepted", "agent/gatekeeper.ts", "if (Object.keys(proposal).some((k) => !allowed.includes(k))) return", "if (false) return", GATE],
+  ["the step limit is not applied", "agent/gatekeeper.ts", "if (steps >= maxSteps) return", "if (false) return", GATE],
+  ["a scroll has no limit", "agent/gatekeeper.ts", "Math.abs(dy) > SCROLL_MAX", "false", GATE],
+  ["a wait has no limit", "agent/gatekeeper.ts", "ms > WAIT_MAX", "false", GATE],
+  ["a link need not be in the snapshot", "agent/gatekeeper.ts", "if (!refs.has(ref)) return", "if (false) return", GATE],
+  ["links work before any snapshot", "agent/gatekeeper.ts", "if (snap === null) return { ok: false, reason: 'no_snapshot' };", "", GATE],
+  ["a repeated step is allowed", "agent/gatekeeper.ts", "if (used.has(", "if (false && used.has(", GATE],
+  ["a risky command is not marked", "agent/gatekeeper.ts", "needsApproval: v.risk === 'risky'", "needsApproval: false", GATE],
+  ["old links stay alive after a new snapshot", "agent/gatekeeper.ts", "refs = new Set(); // links of an older snapshot are dead", "", GATE],
+  ["links of another snapshot are taken", "agent/gatekeeper.ts", "event.snap === snap && Array.isArray(event.links)", "Array.isArray(event.links)", GATE],
+  ["an older snapshot replaces the current one", "agent/gatekeeper.ts", "if (snap === null || event.snap >= snap) {", "if (true) {", GATE],
+  ["malformed references are kept", "agent/gatekeeper.ts", "typeof l.ref === 'string' && REF.test(l.ref)", "typeof l.ref === 'string'", GATE],
+  ["a refusal still costs an id", "agent/gatekeeper.ts", "const command: Record<string, unknown> = { cmd: action, id: `a${nextId}` };", "const command: Record<string, unknown> = { cmd: action, id: `a${nextId++}` };", GATE],
   // the guarded thread (the deadline, the crashes, the state it keeps)
   ['no deadline', 'hooks/guarded.ts', "const timer = setTimeout(() => fail('hook_timeout'), timeoutMs);", "const timer = setTimeout(() => fail('hook_timeout'), 600_000);", GUARDED],
   ['a late thread is not killed', 'hooks/guarded.ts', '          void w.terminate();\n        }\n        resolve(r);', '        }\n        resolve(r);', GUARDED],

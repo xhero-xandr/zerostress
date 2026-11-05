@@ -44,6 +44,8 @@ if (args.includes('--list')) {
 const work = mkdtempSync(join(tmpdir(), 'zs-mutate-'));
 cpSync(webDir, join(work, 'web'), { recursive: true, filter: (p) => !p.includes('node_modules') });
 const root = join(work, 'web');
+// the command tests read the supervisor's shared fixture, which lives next to web/ in the repository
+cpSync(join(dirname(webDir), 'supervisor/testdata'), join(work, 'supervisor/testdata'), { recursive: true });
 symlinkSync(join(webDir, 'node_modules'), join(root, 'node_modules'), 'junction');
 
 const files = new Map();
@@ -64,7 +66,7 @@ let caught = 0;
 const bad = [];
 try {
   // the unmutated copy must pass, or "caught" would mean nothing
-  const base = spawnSync(process.execPath, ['--test', '--test-concurrency=2', 'hooks/test/hooks.test.ts', 'hooks/test/guarded.test.ts', 'hooks/test/ruleset.test.ts', 'agent/test/signals.test.ts'], { cwd: root, encoding: 'utf8', timeout: 240_000 });
+  const base = spawnSync(process.execPath, ['--test', '--test-concurrency=2', 'hooks/test/hooks.test.ts', 'hooks/test/guarded.test.ts', 'hooks/test/ruleset.test.ts', 'agent/test/signals.test.ts', 'agent/test/gatekeeper.test.ts'], { cwd: root, encoding: 'utf8', timeout: 240_000 });
   if (base.status !== 0) {
     console.error('the tests fail without any mutation:\n' + base.stdout.split('\n').filter((l) => l.startsWith('✖')).join('\n'));
     process.exit(2);
