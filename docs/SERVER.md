@@ -1,6 +1,6 @@
 # Сервер разработки: что на нём есть и как с ним работать
 
-Состояние проверено 4 ноября 2026, после перезагрузки хоста и сквозной проверки с нуля (скрипты хоста, сборка агента и образа, установка, дымовой тест и тест сети). Доступ: `ssh vultr` (под `root`, на время разработки; перед публичным запуском вход `root` нужно закрыть, см. [спецификацию 001](specs/001-host-baseline.md), раздел 4.7).
+Состояние проверено 4–5 ноября 2026: после перезагрузки хоста и сквозной проверки с нуля (скрипты хоста, сборка агента и образа, установка, дымовой тест и тест сети), затем сквозные тесты супервизора, сборщика и агента. Доступ: `ssh vultr` (под `root`, на время разработки; перед публичным запуском вход `root` нужно закрыть, см. [спецификацию 001](specs/001-host-baseline.md), раздел 4.7).
 
 ## Что установлено
 | Путь | Что | Откуда |
@@ -12,7 +12,7 @@
 | `/opt/zerostress/images/` | ядро гостя, `guest-rootfs.ext4`, `manifest.json` | `guest-image/build.sh`, ставит `guest-image/install.sh` |
 | `/opt/node` | Node 24.22.2 только для вспомогательных скриптов тестов хоста (супервизору не нужен) | официальный архив, сумма проверена по `SHASUMS256.txt` |
 | `/opt/go` | Go 1.27.3, только для сборки агента | архив с go.dev, сумма проверена |
-| `/opt/zerostress-src` | копия рабочего дерева (без git) | `deploy/dev-sync.sh` с локальной машины |
+| `/opt/zerostress-src` | **рабочая копия репозитория (git, вся история)**, владелец `linuxuser`; здесь ведётся работа | см. «Рабочая копия» ниже |
 | `/var/lib/zerostress/runs` | каталоги запусков, на каждый запуск свой, после него удаляется | супервизор (тесты создают и убирают сами) |
 | `/run/zerostress` | каталог для сокета супервизора | `tmpfiles.d` создаёт при каждой загрузке |
 | `/etc/zerostress/web.env` | окружение веб-слоя, здесь живёт ключ Vultr Inference (`root:zerostress-web`, `0640`); читают только `root` и `zerostress-web` | создаёт `deploy/001-host-baseline.sh` один раз, повторный запуск не перезаписывает |
@@ -22,11 +22,19 @@
 
 Проект называется ZeroStress. 4 ноября 2026 сервер приведён к этому имени целиком: учётные записи переименованы на месте (uid, gid и владельцы файлов сохранились), каталоги перенесены, а юнит, sudoers, правила `sysctl`, `tmpfiles`, `udev` и SELinux, зона и политика `firewalld` и таблица nftables пересозданы скриптами из репозитория. Образ гостя пересобран под новое имя агента.
 
-Из служб проекта работает только `zerostress-supervisor` (Go, статический бинарник); веб-слоя и прокси пока нет. Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
+Из служб проекта работает только `zerostress-supervisor` (Go, статический бинарник); веб-интерфейса и прокси пока нет (агент `web/agent` вызывается из тестов и инструментов, службы у него нет). Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
+
+## Рабочая копия
+Репозиторий живёт на сервере: `/opt/zerostress-src` (git, ветка `master`, владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`; `root` добавил каталог в `safe.directory`). Удалённого репозитория нет: публикация на GitHub не делалась и без вашего решения не делается.
+- Работа и коммиты идут прямо здесь (`cd /opt/zerostress-src`). Команды ниже дописаны с `ssh vultr '…'` для запуска с другой машины; на сервере `ssh vultr` и кавычки не нужны. Node: `export PATH=/opt/node/bin:$PATH`, Go: `export PATH=/opt/go/bin:$PATH`.
+- Сборка идёт от `linuxuser` (`sudo -u linuxuser env PATH=$PATH …`), тесты хоста от `root`.
+- Забрать коммиты на другую машину: `ssh vultr 'git -C /opt/zerostress-src bundle create - --all' > app.bundle`, затем `git fetch app.bundle` там.
+- `deploy/dev-sync.sh` (с другой машины) сохраняет `.git` и **отказывается**, если на сервере есть несохранённые изменения (`FORCE=1` принудительно). Он перезаписывает отслеживаемые файлы; собранные файлы вне git (бинарники, `node_modules`) стирает, их нужно собрать снова (`build-agent.sh`, `supervisor/build.sh`, `npm ci --ignore-scripts` в `web/`).
+- Не коммитятся (в `.gitignore`): бинарники, `node_modules`, образы, `.env`, ключи.
 
 ## Как работать
 ```
-bash deploy/dev-sync.sh                                   # локально: отправить рабочее дерево на сервер
+bash deploy/dev-sync.sh                                   # с другой машины: отправить рабочее дерево на сервер (на сервере не нужно)
 ssh vultr 'sudo -u linuxuser bash /opt/zerostress-src/guest-image/build-agent.sh'   # тесты и сборка агента
 ssh vultr 'AGENT_BIN=/opt/zerostress-src/guest-image/agent/zerostress-agent bash /opt/zerostress-src/guest-image/build.sh'   # образ в /var/tmp/zerostress-build/out
 ssh vultr 'bash /opt/zerostress-src/guest-image/install.sh'                          # установить образ в /opt/zerostress/images
@@ -43,6 +51,7 @@ ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                   
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-e2e.sh'                   # сквозной тест службы с настоящими ВМ (47 проверок)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-timeouts.sh'              # лимит агента 60 с и жёсткий потолок (около 2 минут, временно меняет юнит и восстанавливает)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/supervisor-sessions-e2e.sh'          # сессии: команды, подтверждения, простой, слоты, падения (около 3 минут; нужен образ с актуальной заглушкой)
+ssh vultr 'export PATH=/opt/node/bin:$PATH; cd /opt/zerostress-src/web && npm ci --ignore-scripts && npm test'   # хуки и агент: 394 теста; npm run mutate (около 40 минут), npm run corpus, npm run bench (настоящая модель, ключ из web.env)
 ssh vultr '/opt/node/bin/node --disable-warning=ExperimentalWarning /opt/zerostress-src/deploy/test/bench-concurrency.mjs'   # замер параллельности с Chromium (около 3 минут, временно меняет юнит и восстанавливает)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-helper.sh'                       # помощник zsvm: отклоняет всё неверное, кто может его вызывать
 ssh vultr 'bash /opt/zerostress-src/deploy/test/zsvm-probe.sh'                        # разведочная проба юнита на ВМ: лимиты cgroup, сигналы, очистка (остановите службу супервизора на время теста)
