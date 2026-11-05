@@ -6,6 +6,7 @@ const LOADER = ['hooks/test/ruleset.test.ts'];
 const SIGNALS = ['agent/test/signals.test.ts'];
 const GATE = ['agent/test/gatekeeper.test.ts'];
 const RUN = ['agent/test/runner.test.ts'];
+const REPORT = ['agent/test/report.test.ts'];
 const MODEL = ['agent/test/model.test.ts', 'agent/test/assess.test.ts'];
 
 export const MUTATIONS = [
@@ -236,6 +237,29 @@ export const MUTATIONS = [
   ["any answer to a submission is believed", "agent/supervisor.ts", "typeof value?.run_id !== 'string' || !UUID.test(value.run_id) || ", "", RUN],
   ["the supervisor's code is passed on as it is", "agent/supervisor.ts", "typeof value?.code === 'string' && /^[a-z_]{1,40}$/.test(value.code) ? value.code : 'error'", "typeof value?.code === 'string' ? value.code : 'error'", RUN],
   ["a huge answer is read", "agent/supervisor.ts", "if (n > limit) {", "if (false) {", RUN],
+  // the report (agent/report.ts, spec 008, 7)
+  ["the public report carries the hooks' findings", "agent/report.ts", "injection_attempt: o(r.hooks).triggered === true,", "injection_attempt: o(r.hooks).triggered === true, hooks: r.hooks,", REPORT],
+  ["the public report carries the command lines", "agent/report.ts", "steps: list<Record<string, unknown>>(r.steps, 20).map((x) => ({ action: s(x.action, 20), status: s(x.status, 20) })),", "steps: list<Record<string, unknown>>(r.steps, 20).map((x) => ({ action: s(x.action, 20), status: s(x.status, 20), line: x.line })),", REPORT],
+  ["any mode reason is passed on", "agent/report.ts", "typeof a.mode_reason === 'string' && Object.hasOwn(MODE_TEXT, a.mode_reason) ? a.mode_reason : null", "typeof a.mode_reason === 'string' ? a.mode_reason : null", REPORT],
+  ["any verdict is passed on", "agent/report.ts", "(['benign', 'suspicious', 'malicious', 'unknown'].includes(a.verdict as string) ? a.verdict : 'unknown')", "a.verdict", REPORT],
+  ["the confidence is not clamped", "agent/report.ts", "Math.min(1, Math.max(0, n(a.confidence)))", "n(a.confidence)", REPORT],
+  ["the summary is not cut", "agent/report.ts", "a.summary.slice(0, 400)", "a.summary", REPORT],
+  ["the reasons are not capped", "agent/report.ts", "list<Record<string, unknown>>(a.reasons, 8)", "list<Record<string, unknown>>(a.reasons, 8000)", REPORT],
+  ["a claim is not cut", "agent/report.ts", "claim: s(x.claim, 200)", "claim: s(x.claim, 200000)", REPORT],
+  ["the evidence is not cut", "agent/report.ts", "evidence: list<unknown>(x.evidence, 6).map((e) => s(e, 80))", "evidence: list<unknown>(x.evidence, 600).map((e) => s(e, 8000))", REPORT],
+  ["the address is not cut", "agent/report.ts", "url: s(r.url, 2048)", "url: s(r.url, 2048000)", REPORT],
+  ["the signals are not capped", "agent/report.ts", "list<Record<string, unknown>>(o(a.rules).signals, 40)", "list<Record<string, unknown>>(o(a.rules).signals, 4000)", REPORT],
+  ["the steps are not capped", "agent/report.ts", "steps: list<Record<string, unknown>>(r.steps, 20).map((x) => ({ action: s(x.action, 20), status: s(x.status, 20) })),", "steps: list<Record<string, unknown>>(r.steps, 20000).map((x) => ({ action: s(x.action, 20), status: s(x.status, 20) })),", REPORT],
+  ["the injection flag is lost", "agent/report.ts", "injection_attempt: o(r.hooks).triggered === true,", "injection_attempt: false,", REPORT],
+  ["the owner view has no public part", "agent/report.ts", "...publicReport(r),", "", REPORT],
+  ["the owner does not see the findings", "agent/report.ts", "list<Record<string, unknown>>(o(r.hooks).findings, 200).map(", "[].map(", REPORT],
+  ["the owner does not see the approval hash", "agent/report.ts", "command_sha256: s(x.sha256, 64)", "command_sha256: ''", REPORT],
+  ["the owner does not see the tokens", "agent/report.ts", "const usage = a.usage === null || a.usage === undefined ? null : o(a.usage);", "const usage = null;", REPORT],
+  ["the owner is not told the model was set aside", "agent/report.ts", "lowered: model.lowered === true", "lowered: false", REPORT],
+  ["the owner does not see the rule set", "agent/report.ts", "ruleset: s(v.ruleset, 64)", "ruleset: ''", REPORT],
+  ["a text field is left undecided (summary)", "agent/report.ts", "  'summary',\n", "", REPORT],
+  ["a text field is left undecided (signal text)", "agent/report.ts", "  'signals[].text',\n", "", REPORT],
+  ["a sentence of ours carries markup", "agent/report.ts", "hooks_fired: 'The page contains text", "hooks_fired: '<b>The page contains text", REPORT],
   // the guarded thread (the deadline, the crashes, the state it keeps)
   ['no deadline', 'hooks/guarded.ts', "const timer = setTimeout(() => fail('hook_timeout'), timeoutMs);", "const timer = setTimeout(() => fail('hook_timeout'), 600_000);", GUARDED],
   ['a late thread is not killed', 'hooks/guarded.ts', '          void w.terminate();\n        }\n        resolve(r);', '        }\n        resolve(r);', GUARDED],
