@@ -12,7 +12,7 @@ ZeroStress — веб-агент, который открывает подозр
 - Изоляция: Firecracker v1.17.0, микро-ВМ на каждую задачу. Хост Rocky Linux 10, гость Ubuntu 24.04 с Node, Playwright 1.64.1 и Chrome Headless Shell.
 - Супервизор хоста: Go, только стандартная библиотека, управление Firecracker по REST через Unix-сокет (`supervisor/`, статический бинарник, рантайма на хосте нет). Выбор Go сделан 4 ноября 2026 после сравнения с реализацией на TypeScript на одних и тех же сквозных тестах (docs/specs/006-supervisor-api.md, раздел 8).
 - Сборщик улик (в госте, `collector/`, написан): Playwright плюс CDP-сессия (`context.newCDPSession`). Одного API Playwright недостаточно для причин клиентских редиректов. Страницу читаем из изолированного мира CDP, снимок только в режиме `ai`. Тесты: `npm test` в `collector/` (нужен локальный Chromium: `npx playwright install --only-shell chromium`).
-- LLM: пакет `openai` с `baseURL` Vultr Serverless Inference.
+- LLM: тонкий клиент на `fetch` к OpenAI-совместимому API Vultr Serverless Inference (`web/agent/model.ts`), без пакета `openai`: нужен один адрес, ответ всё равно читается строго по полям, а у службы, держащей ключ, должно быть как можно меньше зависимостей (решение 5 ноября 2026, спека 008).
 - Канал с гостем: vsock; приёмник задач в госте — маленький агент на Go (контракт сборщика: задача JSON в stdin, события NDJSON в stdout).
 - Прокси и TLS: Caddy (решение 4 ноября 2026, работает из коробки; HAProxy и nginx остаются запасными, замена несложна). Лимиты по IP живут в привратнике веб-слоя, не в прокси. Подробности: docs/TOOLS.md, раздел 8.
 - Не выбрано: веб-фреймворк.
