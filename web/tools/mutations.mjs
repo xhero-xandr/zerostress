@@ -5,6 +5,7 @@ const GUARDED = ['hooks/test/guarded.test.ts'];
 const LOADER = ['hooks/test/ruleset.test.ts'];
 const SIGNALS = ['agent/test/signals.test.ts'];
 const GATE = ['agent/test/gatekeeper.test.ts'];
+const RUN = ['agent/test/runner.test.ts'];
 const MODEL = ['agent/test/model.test.ts', 'agent/test/assess.test.ts'];
 
 export const MUTATIONS = [
@@ -209,6 +210,32 @@ export const MUTATIONS = [
   ["the token limit is ignored", "agent/model.ts", "max_tokens: cfg.maxTokens,", "max_tokens: 800,", MODEL],
   ["the token limit is unbounded", "agent/config.ts", "int(env, 'AGENT_MODEL_MAX_TOKENS', 2000, 200, 16000)", "int(env, 'AGENT_MODEL_MAX_TOKENS', 2000, 0, 1000000000)", MODEL],
   ["reasoning is on by default", "agent/config.ts", "thinkingOff: env.AGENT_MODEL_THINKING !== 'default',", "thinkingOff: env.AGENT_MODEL_THINKING === 'off',", MODEL],
+  // the task runner and the supervisor client (agent/runner.ts, agent/supervisor.ts, spec 008, 5)
+  ["the session is never closed", "agent/runner.ts", "await deps.sup.command(runId, '{\"cmd\":\"close\",\"id\":\"close-1\"}');", "", RUN],
+  ["a command left for a person closes the session", "agent/runner.ts", "closeNeeded = false;", "", RUN],
+  ["refusals are not recorded", "agent/runner.ts", "refused.push({ proposal: a.next, reason: d.reason });", "", RUN],
+  ["a receipt undoes a result", "agent/runner.ts", "if (!COMMAND_END.has(step.status)) step.status = receipt.status;", "step.status = receipt.status;", RUN],
+  ["a command is not waited for", "agent/runner.ts", "await Promise.race([done, new Promise<void>((r) => setTimeout(r, commandWaitMs).unref())]);", "", RUN],
+  ["a command that hangs is not noticed", "agent/runner.ts", "if (!COMMAND_END.has(step.status) && !finished) {", "if (false) {", RUN],
+  ["the evidence skips the hooks", "agent/runner.ts", "const r = await hooks.inspect(o);", "const r = { event: o as unknown, findings: [] as never[] };", RUN],
+  ["the gatekeeper is not shown the page", "agent/runner.ts", "gate.observe(r.event);", "", RUN],
+  ["huge or too many events are taken", "agent/runner.ts", "if (data.length > MAX_EVIDENCE_LINE || events.length >= MAX_EVENTS) return;", "", RUN],
+  ["a broken stream starts from the beginning", "agent/runner.ts", "deps.sup.events(runId, lastSeq, total.signal)", "deps.sup.events(runId, 0, total.signal)", RUN],
+  ["the thread of the hooks starts late", "hooks/guarded.ts", "  slot = spawn();\n\n  // one event", "  // one event", GUARDED],
+  ["a run that is lost is not cancelled", "agent/runner.ts", "await deps.sup.cancel(runId).catch(() => notes.push('the run could not be cancelled'));", "", RUN],
+  ["the deadline is far away", "agent/runner.ts", "failure ??= 'agent_timeout'; total.abort(); }, totalMs);", "failure ??= 'agent_timeout'; total.abort(); }, 100000000);", RUN],
+  ["the reason of a failure is lost", "agent/runner.ts", "if (typeof s.reason === 'string' && /^[a-z_]{1,40}$/.test(s.reason)) failure ??= s.reason;", "", RUN],
+  ["the screenshot is fetched without vision", "agent/runner.ts", "if (!deps.cfg.vision) return null;", "", RUN],
+  ["an artifact that was not saved is listed", "agent/runner.ts", "a.saved === true && ", "", RUN],
+  ["an oversized event is not an end", "agent/runner.ts", "failure ??= 'stream_refused';", "", RUN],
+  ["lines end only with a line feed", "agent/supervisor.ts", "this.buf.search(/\\r\\n|\\n|\\r/)", "this.buf.search(/\\n/)", RUN],
+  ["the size of an event is not limited", "agent/supervisor.ts", "if (this.size > MAX_FRAME_BYTES) throw", "if (false) throw", RUN],
+  ["a bad event id is a number", "agent/supervisor.ts", "/^\\d{1,12}$/.test(f.id)", "true", RUN],
+  ["any run id is used in a path", "agent/supervisor.ts", "if (!UUID.test(id)) throw", "if (false) throw", RUN],
+  ["any artifact name is used in a path", "agent/supervisor.ts", "if (!ARTIFACT.test(name)) throw", "if (false) throw", RUN],
+  ["any answer to a submission is believed", "agent/supervisor.ts", "typeof value?.run_id !== 'string' || !UUID.test(value.run_id) || ", "", RUN],
+  ["the supervisor's code is passed on as it is", "agent/supervisor.ts", "typeof value?.code === 'string' && /^[a-z_]{1,40}$/.test(value.code) ? value.code : 'error'", "typeof value?.code === 'string' ? value.code : 'error'", RUN],
+  ["a huge answer is read", "agent/supervisor.ts", "if (n > limit) {", "if (false) {", RUN],
   // the guarded thread (the deadline, the crashes, the state it keeps)
   ['no deadline', 'hooks/guarded.ts', "const timer = setTimeout(() => fail('hook_timeout'), timeoutMs);", "const timer = setTimeout(() => fail('hook_timeout'), 600_000);", GUARDED],
   ['a late thread is not killed', 'hooks/guarded.ts', '          void w.terminate();\n        }\n        resolve(r);', '        }\n        resolve(r);', GUARDED],

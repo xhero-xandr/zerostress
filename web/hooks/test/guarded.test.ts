@@ -163,3 +163,18 @@ test('the thread is warmed up before it says ready: the first event does not pay
   }
   assert.ok(median(warm) + 25 < median(cold), `warm ${median(warm).toFixed(0)} ms, cold ${median(cold).toFixed(0)} ms`);
 });
+
+test('the thread starts when the hooks are created, not with the first event', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zs-marker-'));
+  const mark = join(dir, 'mark');
+  process.env.ZS_MARKER = mark;
+  try {
+    const g = open({ workerUrl: new URL('./workers/marker.ts', import.meta.url) });
+    await new Promise((res) => setTimeout(res, 800));
+    assert.ok(existsSync(mark), 'it was already running before any event');
+    await g.close();
+  } finally {
+    delete process.env.ZS_MARKER;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

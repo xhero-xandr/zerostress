@@ -66,7 +66,7 @@ let caught = 0;
 const bad = [];
 try {
   // the unmutated copy must pass, or "caught" would mean nothing
-  const base = spawnSync(process.execPath, ['--test', '--test-concurrency=2', 'hooks/test/hooks.test.ts', 'hooks/test/guarded.test.ts', 'hooks/test/ruleset.test.ts', 'agent/test/signals.test.ts', 'agent/test/gatekeeper.test.ts', 'agent/test/model.test.ts', 'agent/test/assess.test.ts'], { cwd: root, encoding: 'utf8', timeout: 240_000 });
+  const base = spawnSync(process.execPath, ['--test', '--test-concurrency=2', 'hooks/test/hooks.test.ts', 'hooks/test/guarded.test.ts', 'hooks/test/ruleset.test.ts', 'agent/test/signals.test.ts', 'agent/test/gatekeeper.test.ts', 'agent/test/model.test.ts', 'agent/test/assess.test.ts', 'agent/test/runner.test.ts'], { cwd: root, encoding: 'utf8', timeout: 240_000 });
   if (base.status !== 0) {
     console.error('the tests fail without any mutation:\n' + base.stdout.split('\n').filter((l) => l.startsWith('✖')).join('\n'));
     process.exit(2);

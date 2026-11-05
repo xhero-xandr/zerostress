@@ -34,6 +34,7 @@ ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                  
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/collector.sh'                   # настоящий сборщик в настоящей ВМ на example.com (сборщик кладётся поверх установленного образа)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/mutate-artifacts.sh'                  # проверка тестов выдачи артефактов мутациями: 13 правок, тесты обязаны упасть (после dev-sync)
+ssh vultr 'bash /opt/zerostress-src/deploy/test/agent-e2e.sh'                      # агент (web/agent) целиком: супервизор, ВМ, сборщик, хуки, настоящая модель; сначала dev-sync, build-agent.sh и npm ci в web/ (образ подменяется на время теста и возвращается)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/collector-e2e.sh'                    # настоящий сборщик за супервизором (образ подменяется на время теста и возвращается)
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/session.sh'                     # сессии агента v2 по настоящему vsock (сначала build-agent.sh: dev-sync стирает бинарник)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'        # совместимость параметров юнита с SELinux (см. спецификацию 006)

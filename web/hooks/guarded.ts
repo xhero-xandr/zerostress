@@ -119,6 +119,10 @@ export function createGuardedHooks(opts: GuardedOptions = {}): GuardedHooks {
     });
   }
 
+  // The thread starts now, not with the first event: a task spends seconds booting its machine, and the thread boots
+  // and warms up meanwhile.
+  slot = spawn();
+
   // one event at a time: the thread is sequential anyway, and the state it keeps depends on the order
   let queue: Promise<unknown> = Promise.resolve();
 
