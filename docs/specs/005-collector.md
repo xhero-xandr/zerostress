@@ -71,7 +71,7 @@
 | `links` | `snap`, `links`: до 100 ссылок со всего снимка, у каждой `ref`, `text` (до 200), `href`, `origin_differs` | `ariaSnapshot` |
 | `snapshot` | `snap` (номер), `text` (снимок `ai`, до 64 КиБ и 1500 строк), `lines`, `truncated` | `page.ariaSnapshot({mode:'ai'})`; текст недоверенный целиком; **включает** визуально скрытый текст (нулевой размер, белое на белом, за краем экрана, `aria-hidden`), не отличая его от видимого, поэтому скрытый текст сборщик отдельно размечает в `page.hidden_text` по вычисленным стилям |
 | `download` | `url`, `filename`, `mime` (`null` у скачивания, которое началось само), `saved` (`false`, пока нет команды `download`), `status` (при сохранении по команде) | событие `download` Playwright; сохранение командой через запрос адреса |
-| `dialog` | `type`, `message` (до 500) | CDP |
+| `dialog` | `dialog_type` (`alert`, `confirm`, `prompt`, `beforeunload`; не `type`: оно занято конвертом события), `message` (до 500) | CDP |
 | `console` | `level`, `text` (до 500); не более 100 строк | CDP |
 | `popup` | `url`; не более 3 всплывающих окон, остальные закрываются | события контекста |
 | `artifact` | `id`, `name`, `bytes`, `sha256`, `mime`, `saved`, `error` (`artifact_limit` или код записи, если `saved: false`) | 3.6 |

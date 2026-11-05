@@ -158,7 +158,8 @@ test('JavaScript dialogs are reported and dismissed (the page does not hang)', a
   const r = await scanOnce(`${pages.origin}/dialog`);
   assert.equal(r.code, 0, r.stderr());
   const d = r.kinds('dialog');
-  assert.deepEqual(d.map((x) => [x.type, x.message]), [['alert', 'ALERT-MESSAGE'], ['confirm', 'CONFIRM-MESSAGE']]);
+  assert.deepEqual(d.map((x) => [x.dialog_type, x.message]), [['alert', 'ALERT-MESSAGE'], ['confirm', 'CONFIRM-MESSAGE']]);
+  assert.ok(d.every((x) => x.type === 'evidence' && x.v === 1), 'a dialog is still an evidence event');
   assert.equal(r.first('summary').nav_error, null);
 });
 

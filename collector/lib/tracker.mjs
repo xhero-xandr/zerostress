@@ -115,7 +115,7 @@ export async function attachTracker({ page, context, cdp, emitter }) {
   });
   cdp.on('Page.javascriptDialogOpening', (e) => {
     stats.dialogs += 1;
-    emit('dialog', { type: e.type, message: cut(e.message, LIMITS.dialogChars) });
+    emit('dialog', { dialog_type: e.type, message: cut(e.message, LIMITS.dialogChars) });
   });
 
   await cdp.send('Network.enable');

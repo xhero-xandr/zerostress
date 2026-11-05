@@ -112,6 +112,17 @@ test('emitter: order, backpressure-safe writes, budget, essential kinds', async 
   const lines = chunks.join('').trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(lines.map((l) => l.kind), ['nav', 'request', 'cmd_result', 'summary']);
   assert.deepEqual(em.dropped(), { request: 1 });
+  // a field can never replace the envelope
+  const out2 = new PassThrough();
+  const got = [];
+  out2.on('data', (d) => got.push(d.toString()));
+  const em2 = createEmitter(out2, { now: () => 5 });
+  em2.emit('dialog', { type: 'alert', kind: 'other', v: 9, t: -1, message: 'm' });
+  await em2.flush();
+  const rec = JSON.parse(got.join(''));
+  assert.deepEqual([rec.type, rec.v, rec.kind, rec.message], ['evidence', 1, 'dialog', 'm']);
+  assert.ok(rec.t >= 0);
+  assert.deepEqual(Object.keys(rec).slice(0, 4), ['type', 'v', 'kind', 't']);
   assert.ok(lines.every((l) => l.type === 'evidence' && l.v === 1 && Number.isInteger(l.t)));
   assert.ok(lines[0].t < lines[3].t);
 });

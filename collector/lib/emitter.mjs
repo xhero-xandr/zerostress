@@ -23,7 +23,10 @@ export function createEmitter(stream, { now = Date.now, budget = LIMITS.outputBu
   }
 
   function emit(kind, fields = {}) {
-    const record = { type: 'evidence', v: 1, kind, t: now() - started, ...fields };
+    const t = now() - started;
+    // the envelope is written again after the fields: a field called type, kind, v or t (a dialog has a "type") must
+    // never replace it. The first four keys keep their place at the front of the line.
+    const record = { type: 'evidence', v: 1, kind, t, ...fields, ...{ type: 'evidence', v: 1, kind, t } };
     const line = JSON.stringify(record) + '\n';
     const bytes = Buffer.byteLength(line);
     if (!ESSENTIAL.has(kind) && used + bytes > budget) {
