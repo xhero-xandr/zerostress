@@ -25,7 +25,7 @@
 Из служб проекта работает только `zerostress-supervisor` (Go, статический бинарник); веб-интерфейса и прокси пока нет (агент `web/agent` вызывается из тестов и инструментов, службы у него нет). Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
 
 ## Рабочая копия
-Репозиторий живёт на сервере: `/opt/zerostress-src` (git, ветка `master`, владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`; `root` добавил каталог в `safe.directory`). Удалённого репозитория нет: публикация на GitHub не делалась и без вашего решения не делается.
+Репозиторий живёт на сервере: `/opt/zerostress-src` (git, ветка `main`, владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`; `root` добавил каталог в `safe.directory`). Удалённого репозитория нет: публикация на GitHub не делалась и без вашего решения не делается.
 - Работа и коммиты идут прямо здесь (`cd /opt/zerostress-src`). Команды ниже дописаны с `ssh vultr '…'` для запуска с другой машины; на сервере `ssh vultr` и кавычки не нужны. Node: `export PATH=/opt/node/bin:$PATH`, Go: `export PATH=/opt/go/bin:$PATH`.
 - Сборка идёт от `linuxuser` (`sudo -u linuxuser env PATH=$PATH …`), тесты хоста от `root`.
 - Забрать коммиты на другую машину: `ssh vultr 'git -C /opt/zerostress-src bundle create - --all' > app.bundle`, затем `git fetch app.bundle` там.
