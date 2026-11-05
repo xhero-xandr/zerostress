@@ -10,7 +10,7 @@ export type Message = { role: 'system' | 'user'; content: string | Array<Record<
 
 export type ModelResult =
   | { ok: true; content: string; usage: Usage | null }
-  | { ok: false; reason: 'timeout' | 'network' | 'rate_limited' | 'server_error' | 'rejected' | 'empty' | 'bad_response' };
+  | { ok: false; reason: 'timeout' | 'network' | 'rate_limited' | 'server_error' | 'rejected' | 'empty' | 'truncated' | 'bad_response' };
 
 export interface ModelClient {
   complete(messages: Message[]): Promise<ModelResult>;
@@ -52,7 +52,6 @@ export const ANSWER_SCHEMA = {
   },
 } as const;
 
-export const MAX_ANSWER_TOKENS = 800;
 const RETRY_AFTER_MAX_MS = 5000;
 
 const sleepReal = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -86,8 +85,11 @@ export function createModelClient(cfg: AgentConfig, deps: ClientDeps = {}): Mode
         body: JSON.stringify({
           model: cfg.model,
           messages,
-          max_tokens: MAX_ANSWER_TOKENS,
+          max_tokens: cfg.maxTokens,
           temperature: 0,
+          // Models that reason spend most of their tokens on it unless told not to, and each family listens to a different
+          // field: the service passes both on and ignores the one a model does not know (measured, spec 008, 8)
+          ...(cfg.thinkingOff ? { reasoning_effort: 'low', chat_template_kwargs: { enable_thinking: false } } : {}),
           response_format: { type: 'json_schema', json_schema: { name: 'verdict', strict: true, schema: ANSWER_SCHEMA } },
         }),
         signal: AbortSignal.timeout(cfg.timeoutMs),
@@ -109,9 +111,11 @@ export function createModelClient(cfg: AgentConfig, deps: ClientDeps = {}): Mode
     } catch {
       return { result: { ok: false, reason: 'bad_response' } };
     }
-    const choice = (body as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0];
+    const choice = (body as { choices?: Array<{ finish_reason?: unknown; message?: { content?: unknown } }> })?.choices?.[0];
     const content = choice?.message?.content;
     const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((p) => (typeof (p as { text?: unknown })?.text === 'string' ? (p as { text: string }).text : '')).join('') : '';
+    // the answer was cut off (or never started: the reasoning used every token): half a JSON is not an answer
+    if (choice?.finish_reason === 'length') return { result: { ok: false, reason: 'truncated' } };
     if (text.trim() === '') return { result: { ok: false, reason: 'empty' } };
     const u = (body as { usage?: Record<string, unknown> }).usage;
     const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
@@ -199,7 +203,8 @@ export function parseAnswer(text: string, valid: ReadonlySet<string>): ParsedAns
       dropped++;
       continue;
     }
-    const evidence = r.evidence.filter((e): e is string => typeof e === 'string' && valid.has(e)).slice(0, MAX_EVIDENCE);
+    // "forms.cross_origin" or "links[2]" point into the field "forms" or "links": the part before the first dot or bracket is what must exist
+    const evidence = r.evidence.filter((e): e is string => typeof e === 'string' && e.length <= 80 && valid.has(e.split(/[.[]/, 1)[0]!)).slice(0, MAX_EVIDENCE);
     dropped += r.evidence.length - evidence.length;
     if (evidence.length === 0) {
       dropped++; // a claim that cites nothing that exists is not a reason

@@ -11,6 +11,10 @@ export interface AgentConfig {
   /** send the screenshot too (the model must read images) */
   vision: boolean;
   timeoutMs: number;
+  /** the most the model may write (reasoning included, for models that reason) */
+  maxTokens: number;
+  /** ask the model not to spend its tokens on a long hidden reasoning: our verdict is by the rules, the model explains */
+  thinkingOff: boolean;
   /** repeats after a 429 or a server error */
   retries: number;
   maxConcurrent: number;
@@ -59,6 +63,8 @@ export function loadAgentConfig(env: Env): AgentConfig {
     model,
     vision: env.INFERENCE_VISION === '1',
     timeoutMs: int(env, 'AGENT_MODEL_TIMEOUT_S', 30, 1, 300) * 1000,
+    maxTokens: int(env, 'AGENT_MODEL_MAX_TOKENS', 2000, 200, 16000),
+    thinkingOff: env.AGENT_MODEL_THINKING !== 'default',
     retries: int(env, 'AGENT_MODEL_RETRIES', 2, 0, 5),
     maxConcurrent: int(env, 'AGENT_MODEL_CONCURRENCY', 8, 1, 16),
     dailyRequests: int(env, 'AGENT_DAILY_REQUESTS', 2000, 0, 1_000_000),
@@ -69,5 +75,5 @@ export function loadAgentConfig(env: Env): AgentConfig {
 
 /** The configuration without the key, for logs and reports. */
 export function describeConfig(c: AgentConfig): Record<string, unknown> {
-  return { enabled: c.enabled, base: c.baseUrl === '' ? '' : new URL(c.baseUrl).origin, model: c.model, vision: c.vision, timeout_ms: c.timeoutMs, retries: c.retries, max_concurrent: c.maxConcurrent };
+  return { enabled: c.enabled, base: c.baseUrl === '' ? '' : new URL(c.baseUrl).origin, model: c.model, vision: c.vision, timeout_ms: c.timeoutMs, max_tokens: c.maxTokens, thinking_off: c.thinkingOff, retries: c.retries, max_concurrent: c.maxConcurrent };
 }

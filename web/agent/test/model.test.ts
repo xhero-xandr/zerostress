@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { createBudget } from '../budget.ts';
 import { ConfigError, describeConfig, loadAgentConfig, type AgentConfig } from '../config.ts';
-import { createModelClient, extractJson, MAX_ANSWER_TOKENS, parseAnswer } from '../model.ts';
+import { createModelClient, extractJson, parseAnswer } from '../model.ts';
 import { answer, chat, startFakeModel, type FakeModel } from './fakemodel.ts';
 
 const KEY = 'sk-test-SECRET-0123456789';
@@ -18,7 +18,7 @@ const msg = [{ role: 'user' as const, content: 'hi' }];
 test('settings: defaults, and a missing key or model only switches the model off', () => {
   const c = loadAgentConfig({});
   assert.equal(c.enabled, false);
-  assert.deepEqual([c.timeoutMs, c.retries, c.maxConcurrent, c.maxSteps], [30_000, 2, 8, 5]);
+  assert.deepEqual([c.timeoutMs, c.retries, c.maxConcurrent, c.maxSteps, c.maxTokens, c.thinkingOff], [30_000, 2, 8, 5, 2000, true]);
   assert.equal(loadAgentConfig({ INFERENCE_BASE_URL: 'https://api.example/v1', INFERENCE_API_KEY: 'k' }).enabled, false, 'no model');
   assert.equal(loadAgentConfig({ INFERENCE_BASE_URL: 'https://api.example/v1', INFERENCE_MODEL: 'm' }).enabled, false, 'no key');
   const on = loadAgentConfig({ INFERENCE_BASE_URL: 'https://api.example/v1/', INFERENCE_API_KEY: 'k', INFERENCE_MODEL: 'm' });
@@ -32,7 +32,7 @@ test('settings: bad values are refused', () => {
   for (const bad of [
     { INFERENCE_BASE_URL: 'http://api.example/v1' }, { INFERENCE_BASE_URL: 'ftp://x' }, { INFERENCE_BASE_URL: 'not an address' },
     { INFERENCE_BASE_URL: 'https://user:pass@api.example/v1' }, { INFERENCE_MODEL: 'a b' }, { INFERENCE_MODEL: 'x'.repeat(200) },
-    { AGENT_MODEL_TIMEOUT_S: '0' }, { AGENT_MODEL_TIMEOUT_S: 'abc' }, { AGENT_MODEL_TIMEOUT_S: '-5' }, { AGENT_MODEL_CONCURRENCY: '99' }, { AGENT_MODEL_RETRIES: '9' },
+    { AGENT_MODEL_TIMEOUT_S: '0' }, { AGENT_MODEL_TIMEOUT_S: 'abc' }, { AGENT_MODEL_TIMEOUT_S: '-5' }, { AGENT_MODEL_CONCURRENCY: '99' }, { AGENT_MODEL_RETRIES: '9' }, { AGENT_MODEL_MAX_TOKENS: '10' }, { AGENT_MODEL_MAX_TOKENS: '99999' },
   ]) {
     assert.throws(() => loadAgentConfig({ ...ok, ...bad }), ConfigError, JSON.stringify(bad));
   }
@@ -79,7 +79,9 @@ test('the client: one request in the protocol, key in the header only', async ()
   const seen = s.seen[0]!;
   assert.equal(seen.headers.authorization, `Bearer ${KEY}`);
   assert.equal(seen.body.model, 'test-model');
-  assert.equal(seen.body.max_tokens, MAX_ANSWER_TOKENS);
+  assert.equal(seen.body.max_tokens, 2000);
+  assert.equal(seen.body.reasoning_effort, 'low', 'a model that reasons is asked not to');
+  assert.deepEqual(seen.body.chat_template_kwargs, { enable_thinking: false });
   assert.equal(seen.body.temperature, 0);
   assert.equal(seen.body.response_format.type, 'json_schema');
   assert.equal(seen.body.response_format.json_schema.strict, true);
@@ -123,6 +125,24 @@ test('the client: a refusal, an empty or a broken answer is not retried', async 
     assert.deepEqual(r, { ok: false, reason }, reason);
     assert.equal(s.seen.length, 1, `${reason} is not retried`);
   }
+});
+
+test('the client: thinking can be left on, and the limit of tokens is a setting', async () => {
+  const s = await serve(() => chat(answer()));
+  await createModelClient(cfgFor(s.url, { AGENT_MODEL_THINKING: 'default', AGENT_MODEL_MAX_TOKENS: '5000' })).complete(msg);
+  const b = s.seen[0]!.body;
+  assert.equal(b.max_tokens, 5000);
+  assert.equal('reasoning_effort' in b, false);
+  assert.equal('chat_template_kwargs' in b, false);
+});
+
+test('the client: an answer cut off by the limit is a failure of its own, not retried, not parsed', async () => {
+  const s = await serve(() => ({ body: { choices: [{ finish_reason: 'length', message: { content: '{"verdict":"mal' } }] } }));
+  const r = await createModelClient(cfgFor(s.url), { sleep: async () => {} }).complete(msg);
+  assert.deepEqual(r, { ok: false, reason: 'truncated' });
+  assert.equal(s.seen.length, 1);
+  const empty = await serve(() => ({ body: { choices: [{ finish_reason: 'length', message: { content: '', reasoning: 'thinking...' } }] } }));
+  assert.deepEqual(await createModelClient(cfgFor(empty.url)).complete(msg), { ok: false, reason: 'truncated' }, 'all the tokens went on reasoning');
 });
 
 test('the client: a slow service is a timeout, not retried', async () => {
@@ -224,6 +244,15 @@ test('reasons: those that cite nothing real are dropped, references are filtered
   }
   const many = parse(answer({ reasons: Array.from({ length: 20 }, (_, i) => ({ claim: `r${i}`, evidence: ['page'] })) }));
   assert.equal(many.ok && many.answer.reasons.length, 8);
+});
+
+test('evidence may point into a field that was shown, and only into one', () => {
+  const r = parse(answer({ reasons: [
+    { claim: 'a', evidence: ['page.title'] }, { claim: 'b', evidence: ['links[2].text'] }, { claim: 'c', evidence: ['password_form_cross_origin.level'] },
+    { claim: 'd', evidence: ['invented.title'] }, { claim: 'e', evidence: ['.page'] }, { claim: 'f', evidence: ['[0]page'] }, { claim: 'g', evidence: ['page'.padEnd(200, 'x')] }, { claim: 'h', evidence: ['page.' + 'x'.repeat(200)] },
+  ] }));
+  assert.equal(r.ok, true);
+  if (r.ok) assert.deepEqual(r.answer.reasons.map((x) => x.claim), ['a', 'b', 'c']);
 });
 
 test('text is cut to its limits', () => {

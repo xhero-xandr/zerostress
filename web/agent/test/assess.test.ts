@@ -120,6 +120,11 @@ test('the model may cite the sections it was shown, and signals; not sections it
   assert.deepEqual(a.reasons[0]!.evidence, ['forms', 'chain', 'page'], 'the login page has no downloads and no certificate in the evidence');
 });
 
+test('the model may point at the fields of the dossier, not only at sections', async () => {
+  const { a } = await run('login', () => chat(answer({ verdict: 'malicious', reasons: [{ claim: 'A.', evidence: ['final_url', 'signals', 'forms.cross_origin', 'rules_verdict', 'mode', 'screenshot'] }] })));
+  assert.deepEqual(a.reasons[0]!.evidence, ['final_url', 'signals', 'forms.cross_origin', 'rules_verdict'], '"mode" is a label of ours, not evidence; there was no screenshot');
+});
+
 test('a huge page is cut down to the limit before it is shown', async () => {
   const events = fixture('plain').map((e) => (e as { kind: string }).kind === 'page' ? { ...(e as object), text: 'word '.repeat(100_000) } : e);
   const s = await serve(() => chat(answer()));
@@ -205,6 +210,7 @@ test('the service fails: rules only, whatever the failure', async () => {
   for (const [h, why, note] of [
     [() => ({ status: 500 }), 'server error', /server_error/], [() => ({ status: 401 }), 'refusal', /rejected/], [() => ({ status: 429 }), 'limit', /rate_limited/],
     [() => ({ body: 'x' }), 'garbage', /bad_response/], [() => chat(''), 'empty', /empty/],
+    [() => ({ body: { choices: [{ finish_reason: 'length', message: { content: '{"ver' } }] } }), 'cut off', /truncated/],
   ] as const) {
     const { a } = await run('login', h);
     assert.equal(a.mode, 'rules_only', why);
@@ -291,5 +297,5 @@ test('the prompt: loaded with its hash; an empty one is refused; it tells the mo
   const dir = mkdtempSync(join(tmpdir(), 'zs-prompt-'));
   writeFileSync(join(dir, 'p.md'), 'short');
   assert.throws(() => loadPrompt(join(dir, 'p.md')), /missing or empty/);
-  for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only ids that appear in the dossier/, /Do not propose anything else/]) assert.match(prompt.text, must);
+  for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only things that appear in the dossier/, /Do not propose anything else/]) assert.match(prompt.text, must);
 });

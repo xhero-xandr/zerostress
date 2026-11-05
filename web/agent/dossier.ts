@@ -16,7 +16,7 @@ const TEXT_STEPS = [6000, 2000, 500, 0];
 
 export interface Dossier {
   json: Record<string, unknown>;
-  /** the references the model may cite: signal ids and the names of the sections it was shown */
+  /** the references the model may cite: signal ids and the names of the fields of the dossier it was shown */
   ids: Set<string>;
 }
 
@@ -77,11 +77,7 @@ export function buildDossier(events: readonly unknown[], analysis: Analysis, mod
     if (JSON.stringify(json).length <= DOSSIER_MAX_CHARS) break;
   }
 
-  if (chain.length) ids.add('chain');
-  if (tls.length) ids.add('tls');
-  if (page) ids.add('page');
-  if (forms.length) ids.add('forms');
-  if (links.length) ids.add('links');
-  if (downloads.length) ids.add('downloads');
+  // a reason may point at any field of the dossier it was shown ("final_url", "forms", "signals"), as well as at a signal
+  for (const key of Object.keys(json)) if (key !== 'mode') ids.add(key);
   return { json, ids };
 }
