@@ -1,9 +1,9 @@
-{"type":"evidence","v":1,"kind":"nav","t":162,"via":"requested","from":"","to":"http://page.test/"}
-{"type":"evidence","v":1,"kind":"nav","t":172,"via":"commit","from":"","to":"http://page.test/","origin_changed":false}
-{"type":"evidence","v":1,"kind":"request","t":173,"url":"http://page.test/","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
-{"type":"evidence","v":1,"kind":"page","t":684,"url":"http://page.test/","title":"Start","lang":"en","text":"Start\nNext page","text_truncated":false,"hidden_text":{"present":false,"reasons":[],"text":""},"meta":[],"comments_count":0}
-{"type":"evidence","v":1,"kind":"forms","t":684,"forms":[],"total":0,"loose_password_fields":0}
-{"type":"evidence","v":1,"kind":"snapshot","t":704,"snap":1,"text":"- generic [active] [ref=e1]:\n  - heading \"Start\" [level=1] [ref=e2]\n  - link \"Next page\" [ref=e3] [cursor=pointer]:\n    - /url: /next","lines":4,"truncated":false}
-{"type":"evidence","v":1,"kind":"links","t":704,"snap":1,"links":[{"ref":"e3","text":"Next page","href":"/next","origin_differs":false}]}
-{"type":"evidence","v":1,"kind":"artifact","t":724,"id":"3b93cd644050d7a7","file":"3b93cd644050d7a7.png","name":"screenshot.png","bytes":7050,"sha256":"3b93cd644050d7a74171d4dcd05b335a2376df9c3f472349d5f06513df05fd76","mime":"image/png","saved":true}
-{"type":"evidence","v":1,"kind":"summary","t":724,"final_url":"http://page.test/","nav_error":null,"counts":{"nav":2,"request":1,"page":1,"forms":1,"snapshot":1,"links":1,"artifact":1,"requests_seen":1,"blocked":0,"dialogs":0,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":724}
+{"type":"evidence","v":1,"kind":"nav","t":173,"via":"requested","from":"","to":"http://page.test/"}
+{"type":"evidence","v":1,"kind":"nav","t":182,"via":"commit","from":"","to":"http://page.test/","origin_changed":false}
+{"type":"evidence","v":1,"kind":"request","t":184,"url":"http://page.test/","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"page","t":704,"url":"http://page.test/","title":"Start","lang":"en","text":"Start\nNext page","text_truncated":false,"hidden_text":{"present":false,"reasons":[],"text":""},"meta":[],"comments_count":0}
+{"type":"evidence","v":1,"kind":"forms","t":704,"forms":[],"total":0,"loose_password_fields":0}
+{"type":"evidence","v":1,"kind":"snapshot","t":722,"snap":1,"text":"- generic [active] [ref=e1]:\n  - heading \"Start\" [level=1] [ref=e2]\n  - link \"Next page\" [ref=e3] [cursor=pointer]:\n    - /url: /next","lines":4,"truncated":false}
+{"type":"evidence","v":1,"kind":"links","t":723,"snap":1,"links":[{"ref":"e3","text":"Next page","href":"/next","origin_differs":false}]}
+{"type":"evidence","v":1,"kind":"artifact","t":740,"id":"3b93cd644050d7a7","file":"3b93cd644050d7a7.png","name":"screenshot.png","bytes":7050,"sha256":"3b93cd644050d7a74171d4dcd05b335a2376df9c3f472349d5f06513df05fd76","mime":"image/png","saved":true}
+{"type":"evidence","v":1,"kind":"summary","t":740,"final_url":"http://page.test/","nav_error":null,"counts":{"nav":2,"request":1,"page":1,"forms":1,"snapshot":1,"links":1,"artifact":1,"requests_seen":1,"blocked":0,"dialogs":0,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":740}

@@ -1,0 +1,11 @@
+{"type":"evidence","v":1,"kind":"nav","t":160,"via":"requested","from":"","to":"http://page.test/schemes"}
+{"type":"evidence","v":1,"kind":"nav","t":170,"via":"commit","from":"","to":"http://page.test/schemes","origin_changed":false}
+{"type":"evidence","v":1,"kind":"console","t":172,"level":"error","text":"Not allowed to load local resource: file:///etc/hostname"}
+{"type":"evidence","v":1,"kind":"request","t":174,"url":"http://page.test/schemes","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"request","t":181,"url":"data:text/html,<p>inner</p>","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"http://page.test/schemes"}
+{"type":"evidence","v":1,"kind":"page","t":692,"url":"http://page.test/schemes","title":"Schemes","lang":"en","text":"js linkok link","text_truncated":false,"hidden_text":{"present":false,"reasons":[],"text":""},"meta":[],"comments_count":0}
+{"type":"evidence","v":1,"kind":"forms","t":692,"forms":[],"total":0,"loose_password_fields":0}
+{"type":"evidence","v":1,"kind":"snapshot","t":3708,"snap":1,"text":"- generic [active] [ref=e1]:\n  - iframe [ref=e2]\n  - iframe [ref=e3]:\n    - paragraph [ref=f2e2]: inner\n  - link \"js link\" [ref=e4] [cursor=pointer]:\n    - /url: javascript:void(0)\n  - link \"ok link\" [ref=e5] [cursor=pointer]:\n    - /url: /final","lines":8,"truncated":false}
+{"type":"evidence","v":1,"kind":"links","t":3708,"snap":1,"links":[{"ref":"e4","text":"js link","href":"javascript:void(0)","origin_differs":true},{"ref":"e5","text":"ok link","href":"/final","origin_differs":false}]}
+{"type":"evidence","v":1,"kind":"artifact","t":3731,"id":"bf5641cce7d7304f","file":"bf5641cce7d7304f.png","name":"screenshot.png","bytes":6006,"sha256":"bf5641cce7d7304f5783807597c5d0c6cb809301796a08e67345d680cec600cd","mime":"image/png","saved":true}
+{"type":"evidence","v":1,"kind":"summary","t":3732,"final_url":"http://page.test/schemes","nav_error":null,"counts":{"nav":2,"console":1,"request":2,"page":1,"forms":1,"snapshot":1,"links":1,"artifact":1,"requests_seen":2,"blocked":0,"dialogs":0,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":3732}

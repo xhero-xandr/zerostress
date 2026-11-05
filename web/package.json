@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test --test-concurrency=2 hooks/test/*.test.ts",
+    "test": "node --test --test-concurrency=2 hooks/test/*.test.ts agent/test/*.test.ts",
     "mutate": "node tools/mutate.mjs",
     "corpus": "node tools/corpus.mjs"
   },

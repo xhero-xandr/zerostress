@@ -1,0 +1,11 @@
+{"type":"evidence","v":1,"kind":"nav","t":162,"via":"requested","from":"","to":"http://page.test/dialog"}
+{"type":"evidence","v":1,"kind":"nav","t":174,"via":"commit","from":"","to":"http://page.test/dialog","origin_changed":false}
+{"type":"evidence","v":1,"kind":"dialog","t":175,"dialog_type":"alert","message":"ALERT-MESSAGE"}
+{"type":"evidence","v":1,"kind":"dialog","t":176,"dialog_type":"confirm","message":"CONFIRM-MESSAGE"}
+{"type":"evidence","v":1,"kind":"request","t":176,"url":"http://page.test/dialog","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"page","t":684,"url":"http://page.test/dialog","title":"Dialog","lang":"en","text":"dialog","text_truncated":false,"hidden_text":{"present":false,"reasons":[],"text":""},"meta":[],"comments_count":0}
+{"type":"evidence","v":1,"kind":"forms","t":684,"forms":[],"total":0,"loose_password_fields":0}
+{"type":"evidence","v":1,"kind":"snapshot","t":703,"snap":1,"text":"- paragraph [ref=e2]: dialog","lines":1,"truncated":false}
+{"type":"evidence","v":1,"kind":"links","t":703,"snap":1,"links":[]}
+{"type":"evidence","v":1,"kind":"artifact","t":720,"id":"ce6cc5a2f208320e","file":"ce6cc5a2f208320e.png","name":"screenshot.png","bytes":5334,"sha256":"ce6cc5a2f208320ed3ed6ca3d22f5f9b1213f7bb7e86c5e6bf525622d5d612f5","mime":"image/png","saved":true}
+{"type":"evidence","v":1,"kind":"summary","t":721,"final_url":"http://page.test/dialog","nav_error":null,"counts":{"nav":2,"dialog":2,"request":1,"page":1,"forms":1,"snapshot":1,"links":1,"artifact":1,"requests_seen":1,"blocked":0,"dialogs":2,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":721}

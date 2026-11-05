@@ -1,0 +1,4 @@
+{"type":"evidence","v":1,"kind":"nav","t":158,"via":"requested","from":"","to":"http://page.test/autodownload"}
+{"type":"evidence","v":1,"kind":"request","t":166,"url":"http://page.test/autodownload","method":"GET","resource_type":"document","status":200,"mime":"application/octet-stream","blocked":"canceled","initiator":"other"}
+{"type":"evidence","v":1,"kind":"summary","t":166,"final_url":"about:blank","nav_error":"download","counts":{"nav":1,"request":1,"requests_seen":1,"blocked":1,"dialogs":0,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":166}
+{"type":"evidence","v":1,"kind":"download","t":168,"url":"http://page.test/autodownload","filename":"auto.bin","mime":null,"saved":false}

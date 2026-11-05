@@ -3,6 +3,7 @@
 const HOOKS = ['hooks/test/hooks.test.ts'];
 const GUARDED = ['hooks/test/guarded.test.ts'];
 const LOADER = ['hooks/test/ruleset.test.ts'];
+const SIGNALS = ['agent/test/signals.test.ts'];
 
 export const MUTATIONS = [
   // normalisation
@@ -77,6 +78,49 @@ export const MUTATIONS = [
   ['gaps are all nine words wide', 'hooks/ruleset.ts', 'out += gap(Number(arg));', 'out += gap(9);', LOADER],
   ['the hooks start without rules when loading fails', 'hooks/rules.ts', "const loaded = loadRuleset(fileURLToPath(new URL('./rules/', import.meta.url)));", "let loaded: ReturnType<typeof loadRuleset>;\ntry { loaded = loadRuleset(fileURLToPath(new URL('./rules/', import.meta.url))); } catch { loaded = { rules: [], squashed: [], hash: '', files: [] }; }", LOADER],
   ['the state does not carry the rule hash', 'hooks/hooks.ts', 'ruleset: RULESET_SHA256,', "ruleset: '',", LOADER],
+  // the verdict by the rules (agent/signals.ts, spec 008)
+  ["a password form to another site passes", "agent/signals.ts", "return (actionOrigin !== '' && pageOrigin !== '' && actionOrigin !== pageOrigin) || f.origin_differs === true;", "return false;", SIGNALS],
+  ["the collector's flag is ignored", "agent/signals.ts", " || f.origin_differs === true;", ";", SIGNALS],
+  ["a password over http passes", "agent/signals.ts", "if (overHttp) add(", "if (false) add(", SIGNALS],
+  ["a form action over http passes", "agent/signals.ts", " || passwordForms.some((f) => parseUrl(f.action)?.protocol === 'http:')", "", SIGNALS],
+  ["the chain threshold is higher", "agent/signals.ts", "if (hops >= 3) add(", "if (hops >= 4) add(", SIGNALS],
+  ["a three-site chain is not reported", "agent/signals.ts", "else if (hops === 2) add(", "else if (false) add(", SIGNALS],
+  ["a step by the page is not reported", "agent/signals.ts", "if (byPage.length) add(", "if (false) add(", SIGNALS],
+  ["shorteners are not reported", "agent/signals.ts", "if (first && SHORTENERS.has(", "if (false && SHORTENERS.has(", SIGNALS],
+  ["mixed alphabets pass", "agent/signals.ts", "if (mixedScripts(shown) ||", "if (false ||", SIGNALS],
+  ["a name spelling a brand passes", "agent/signals.ts", "|| spoof ||", "|| false ||", SIGNALS],
+  ["bare number addresses pass", "agent/signals.ts", "|| isIpHost(name) ||", "|| false ||", SIGNALS],
+  ["unusual ports pass", "agent/signals.ts", "(port !== '' && port !== '80' && port !== '443')", "false", SIGNALS],
+  ["no encryption is not reported", "agent/signals.ts", "if (finalParsed?.protocol === 'http:') add('no_tls'", "if (false) add('no_tls'", SIGNALS],
+  ["self-signed certificates pass", "agent/signals.ts", "if (issuer !== '' && issuer === subject) tlsBad.push(i);", "", SIGNALS],
+  ["certificates not yet valid pass", "agent/signals.ts", "if (Number.isFinite(from) && from > now) tlsBad.push(i);", "", SIGNALS],
+  ["expired certificates pass", "agent/signals.ts", "if (Number.isFinite(to) && to < now) tlsBad.push(i);", "", SIGNALS],
+  ["a young certificate is a medium signal", "agent/signals.ts", "add('young_certificate', 'info'", "add('young_certificate', 'medium'", SIGNALS],
+  ["a refused certificate passes", "agent/signals.ts", "if (/^ERR_CERT|^ERR_SSL/.test(navError)) tlsBad.push(summary![1]);", "", SIGNALS],
+  ["the real site is accused", "agent/signals.ts", "!belongsTo(b, finalParsed.hostname)", "true", SIGNALS],
+  ["a mention alone counts as a brand page", "agent/signals.ts", "if (named && loginish &&", "if (named &&", SIGNALS],
+  ["a brand page with a password is only medium", "agent/signals.ts", "hasPassword ? 'high' : 'medium'", "'medium'", SIGNALS],
+  ["hidden text is not reported", "agent/signals.ts", "if (isObj(hidden) && hidden.present === true) add(", "if (false) add(", SIGNALS],
+  ["automatic downloads are not reported", "agent/signals.ts", "if (auto.length || navError === 'download') add(", "if (false) add(", SIGNALS],
+  ["a requested download counts as automatic", "agent/signals.ts", "const auto = downloads.filter(([e]) => e.saved !== true);", "const auto = downloads;", SIGNALS],
+  ["executable files pass", "agent/signals.ts", "if (EXECUTABLE_EXTENSIONS.has(ext)) exec.push(i);", "", SIGNALS],
+  ["pop-ups and dialogs are not reported", "agent/signals.ts", "if (popups.length || dialogs.length) add(", "if (false) add(", SIGNALS],
+  ["third parties are not counted", "agent/signals.ts", "if (third.size > 10) add(", "if (third.size > 1000) add(", SIGNALS],
+  ["blocked requests are not reported", "agent/signals.ts", "if (blocked.length) add(", "if (false) add(", SIGNALS],
+  ["the hooks' finding is ignored", "agent/signals.ts", "if (opts.injection) add(", "if (false) add(", SIGNALS],
+  ["an unloaded page is not reported", "agent/signals.ts", "if (!loaded && navError !== 'download') add('unreachable'", "if (false) add('unreachable'", SIGNALS],
+  ["the points never reach \"malicious\"", "agent/signals.ts", "score >= MALICIOUS_AT", "score >= 100000", SIGNALS],
+  ["the points never reach \"suspicious\"", "agent/signals.ts", "score >= SUSPICIOUS_AT", "score >= 100000", SIGNALS],
+  ["a high signal is not enough for \"malicious\"", "agent/signals.ts", "top === 'high' ||", "", SIGNALS],
+  ["a medium signal is not enough for \"suspicious\"", "agent/signals.ts", "top === 'medium' ||", "", SIGNALS],
+  ["an unread page is benign", "agent/signals.ts", "if (verdict === 'benign' && !loaded && navError !== 'download') verdict = 'unknown';", "", SIGNALS],
+  ["a model turns \"unknown\" into \"benign\"", "agent/signals.ts", "if (rules === 'unknown') return model === 'suspicious' || model === 'malicious' ? model : 'unknown';", "if (rules === 'unknown') return model;", SIGNALS],
+  ["a model can lower the verdict", "agent/signals.ts", "return RANK[model] > RANK[rules] ? model : rules;", "return model;", SIGNALS],
+  ["small signals are worth nothing", "agent/signals.ts", "{ info: 0, low: 5, medium: 20, high: 50 }", "{ info: 0, low: 0, medium: 20, high: 50 }", SIGNALS],
+  ["three-part suffixes are not known", "agent/domain.ts", "return TWO_PART.has(last2) ? labels.slice(-3).join('.') : last2;", "return last2;", SIGNALS],
+  ["look-alike letters are not read", "agent/domain.ts", "LOOKS_LIKE[c] ?? c", "c", SIGNALS],
+  ["one alphabet counts as mixed", "agent/domain.ts", "if (latin && other) return true;", "if (latin || other) return true;", SIGNALS],
+  ["no site belongs to its brand", "agent/lists.ts", "return brand.slds.includes(sld(host));", "return false;", SIGNALS],
   // the guarded thread (the deadline, the crashes, the state it keeps)
   ['no deadline', 'hooks/guarded.ts', "const timer = setTimeout(() => fail('hook_timeout'), timeoutMs);", "const timer = setTimeout(() => fail('hook_timeout'), 600_000);", GUARDED],
   ['a late thread is not killed', 'hooks/guarded.ts', '          void w.terminate();\n        }\n        resolve(r);', '        }\n        resolve(r);', GUARDED],

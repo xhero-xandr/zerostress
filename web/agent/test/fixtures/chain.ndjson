@@ -1,0 +1,13 @@
+{"type":"evidence","v":1,"kind":"nav","t":158,"via":"requested","from":"","to":"http://page.test/r1"}
+{"type":"evidence","v":1,"kind":"request","t":165,"url":"http://page.test/r1","method":"GET","resource_type":"document","status":302,"mime":"","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"nav","t":165,"via":"http","from":"http://page.test/r1","to":"http://page.test/r2","status":302,"origin_changed":false}
+{"type":"evidence","v":1,"kind":"request","t":166,"url":"http://page.test/r2","method":"GET","resource_type":"document","status":301,"mime":"","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"nav","t":166,"via":"http","from":"http://page.test/r2","to":"http://page.test/final","status":301,"origin_changed":false}
+{"type":"evidence","v":1,"kind":"nav","t":170,"via":"commit","from":"","to":"http://page.test/final","origin_changed":false}
+{"type":"evidence","v":1,"kind":"request","t":172,"url":"http://page.test/final","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"page","t":688,"url":"http://page.test/final","title":"Final","lang":"en","text":"Final","text_truncated":false,"hidden_text":{"present":false,"reasons":[],"text":""},"meta":[],"comments_count":0}
+{"type":"evidence","v":1,"kind":"forms","t":688,"forms":[],"total":0,"loose_password_fields":0}
+{"type":"evidence","v":1,"kind":"snapshot","t":707,"snap":1,"text":"- heading \"Final\" [level=1] [ref=e2]","lines":1,"truncated":false}
+{"type":"evidence","v":1,"kind":"links","t":707,"snap":1,"links":[]}
+{"type":"evidence","v":1,"kind":"artifact","t":739,"id":"6f57349bda318cb6","file":"6f57349bda318cb6.png","name":"screenshot.png","bytes":5838,"sha256":"6f57349bda318cb6f0a3202ca5a154264a7ed2d60a46eff36ac2d3ce28221452","mime":"image/png","saved":true}
+{"type":"evidence","v":1,"kind":"summary","t":739,"final_url":"http://page.test/final","nav_error":null,"counts":{"nav":4,"request":3,"page":1,"forms":1,"snapshot":1,"links":1,"artifact":1,"requests_seen":3,"blocked":0,"dialogs":0,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":739}

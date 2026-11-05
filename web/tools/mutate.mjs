@@ -7,6 +7,7 @@
 //
 //   node tools/mutate.mjs              all of them
 //   node tools/mutate.mjs --only=rule  only mutations whose label contains "rule"
+//   node tools/mutate.mjs --file=agent/  only mutations of files whose path contains "agent/"
 //   node tools/mutate.mjs --list       print the labels
 
 import { spawnSync } from 'node:child_process';
@@ -19,6 +20,7 @@ import { MUTATIONS } from './mutations.mjs';
 const webDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const args = process.argv.slice(2);
 const only = args.find((a) => a.startsWith('--only='))?.slice(7);
+const fileFilter = args.find((a) => a.startsWith('--file='))?.slice(7);
 
 const rulesSrc = readFileSync(join(webDir, 'hooks/rules.ts'), 'utf8');
 // the rules are data now: their ids come from the files
@@ -31,7 +33,8 @@ if (!rulesSrc.includes(RULES_LINE)) throw new Error('hooks/rules.ts no longer ex
 const all = [
   ...ruleIds.map((id) => ({ label: `rule off: ${id}`, ruleOff: id, tests: ['hooks/test/hooks.test.ts'] })),
   ...MUTATIONS,
-].filter((m) => !only || m.label.includes(only));
+].filter((m) => !only || m.label.includes(only))
+  .filter((m) => !fileFilter || (m.file ?? '').includes(fileFilter));
 
 if (args.includes('--list')) {
   for (const m of all) console.log(m.label);
@@ -61,7 +64,7 @@ let caught = 0;
 const bad = [];
 try {
   // the unmutated copy must pass, or "caught" would mean nothing
-  const base = spawnSync(process.execPath, ['--test', '--test-concurrency=2', 'hooks/test/hooks.test.ts', 'hooks/test/guarded.test.ts'], { cwd: root, encoding: 'utf8', timeout: 240_000 });
+  const base = spawnSync(process.execPath, ['--test', '--test-concurrency=2', 'hooks/test/hooks.test.ts', 'hooks/test/guarded.test.ts', 'hooks/test/ruleset.test.ts', 'agent/test/signals.test.ts'], { cwd: root, encoding: 'utf8', timeout: 240_000 });
   if (base.status !== 0) {
     console.error('the tests fail without any mutation:\n' + base.stdout.split('\n').filter((l) => l.startsWith('✖')).join('\n'));
     process.exit(2);

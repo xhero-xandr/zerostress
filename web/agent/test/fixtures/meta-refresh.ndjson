@@ -1,0 +1,12 @@
+{"type":"evidence","v":1,"kind":"nav","t":158,"via":"requested","from":"","to":"http://page.test/meta"}
+{"type":"evidence","v":1,"kind":"nav","t":181,"via":"commit","from":"","to":"http://page.test/meta","origin_changed":false}
+{"type":"evidence","v":1,"kind":"request","t":183,"url":"http://page.test/meta","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"nav","t":187,"via":"scheduled","from":"http://page.test/meta","to":"http://page.test/final","reason":"metaTagRefresh","delay_s":1}
+{"type":"evidence","v":1,"kind":"nav","t":1194,"via":"commit","from":"http://page.test/meta","to":"http://page.test/final","origin_changed":false}
+{"type":"evidence","v":1,"kind":"request","t":1195,"url":"http://page.test/final","method":"GET","resource_type":"document","status":200,"mime":"text/html","blocked":null,"initiator":"other"}
+{"type":"evidence","v":1,"kind":"page","t":1232,"url":"http://page.test/final","title":"Final","lang":"en","text":"Final","text_truncated":false,"hidden_text":{"present":false,"reasons":[],"text":""},"meta":[],"comments_count":0}
+{"type":"evidence","v":1,"kind":"forms","t":1232,"forms":[],"total":0,"loose_password_fields":0}
+{"type":"evidence","v":1,"kind":"snapshot","t":1250,"snap":1,"text":"- heading \"Final\" [level=1] [ref=f1e2]","lines":1,"truncated":false}
+{"type":"evidence","v":1,"kind":"links","t":1250,"snap":1,"links":[]}
+{"type":"evidence","v":1,"kind":"artifact","t":1281,"id":"6f57349bda318cb6","file":"6f57349bda318cb6.png","name":"screenshot.png","bytes":5838,"sha256":"6f57349bda318cb6f0a3202ca5a154264a7ed2d60a46eff36ac2d3ce28221452","mime":"image/png","saved":true}
+{"type":"evidence","v":1,"kind":"summary","t":1281,"final_url":"http://page.test/final","nav_error":null,"counts":{"nav":4,"request":2,"page":1,"forms":1,"snapshot":1,"links":1,"artifact":1,"requests_seen":2,"blocked":0,"dialogs":0,"downloads":0,"popups":0},"truncated":[],"dropped":{},"duration_ms":1281}
