@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+/* Dark when chosen explicitly (data-theme="dark" on <html>), or when the system asks for it and light was not chosen.
+   All of it is static CSS: nothing is injected at run time, so the production CSP (style-src 'self') holds. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/* Colours as tokens; the pairs below are checked for contrast (text 4.5:1 or more on its background). */
+@theme inline {
+  --color-canvas: var(--zs-canvas);
+  --color-surface: var(--zs-surface);
+  --color-sunken: var(--zs-sunken);
+  --color-line: var(--zs-line);
+  --color-line-strong: var(--zs-line-strong);
+  --color-fg: var(--zs-fg);
+  --color-muted: var(--zs-muted);
+  --color-faint: var(--zs-faint);
+  --color-accent: var(--zs-accent);
+  --color-accent-hover: var(--zs-accent-hover);
+  --color-accent-soft: var(--zs-accent-soft);
+  --color-accent-ink: var(--zs-accent-ink);
+  --color-on-accent: var(--zs-on-accent);
+  --color-danger: var(--zs-danger);
+  --color-danger-soft: var(--zs-danger-soft);
+  --color-danger-line: var(--zs-danger-line);
+  --color-warn: var(--zs-warn);
+  --color-warn-soft: var(--zs-warn-soft);
+  --color-warn-line: var(--zs-warn-line);
+  --color-ok: var(--zs-ok);
+  --color-ok-soft: var(--zs-ok-soft);
+  --color-ok-line: var(--zs-ok-line);
+  --color-band: var(--zs-band);
+  --color-band-fg: var(--zs-band-fg);
+  --color-band-muted: var(--zs-band-muted);
+}
+
+/* All three blocks share one layer, so specificity decides: :root (light) < :root[data-theme=dark] and
+   :root:not([data-theme=light]) under a dark system. An unlayered :root would beat every layered rule. */
+@layer base {
+:root {
+  color-scheme: light;
+  --zs-canvas: #f8fafc;
+  --zs-surface: #ffffff;
+  --zs-sunken: #f1f5f9;
+  --zs-line: #e2e8f0;
+  --zs-line-strong: #cbd5e1;
+  --zs-fg: #0f172a;
+  --zs-muted: #475569;
+  --zs-faint: #64748b;
+  --zs-accent: #0f766e;
+  --zs-accent-hover: #115e59;
+  --zs-accent-soft: #f0fdfa;
+  --zs-accent-ink: #115e59;
+  --zs-on-accent: #ffffff;
+  --zs-danger: #b91c1c;
+  --zs-danger-soft: #fef2f2;
+  --zs-danger-line: #fecaca;
+  --zs-warn: #92400e;
+  --zs-warn-soft: #fffbeb;
+  --zs-warn-line: #fde68a;
+  --zs-ok: #15803d;
+  --zs-ok-soft: #f0fdf4;
+  --zs-ok-line: #bbf7d0;
+  --zs-band: #0f172a;
+  --zs-band-fg: #ffffff;
+  --zs-band-muted: #cbd5e1;
+}
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --zs-canvas: #0b1220;
+    --zs-surface: #111a2b;
+    --zs-sunken: #172235;
+    --zs-line: #23314a;
+    --zs-line-strong: #334462;
+    --zs-fg: #e2e8f0;
+    --zs-muted: #a8b3c4;
+    --zs-faint: #8b97aa;
+    --zs-accent: #2dd4bf;
+    --zs-accent-hover: #5eead4;
+    --zs-accent-soft: #0f2e2c;
+    --zs-accent-ink: #5eead4;
+    --zs-on-accent: #04201d;
+    --zs-danger: #fca5a5;
+    --zs-danger-soft: #3a1414;
+    --zs-danger-line: #7f1d1d;
+    --zs-warn: #fcd34d;
+    --zs-warn-soft: #33260a;
+    --zs-warn-line: #78350f;
+    --zs-ok: #86efac;
+    --zs-ok-soft: #0f2a1a;
+    --zs-ok-line: #14532d;
+    --zs-band: #060b15;
+    --zs-band-fg: #f1f5f9;
+    --zs-band-muted: #a8b3c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --zs-canvas: #0b1220;
+      --zs-surface: #111a2b;
+      --zs-sunken: #172235;
+      --zs-line: #23314a;
+      --zs-line-strong: #334462;
+      --zs-fg: #e2e8f0;
+      --zs-muted: #a8b3c4;
+      --zs-faint: #8b97aa;
+      --zs-accent: #2dd4bf;
+      --zs-accent-hover: #5eead4;
+      --zs-accent-soft: #0f2e2c;
+      --zs-accent-ink: #5eead4;
+      --zs-on-accent: #04201d;
+      --zs-danger: #fca5a5;
+      --zs-danger-soft: #3a1414;
+      --zs-danger-line: #7f1d1d;
+      --zs-warn: #fcd34d;
+      --zs-warn-soft: #33260a;
+      --zs-warn-line: #78350f;
+      --zs-ok: #86efac;
+      --zs-ok-soft: #0f2a1a;
+      --zs-ok-line: #14532d;
+      --zs-band: #060b15;
+      --zs-band-fg: #f1f5f9;
+      --zs-band-muted: #a8b3c4;
+    }
+  }
+  body {
+    background: var(--zs-canvas);
+    color: var(--zs-fg);
+  }
+}
+
+/* the page behind an open native dialog does not scroll; static, so no style is ever injected at run time */
+html:has(dialog[open]) {
+  overflow: hidden;
+}

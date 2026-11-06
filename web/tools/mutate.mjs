@@ -42,11 +42,17 @@ if (args.includes('--list')) {
 }
 
 const work = mkdtempSync(join(tmpdir(), 'zs-mutate-'));
-cpSync(webDir, join(work, 'web'), { recursive: true, filter: (p) => !p.includes('node_modules') });
+cpSync(webDir, join(work, 'web'), { recursive: true, filter: (p) => !p.includes('node_modules') && !p.includes('/client/dist') && !p.includes('/client/mockups') });
 const root = join(work, 'web');
 // the command tests read the supervisor's shared fixture, which lives next to web/ in the repository
 cpSync(join(dirname(webDir), 'supervisor/testdata'), join(work, 'supervisor/testdata'), { recursive: true });
 symlinkSync(join(webDir, 'node_modules'), join(root, 'node_modules'), 'junction');
+// the client (spec 012) has its own packages and runs its tests with vitest
+symlinkSync(join(webDir, 'client/node_modules'), join(root, 'client/node_modules'), 'junction');
+const VITEST = join(root, 'client/node_modules/vitest/vitest.mjs');
+const vitest = (testFiles) => spawnSync(process.execPath, [VITEST, 'run', ...testFiles.map((f) => f.replace(/^client\//, ''))], {
+  cwd: join(root, 'client'), encoding: 'utf8', timeout: 240_000,
+});
 
 const files = new Map();
 const original = (f) => {
@@ -56,6 +62,7 @@ const original = (f) => {
 const restore = () => { for (const [f, t] of files) writeFileSync(join(root, f), t); };
 
 function testsFail(testFiles, env = {}) {
+  if (testFiles.every((f) => f.startsWith('client/'))) return vitest(testFiles).status !== 0;
   const r = spawnSync(process.execPath, ['--test', '--test-concurrency=2', '--test-timeout=30000', ...testFiles], {
     cwd: root, env: { ...process.env, ...env }, encoding: 'utf8', timeout: 240_000,
   });
@@ -70,6 +77,13 @@ try {
   if (base.status !== 0) {
     console.error('the tests fail without any mutation:\n' + base.stdout.split('\n').filter((l) => l.startsWith('✖')).join('\n'));
     process.exit(2);
+  }
+  if (all.some((m) => (m.tests ?? []).some((f) => f.startsWith('client/')))) {
+    const cbase = vitest(['client/src']);
+    if (cbase.status !== 0) {
+      console.error('the client tests fail without any mutation:\n' + cbase.stdout.slice(-2000));
+      process.exit(2);
+    }
   }
   for (const m of all) {
     let failed;

@@ -55,6 +55,7 @@ Untrusted input (page text, OCR, file names) is treated as data a model reads, n
 | Supervisor (privileged) | Go, standard library only — microVM lifecycle, queueing, sessions, artifacts, over a Unix socket |
 | Collector (in the guest) | Node.js, Playwright + a raw CDP session |
 | Web layer and agent (unprivileged) | Node.js 24, TypeScript (type-stripping, no build step), [Hono](https://hono.dev/) |
+| Interface | React 19, React Router 8, TanStack Query, Tailwind CSS 4, built with Vite; strict CSP, no inline scripts or styles |
 | Model | Vultr Serverless Inference, OpenAI-compatible, a thin `fetch` client with a strict response schema — no SDK |
 | Proxy / TLS | Caddy |
 
@@ -65,7 +66,8 @@ The directory a piece of code sits in tells you its privilege level and where it
 | Directory | What's in it | Where it runs |
 |---|---|---|
 | `supervisor/` | Go, standard library only: microVM lifecycle, the queue, sessions, artifacts | **Host, privileged** — the only thing allowed to touch Firecracker, cgroups and the guest network |
-| `web/` | `hooks/` (injection detectors), `agent/` (rules, model client, verdict, report), `server/` (the Hono app) | **Host, unprivileged** — no access to Firecracker or the supervisor's socket beyond its own API |
+| `web/` | `hooks/` (injection detectors), `agent/` (rules, model client, verdict, report), `server/` (the Hono API: tasks, progress stream, report, chat, approvals; serves the built client) | **Host, unprivileged** — no access to Firecracker or the supervisor's socket beyond its own API |
+| `web/client/` | The interface: React, React Router, TanStack Query, Tailwind; light and dark themes, or the system's | **In the visitor's browser**; only the built `dist/` reaches the host |
 | `web/tools/` | Maintained dev tooling: mutation testing, the corpus check, model benchmarking, the DB-IP fetch script | Run by hand or in CI, never by the running service |
 | `collector/` | Node.js + Playwright, driven over a raw CDP session | **Inside the guest micro-VM**, as an unprivileged user, once per task |
 | `guest-image/` | The Go agent that runs inside the guest (`agent/`), plus the scripts that build and install the guest disk image | `agent/` runs **inside the guest**; the build scripts run on the host, but only to produce that image — not part of the running service |

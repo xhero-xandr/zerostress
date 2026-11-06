@@ -22,6 +22,11 @@ for d in agent hooks server; do
 done
 install -m 0644 "$S/web/package.json" "$S/web/package-lock.json" "$S/web/tsconfig.json" "$DEST.new/"
 (cd "$DEST.new" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null)
+# the client (spec 012): built from the lock file, only its output goes next to the server (server/app.ts reads ../client/dist)
+(cd "$S/web/client" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null && npx vite build >/dev/null)
+[[ -f $S/web/client/dist/index.html ]] || { echo "client: the build made no index.html"; exit 1; }
+install -d -m 0755 "$DEST.new/client"
+cp -r "$S/web/client/dist" "$DEST.new/client/dist"
 chown -R root:root "$DEST.new"
 chmod -R go-w "$DEST.new"
 systemctl stop zerostress-web 2>/dev/null || true

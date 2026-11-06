@@ -2,7 +2,8 @@
 // limiter are passed in), so a test can drive it without a supervisor.
 
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { publicReport, type PublicReport } from '../agent/report.ts';
@@ -12,7 +13,7 @@ import { SupervisorError } from '../agent/supervisor.ts';
 import { checkAddress } from './gate.ts';
 import { clientBucket, type Limiter } from './limits.ts';
 import type { Stage, Store, Task } from './store.ts';
-import { errorText, failedPage, homePage, isTab, notFoundPage, progressPage, reportPage, T, type Demo } from './views.ts';
+import { errorText, T, type Demo } from './text.ts';
 
 export interface AppDeps {
   run(input: TaskInput, onProgress: (p: Progress) => void): Promise<TaskResult>;
@@ -28,13 +29,18 @@ export interface AppDeps {
   session: { idle_s: number; max_s: number };
   /** the address of the person asking; the default reads the connection and, behind our own proxy, the proxy's header */
   clientIp?: (c: Context) => string;
+  /** the built client (spec 012): index.html and assets/; the default is ../client/dist next to this file */
+  clientDir?: string;
 }
 
-const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+// The client sends everything with fetch, it has no forms, so form-action can be 'none' (spec 007, 3.5).
+const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 export const MAX_BODY = 4096;
 const SHOT_MAX = 4 * 1024 * 1024;
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const STATIC: Readonly<Record<string, string>> = { 'style.css': 'text/css; charset=utf-8', 'app.js': 'text/javascript; charset=utf-8' };
+/** Only the kinds of file the build makes; the names are hashed by the build, so they can be cached for good. */
+const ASSET_TYPES: Readonly<Record<string, string>> = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const ASSET_NAME = /^[A-Za-z0-9_-]{1,80}\.(js|css)$/;
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 const STAGE_AT: Readonly<Record<Stage, number>> = { queued: 0, starting: 0, opening: 1, analysing: 2, done: 3, failed: 3 };
@@ -96,8 +102,12 @@ async function readJsonBody(c: Context): Promise<{ ok: true; body: Record<string
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
-  const statics = new Map<string, Buffer>();
-  for (const name of Object.keys(STATIC)) statics.set(name, readFileSync(new URL(`./static/${name}`, import.meta.url)));
+  // the client is read once at start: index.html and the files of assets/ whose names have the build's shape
+  const clientDir = deps.clientDir ?? new URL('../client/dist/', import.meta.url).pathname;
+  const indexHtml = readFileSync(join(clientDir, 'index.html'), 'utf8');
+  const assets = new Map<string, Buffer>();
+  for (const name of readdirSync(join(clientDir, 'assets'))) if (ASSET_NAME.test(name)) assets.set(name, readFileSync(join(clientDir, 'assets', name)));
+  const page = (c: Context, status: 200 | 404 = 200) => c.html(indexHtml, status, { 'cache-control': 'no-store' });
   const ip = (c: Context): string => clientBucket((deps.clientIp ?? defaultClientIp)(c));
 
   app.use('*', async (c, next) => {
@@ -113,14 +123,16 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get('/healthz', (c) => c.text('ok', 200, { 'cache-control': 'no-store' }));
 
-  app.get('/static/:file', (c) => {
+  app.get('/assets/:file', (c) => {
     const name = c.req.param('file');
-    const body = Object.hasOwn(STATIC, name) ? statics.get(name) : undefined;
+    const body = ASSET_NAME.test(name) ? assets.get(name) : undefined;
     if (!body) return c.text('not found', 404);
-    return new Response(new Uint8Array(body), { headers: { 'content-type': STATIC[name]!, 'cache-control': 'public, max-age=300' } });
+    return new Response(new Uint8Array(body), { headers: { 'content-type': ASSET_TYPES[name.slice(name.lastIndexOf('.'))]!, 'cache-control': 'public, max-age=31536000, immutable' } });
   });
 
-  app.get('/', (c) => c.html(homePage(deps.demos), 200, { 'cache-control': 'no-store' }));
+  // the pages are the client's; the server only hands out its index for the addresses it knows
+  app.get('/', (c) => page(c));
+  app.get('/api/demos', (c) => json(c, 200, { demos: deps.demos }));
 
   // ---- start a check ----
   app.post('/api/tasks', async (c) => {
@@ -179,21 +191,29 @@ export function createApp(deps: AppDeps): Hono {
     });
   }
 
-  // ---- the report: one page per section, like a scanner's tabs ----
-  const showReport = (c: Context, tabName: string): Response | Promise<Response> => {
-    const task = deps.store.get(c.req.param('id') ?? '');
-    const headers = { 'cache-control': 'no-store' };
-    if (!task || !isTab(tabName)) return c.html(notFoundPage(), 404, headers);
-    if (task.result) {
-      const shots = { desktop: shotName(task.result, 'desktop') !== null, mobile: shotName(task.result, 'mobile') !== null, tablet: shotName(task.result, 'tablet') !== null };
-      const asked = c.req.query('shot');
-      const device = asked === 'mobile' || asked === 'tablet' ? asked : 'desktop';
-      return c.html(reportPage(publicReport(task.result), { id: task.id, shots, device: shots[device] ? device : 'desktop', checkedAt: task.createdAt }, tabName), 200, headers);
-    }
-    if (task.stage === 'failed') return c.html(failedPage(task.id), 200, headers);
-    return c.html(progressPage({ id: task.id, host: hostOf(task.url), stage: task.stage, position: task.position }), 200, headers);
-  };
-  app.get('/r/:id', (c) => showReport(c, 'summary'));
+  // ---- a task: its state for the client, and the client's page for its addresses ----
+  // Public, like the report: the id is the capability to read, the key (never here) the capability to decide.
+  app.get('/api/tasks/:id', (c) => {
+    const task = deps.store.get(c.req.param('id'));
+    if (!task) return fail(c, 404, 'not_found');
+    const r = task.result;
+    return json(c, 200, {
+      id: task.id,
+      stage: task.stage,
+      label: task.stage === 'queued' ? T.queued(task.position) : T.stageNow[task.stage],
+      at: STAGE_AT[task.stage],
+      position: task.position,
+      host: hostOf(task.url),
+      has_report: r !== null,
+      checked_at: task.createdAt,
+      shots: { desktop: !!r && shotName(r, 'desktop') !== null, tablet: !!r && shotName(r, 'tablet') !== null, mobile: !!r && shotName(r, 'mobile') !== null },
+    });
+  });
+
+  const SECTIONS = new Set(['security', 'network', 'links', 'behavior']);
+  const taskPage = (c: Context, section: string | null) =>
+    deps.store.get(c.req.param('id') ?? '') && (section === null || SECTIONS.has(section)) ? page(c) : page(c, 404);
+  app.get('/r/:id', (c) => taskPage(c, null));
   app.get('/r/:id/report.json', (c) => {
     const task = deps.store.get(c.req.param('id'));
     if (!task?.result) return c.text('not found', 404);
@@ -214,7 +234,7 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   // the section pages come after the fixed names (screenshot.png, report.json) so a name is never taken for a section
-  app.get('/r/:id/:tab', (c) => showReport(c, c.req.param('tab')));
+  app.get('/r/:id/:tab', (c) => taskPage(c, c.req.param('tab')));
 
   // ---- Explain and questions about a finished report ----
   // The model only talks: it reads the public report and says something; nothing it says changes the report or starts
@@ -323,14 +343,15 @@ export function createApp(deps: AppDeps): Hono {
       if (b.allow) await deps.approve(t.runId, listed.command_id, listed.sha256);
       else await deps.cancel(t.runId);
     } catch (e) {
-      if (e instanceof SupervisorError && (e.status === 409 || e.status === 410)) return json(c, 400, { code: 'expired', message: 'This decision is no longer possible: the action changed or the time ran out.' });
+      if (e instanceof SupervisorError && (e.status === 409 || e.status === 410)) return json(c, 400, { code: 'expired', message: T.expired });
       return fail(c, 503, 'supervisor_unavailable');
     }
     return json(c, 202, { message: b.allow ? T.approved : T.denied });
   });
 
-  app.notFound((c) => c.html(notFoundPage(), 404, { 'cache-control': 'no-store' }));
-  app.onError((_e, c) => (c.req.path.startsWith('/api/') ? fail(c, 500, 'server') : c.html(failedPage('x'), 500)));
+  // an unknown address gets the client with a 404 (it shows "not found"); an unknown API path a plain JSON 404
+  app.notFound((c) => (c.req.path.startsWith('/api/') ? fail(c, 404, 'not_found') : page(c, 404)));
+  app.onError((_e, c) => (c.req.path.startsWith('/api/') ? fail(c, 500, 'server') : c.text('server error', 500)));
   return app;
 }
 

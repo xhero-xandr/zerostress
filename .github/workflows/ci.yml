@@ -82,6 +82,31 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  client:
+    name: client (spec 012)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --ignore-scripts
+        working-directory: web
+      - run: npm ci --ignore-scripts
+        working-directory: web/client
+      - run: npm run typecheck
+        working-directory: web/client
+      - run: npm test
+        working-directory: web/client
+      - run: npm run build
+        working-directory: web/client
+      # the end-to-end check drives the built client behind the real web layer in Chromium (the collector's Playwright)
+      - run: npm ci --ignore-scripts && npx playwright install --with-deps --only-shell chromium
+        working-directory: collector
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: npm run e2e
+        working-directory: web/client
+
   collector:
     runs-on: ubuntu-24.04
     steps:

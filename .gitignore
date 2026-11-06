@@ -26,3 +26,6 @@ runs/
 .DS_Store
 Thumbs.db
 zerostress-supervisor
+
+# screenshots of the client, for review only
+web/client/mockups/

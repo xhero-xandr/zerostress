@@ -23,7 +23,7 @@ import { createSupervisorClient } from '../agent/supervisor.ts';
 import { createApp } from './app.ts';
 import { createLimiter, DEFAULT_LIMITS } from './limits.ts';
 import { createStore } from './store.ts';
-import type { Demo } from './views.ts';
+import type { Demo } from './text.ts';
 
 const env = process.env;
 const num = (name: string, def: number): number => {

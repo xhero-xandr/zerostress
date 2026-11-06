@@ -11,10 +11,11 @@
 // submitter or the model; the web layer must escape them and may never put them where the browser would read them as
 // markup, script or an instruction (spec 007).
 
-import type { Assessment } from './assess.ts';
-import type { Facts } from './facts.ts';
 import { ASK_CODES } from './fields.ts';
+import type { PublicFacts, PublicReport, PublicVerdict } from './report-types.ts';
 import type { TaskResult } from './runner.ts';
+
+export type { PublicReport } from './report-types.ts';
 
 export const REPORT_SCHEMA = 1;
 
@@ -64,29 +65,6 @@ export const MODE_TEXT: Readonly<Record<string, string>> = {
   model_output_flagged: 'The model repeated text from the page, so its opinion was set aside. The verdict comes from fixed rules.',
 };
 
-export interface PublicReport {
-  schema: 1;
-  run_id: string;
-  url: string;
-  verdict: Assessment['verdict'];
-  confidence: number;
-  status: { state: string; failure: string | null };
-  /** how the verdict was reached */
-  mode: Assessment['mode'];
-  mode_reason: string | null;
-  mode_text: string | null;
-  /** the page tried to address an automated reader (and nothing more is said about it) */
-  injection_attempt: boolean;
-  signals: Array<{ id: string; level: string; text: string }>;
-  summary: string | null;
-  reasons: Array<{ claim: string; evidence: string[] }>;
-  facts: Facts;
-  steps: Array<{ action: string; status: string }>;
-  /** actions waiting for a person; the details are for whoever may decide */
-  pending_approval: number;
-  artifacts: Array<{ name: string; mime: string }>;
-}
-
 export interface OwnerReport extends PublicReport {
   owner: {
     rules: { verdict: string; score: number; confidence: number };
@@ -109,7 +87,7 @@ const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ?
 const list = <T>(v: unknown, max: number): T[] => (Array.isArray(v) ? (v.slice(0, max) as T[]) : []);
 const o = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
-function publicFacts(v: unknown): Facts {
+function publicFacts(v: unknown): PublicFacts {
   const f = o(v);
   return {
     final_host: s(f.final_host, 100),
@@ -163,7 +141,7 @@ export function publicReport(r: TaskResult): PublicReport {
     schema: REPORT_SCHEMA,
     run_id: s(r.run_id, 40),
     url: s(r.url, 2048),
-    verdict: (['benign', 'suspicious', 'malicious', 'unknown'].includes(a.verdict as string) ? a.verdict : 'unknown') as Assessment['verdict'],
+    verdict: (['benign', 'suspicious', 'malicious', 'unknown'].includes(a.verdict as string) ? a.verdict : 'unknown') as PublicVerdict,
     confidence: Math.min(1, Math.max(0, n(a.confidence))),
     status: { state: s(r.state, 20), failure: r.failure === null ? null : s(r.failure, 40) },
     mode,
