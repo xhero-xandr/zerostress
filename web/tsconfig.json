@@ -19,6 +19,7 @@
   },
   "include": [
     "hooks/**/*.ts",
-    "agent/**/*.ts"
+    "agent/**/*.ts",
+    "server/**/*.ts"
   ]
 }

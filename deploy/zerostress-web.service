@@ -1,0 +1,50 @@
+[Unit]
+Description=ZeroStress web layer (pages, API, agent)
+After=network.target zerostress-supervisor.service
+Wants=zerostress-supervisor.service
+
+[Service]
+Type=simple
+User=zerostress-web
+Group=zerostress-web
+# the supervisor's socket belongs to this group
+SupplementaryGroups=zerostress-ipc
+UMask=0077
+EnvironmentFile=/etc/zerostress/web.env
+Environment=WEB_PORT=8080
+Environment=WEB_DATA_DIR=/var/lib/zerostress-web/tasks
+# systemd makes /var/lib/zerostress-web for the service's user; the supervisor's own state directory stays closed to it
+StateDirectory=zerostress-web
+StateDirectoryMode=0700
+Environment=NODE_ENV=production
+WorkingDirectory=/opt/zerostress/web
+ExecStart=/opt/node/bin/node --disable-warning=ExperimentalWarning server/main.ts
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+
+# The service holds the key to the model, so it gets as little as it needs: the supervisor's socket, the internet
+# for the model, and one directory to write.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=768M
+TasksMax=200
+
+[Install]
+WantedBy=multi-user.target
