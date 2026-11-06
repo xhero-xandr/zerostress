@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"math"
 	"time"
 )
 
@@ -19,6 +20,10 @@ func main() {
 	artifactDir := flag.String("artifact-dir", defaultArtifactDir, "directory the collector writes artifacts to")
 	maxArtifact := flag.Int64("max-artifact", defaultMaxArtifact, "max bytes of one artifact handed to the host")
 	flag.Parse()
+	// vsock ports are 32-bit; a larger value would otherwise wrap around to some other port
+	if *port == 0 || *port > math.MaxUint32 {
+		log.Fatalf("-port must be between 1 and %d", uint32(math.MaxUint32))
+	}
 
 	cmd := flag.Args()
 	if len(cmd) == 0 {
@@ -47,7 +52,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ln, err := listenVsock(uint32(*port))
+	ln, err := listenVsock(uint32(*port)) // #nosec G115 -- range checked right after flag.Parse
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Logger writes one JSON object per line. Fields must not carry URLs or typed-in values: see UrlInfo.
+// Logger writes one JSON object per line. Fields must not carry URLs or typed-in values: see URLInfo.
 type Logger func(level, msg string, fields map[string]any)
 
 var nullLogger Logger = func(string, string, map[string]any) {}
@@ -34,8 +34,8 @@ func NewLogger(w io.Writer) Logger {
 
 func stdoutLogger() Logger { return NewLogger(os.Stdout) }
 
-// UrlInfo is what may be logged about a URL: it can carry personal tokens, so never the whole string.
-func UrlInfo(raw string) map[string]any {
+// URLInfo is what may be logged about a URL: it can carry personal tokens, so never the whole string.
+func URLInfo(raw string) map[string]any {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" {
 		return map[string]any{"len": len(raw)}

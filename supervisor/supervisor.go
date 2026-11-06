@@ -237,7 +237,7 @@ func (s *Supervisor) Submit(url string, session *SessionLimits) (SubmitResult, e
 	rec, _ := s.store.Get(id)
 	s.queue = append(s.queue, id)
 	s.emitLocked(id, "state", s.stateDataLocked(rec))
-	s.log("info", "run accepted", merge(map[string]any{"run_id": id}, UrlInfo(url)))
+	s.log("info", "run accepted", merge(map[string]any{"run_id": id}, URLInfo(url)))
 	s.pumpLocked()
 	now, _ := s.store.Get(id)
 	return SubmitResult{RunID: id, State: now.State, Position: s.positionOfLocked(id)}, nil
