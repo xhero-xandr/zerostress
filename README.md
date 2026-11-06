@@ -72,7 +72,6 @@ The directory a piece of code sits in tells you its privilege level and where it
 | `collector/` | Node.js + Playwright, driven over a raw CDP session | **Inside the guest micro-VM**, as an unprivileged user, once per task |
 | `guest-image/` | The Go agent that runs inside the guest (`agent/`), plus the scripts that build and install the guest disk image | `agent/` runs **inside the guest**; the build scripts run on the host, but only to produce that image — not part of the running service |
 | `deploy/` | Host setup scripts (numbered, run once each), end-to-end tests in `deploy/test/`; `deploy/helpers/` holds the root helpers `zsvm`/`zsnet`, `deploy/systemd/` the three unit files | **Host**, run by hand during setup or deployment, not by the service itself |
-| `demo-site/` | Static pages used only for local, offline demos (a cross-origin password form, a page probing the cloud metadata address, ...) | Never deployed; `demo-site/check.mjs` runs it locally |
 | `probes/` | One-off, throwaway probes used while deciding something (not part of any test suite or CI) | Run by hand, kept only for reference — don't confuse with `web/tools/` |
 | `docs/` | Specs (one per decision), the live status, the architecture write-up, the backlog | Documentation only |
 

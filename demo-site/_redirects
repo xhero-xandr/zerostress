@@ -1,4 +1,0 @@
-/start /go/1 302
-/go/1 /go/2 302
-/go/2 /go/3 301
-/go/3 /login/ 302
