@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandbox boundary test</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:600px;margin:60px auto;padding:0 20px}</style></head>
+<body>
+<h1>Sandbox boundary test</h1>
+<p>This page makes one request to the cloud metadata address <code>169.254.169.254</code>, the address attackers use to steal cloud credentials. Inside the ZeroStress sandbox the request is blocked, and the report shows it.</p>
+<p id="out">Trying…</p>
+<script src="probe.js"></script>
+</body></html>
