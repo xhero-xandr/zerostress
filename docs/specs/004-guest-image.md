@@ -18,8 +18,8 @@
 |---|---|
 | Основа | Ubuntu 24.04 (корневая файловая система из CI Firecracker, содержит systemd и SSH) |
 | Node | 24.22.2, официальный архив `nodejs.org`, контрольная сумма проверена по `SHASUMS256.txt`, лежит в `/opt/node` |
-| Playwright | 1.64.1, установлен в `/opt/collector/node_modules` |
-| Браузеры | Playwright кладёт их в `/opt/pw-browsers`: Chrome Headless Shell 156.0.8078.4, вероятно, также полный Chromium и ffmpeg |
+| Playwright | 1.65.0, установлен в `/opt/collector/node_modules` |
+| Браузеры | Playwright кладёт их в `/opt/pw-browsers`: Chrome Headless Shell 158.0.8127.18, вероятно, также полный Chromium и ffmpeg |
 | Пользователь | `pw`, без прав администратора, от него запускаются сборщик и Chromium |
 | Размер | видимый 5 ГБ (разрежённый файл), занято на диске 2,0 ГБ; `/opt/node` 208 МБ, `/opt/collector` 19 МБ, `/opt/pw-browsers` 681 МБ |
 | Ядро | отдельный файл `vmlinux-6.18.56` из CI Firecracker, в образ не входит |
@@ -38,7 +38,7 @@
 1. Скачать ядро и корневую систему Ubuntu из CI Firecracker (корзина S3 `spec.ccfc.min`). Префикс сборки закрепляется явно (на 3 ноября использовался `firecracker-ci/20261028-84df49062576-0/`, ядро 6.18.56), а не выбирается «последний».
 2. Распаковать `squashfs` (`unsquashfs`), сгенерировать ключ для канала SSH (если выбран SSH) и положить публичную часть в `authorized_keys`.
 3. Создать файл образа (`truncate -s 5G`), отформатировать (`mkfs.ext4 -d` из распакованного дерева).
-4. Смонтировать образ через loop, подключить `/dev`, `/dev/pts`, `/proc`, `/sys`, выполнить `chroot` и установить зависимости: пакеты apt, Node (скачать, сверить контрольную сумму, распаковать), `npm install playwright@1.64.1`, браузеры, создать пользователя `pw`.
+4. Смонтировать образ через loop, подключить `/dev`, `/dev/pts`, `/proc`, `/sys`, выполнить `chroot` и установить зависимости: пакеты apt, Node (скачать, сверить контрольную сумму, распаковать), `npm install playwright@1.65.0`, браузеры, создать пользователя `pw`.
 5. Размонтировать (всегда, через `trap`), проверить файловую систему (`e2fsck -fn`), посчитать SHA-256 и записать вместе с версиями в файл `manifest`.
 6. Положить образ в `/opt/zerostress/images/` (`root:root`, только чтение).
 
@@ -144,7 +144,7 @@
 ## 8d. Воспроизводимая сборка `build.sh` (4 ноября 2026)
 Скрипт [guest-image/build.sh](../../guest-image/build.sh) собирает образ с нуля, запускается от `root` на хосте: `AGENT_BIN=... ./build.sh`. Результат в `$BUILD_DIR/out` (по умолчанию `/var/tmp/zerostress-build/out`): `guest-rootfs.ext4`, ядро и `manifest.json` (хеши, версии, коммит). В `/opt/zerostress/images` ничего не устанавливается автоматически.
 
-Закреплено: префикс CI `firecracker-ci/20261028-84df49062576-0/x86_64` (адрес вида `https://s3.amazonaws.com/spec.ccfc.min/...`, бакет с точками в имени не работает с виртуальным адресом), SHA-256 корневой системы и ядра, Node 24.22.2 (сумма из `SHASUMS256.txt`), Playwright 1.64.1 точной версией и lock-файлом ([collector/](../../collector/)), `npm ci --ignore-scripts`. Ставится только `chromium-headless-shell` (`playwright install --only-shell chromium`), `ffmpeg` и полный Chromium не нужны. Из пакетов `apt` убраны `curl`, `xz-utils` и `xvfb` относительно ручной сборки.
+Закреплено: префикс CI `firecracker-ci/20261028-84df49062576-0/x86_64` (адрес вида `https://s3.amazonaws.com/spec.ccfc.min/...`, бакет с точками в имени не работает с виртуальным адресом), SHA-256 корневой системы и ядра, Node 24.22.2 (сумма из `SHASUMS256.txt`), Playwright 1.65.0 точной версией и lock-файлом ([collector/](../../collector/)), `npm ci --ignore-scripts`. Ставится только `chromium-headless-shell` (`playwright install --only-shell chromium`), `ffmpeg` и полный Chromium не нужны. Из пакетов `apt` убраны `curl`, `xz-utils` и `xvfb` относительно ручной сборки.
 
 **Проверено (сервер):** сборка с нуля прошла за несколько минут; образ занимает на диске 1,5 ГБ (в ручной сборке 2,0 ГБ); дымовой тест прошёл полностью, включая Chromium с `chromiumSandbox: true` от `pw` (страница с кириллицей, иероглифами и эмодзи отрисована, скриншот снят); агент готов через 2,8 с; копирование образа 0,46 с.
 

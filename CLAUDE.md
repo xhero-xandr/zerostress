@@ -9,7 +9,7 @@ ZeroStress — веб-агент, который открывает подозр
 
 ## Стек
 - Node.js 24 LTS, TypeScript через удаление типов (`tsc --noEmit` для проверки типов), только «стираемый» синтаксис (без `enum` и runtime `namespace`, импорты с явным `.ts`, `import type`).
-- Изоляция: Firecracker v1.17.0, микро-ВМ на каждую задачу. Хост Rocky Linux 10, гость Ubuntu 24.04 с Node, Playwright 1.64.1 и Chrome Headless Shell.
+- Изоляция: Firecracker v1.17.0, микро-ВМ на каждую задачу. Хост Rocky Linux 10, гость Ubuntu 24.04 с Node, Playwright 1.65.0 и Chrome Headless Shell.
 - Супервизор хоста: Go, только стандартная библиотека, управление Firecracker по REST через Unix-сокет (`supervisor/`, статический бинарник, рантайма на хосте нет). Выбор Go сделан 4 ноября 2026 после сравнения с реализацией на TypeScript на одних и тех же сквозных тестах (docs/specs/006-supervisor-api.md, раздел 8).
 - Сборщик улик (в госте, `collector/`, написан): Playwright плюс CDP-сессия (`context.newCDPSession`). Одного API Playwright недостаточно для причин клиентских редиректов. Страницу читаем из изолированного мира CDP, снимок только в режиме `ai`. Тесты: `npm test` в `collector/` (нужен локальный Chromium: `npx playwright install --only-shell chromium`).
 - LLM: тонкий клиент на `fetch` к OpenAI-совместимому API Vultr Serverless Inference (`web/agent/model.ts`), без пакета `openai`: нужен один адрес, ответ всё равно читается строго по полям, а у службы, держащей ключ, должно быть как можно меньше зависимостей (решение 5 ноября 2026, спека 008).

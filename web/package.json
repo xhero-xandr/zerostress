@@ -15,11 +15,11 @@
     "bench": "node tools/model-bench.mjs"
   },
   "devDependencies": {
-    "@types/node": "24.10.1",
-    "typescript": "5.9.3"
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.5",
-    "hono": "4.13.13"
+    "@hono/node-server": "2.1.6",
+    "hono": "4.13.16"
   }
 }

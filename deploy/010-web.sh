@@ -8,8 +8,8 @@ set -euo pipefail
 S=$(cd "$(dirname "$0")/.." && pwd)
 DOMAIN=${DOMAIN:-zerostress.space}
 NODE=/opt/node/bin
-CADDY_VERSION=2.11.8
-CADDY_SHA512=c863699eee84c6b410573de2ec67af81d07eb054f9020bb98f3c6cb256fea4be2fd1acfbd39110c649c3338282593bba3d3ed6424d91b7f5675e8b877a8999e9
+CADDY_VERSION=2.11.9
+CADDY_SHA512=0e85544340290a16ce4bfb76fe7d65e9de1bf3a6e67f5ccfff30b30d27ea4c73e078077b7bf3e58ae60b6b12e44327705287059c775bca5782e8ee85ea7edd75
 DEST=/opt/zerostress/web
 export PATH=$NODE:$PATH
 

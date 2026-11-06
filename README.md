@@ -51,7 +51,7 @@ Untrusted input (page text, OCR, file names) is treated as data a model reads, n
 | Layer | Choice |
 |---|---|
 | Host | Rocky Linux 10, Firecracker, KVM, SELinux Enforcing |
-| Guest image | Ubuntu 24.04, Node.js 24, Playwright 1.64.1, Chrome Headless Shell |
+| Guest image | Ubuntu 24.04, Node.js 24, Playwright 1.65.0, Chrome Headless Shell |
 | Supervisor (privileged) | Go, standard library only — microVM lifecycle, queueing, sessions, artifacts, over a Unix socket |
 | Collector (in the guest) | Node.js, Playwright + a raw CDP session |
 | Web layer and agent (unprivileged) | Node.js 24, TypeScript (type-stripping, no build step), [Hono](https://hono.dev/) |
