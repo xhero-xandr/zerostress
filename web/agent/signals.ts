@@ -2,6 +2,8 @@
 // evidence comes from the collector and has passed the hooks, but the collector itself is not trusted: every field is
 // read defensively, and what cannot be read is simply not a reason.
 
+import { deviceViews } from './devices.ts';
+import { hidesText } from './hiding.ts';
 import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } from './lists.ts';
 import { domainToUnicode } from 'node:url';
 import { isIpHost, mixedScripts, parseUrl, registrable, sld, skeleton } from './domain.ts';
@@ -35,6 +37,8 @@ export interface Options {
   injection?: boolean;
   /** the time against which a certificate is judged, ms since 1970 */
   now?: number;
+  /** days since the final site's domain was registered, if the registry could be asked */
+  domainAgeDays?: number | null;
 }
 
 type Ev = Record<string, unknown>;
@@ -43,6 +47,14 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const origin = (u: unknown): string => parseUrl(u)?.origin ?? '';
 const hostOf = (u: unknown): string => parseUrl(u)?.hostname ?? '';
+
+/** Titles of the pages that stand between a visitor and the site: Cloudflare's wait page and block page, other bot walls. */
+/** Addresses that belong to bot walls and captchas (Cloudflare, DataDome, hCaptcha, reCAPTCHA, PerimeterX, Imperva). */
+const CHALLENGE_INFRA = /\/cdn-cgi\/challenge-platform\/|[?&]__cf_chl_|challenges\.cloudflare\.com|captcha-delivery\.com|hcaptcha\.com\/|recaptcha\/|px-cdn\.net|perimeterx|_Incapsula_Resource|geetest/i;
+const CHALLENGE_TITLE = /^\s*(just a moment|attention required!? ?\|? ?cloudflare|checking your browser|verifying you are human|verify you are human|ddos protection by|one more step|please wait while|security check|are you a robot|pardon our interruption|access denied)\b/i;
+
+/** The warning page Cloudflare puts in front of a site it has itself flagged: its own verdict, not the site's content. */
+const PROVIDER_WARNING_TITLE = /^\s*suspected (phishing|malware)\s*\|\s*cloudflare\b/i;
 
 export function analyze(events: readonly unknown[], opts: Options = {}): Analysis {
   const signals: Signal[] = [];
@@ -113,6 +125,22 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   if (tlsBad.length) add('tls_problem', 'medium', 'The certificate is self-signed, not valid at this time, or the browser refused it.', [...new Set(tlsBad)]);
   if (tlsYoung.length) add('young_certificate', 'info', 'A certificate was issued less than two weeks ago (common for honest sites that renew often).', tlsYoung);
 
+  // ---- the same address as a phone and as a tablet ----
+  const views = deviceViews(events);
+  const names = (d: string) => views.filter((v) => v.differs.includes(d as never)).map((v) => (v.device === 'mobile' ? 'a phone' : 'a tablet'));
+  const onlyHere = names('password_only_here');
+  if (onlyHere.length) add('device_cloaking', 'high', `The page asks for a password only when opened as ${onlyHere.join(' and ')}; as a computer it shows no such form. Pages that hide from computers usually have a reason.`, views.filter((v) => v.differs.includes('password_only_here')).map((v) => v.at));
+  const elsewhere = names('other_site');
+  if (elsewhere.length) add('device_redirect', 'medium', `Opened as ${elsewhere.join(' and ')}, the link ends up on a different site than it does on a computer.`, views.filter((v) => v.differs.includes('other_site')).map((v) => v.at));
+
+  // ---- the domain ----
+  const age = opts.domainAgeDays;
+  if (typeof age === 'number' && Number.isFinite(age) && age >= 0 && age < 90) {
+    const n = Math.floor(age);
+    const when = n === 0 ? 'today' : n === 1 ? '1 day ago' : `${n} days ago`;
+    add('young_domain', age < 30 ? 'medium' : 'low', `The site's domain was registered ${when}. Honest sites can be new too, but most scam sites are.`);
+  }
+
   // ---- the page ----
   const forms0 = list(forms?.[0].forms).filter(isObj);
   const passwordForms = forms0.filter((f) => f.has_password === true);
@@ -142,8 +170,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
         break;
       }
     }
-    const hidden = page[0].hidden_text;
-    if (isObj(hidden) && hidden.present === true) add('hidden_text', 'low', 'The page contains text a person cannot see.', [page[1]]);
+    if (hidesText(page[0].hidden_text)) add('hidden_text', 'low', 'The page hides text from visitors (invisible, zero-size or the colour of the background).', [page[1]]);
   }
 
   // ---- downloads ----
@@ -171,8 +198,29 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
 
   if (opts.injection) add('injection_attempt', 'medium', 'The page contains text aimed at an automated reader (instructions to a model).', []);
 
-  const loaded = page !== undefined && navError === '';
-  if (!loaded && navError !== 'download') add('unreachable', 'info', 'The page could not be loaded or read.', summary ? [summary[1]] : []);
+  // Nothing was read of the site itself when the visit ended on a wall: a bot-check page, an error the site answered
+  // with instead of its page, or a page with nothing on it. A verdict of "no threat found" on such a visit would be a lie.
+  // A real page that merely carries a captcha widget has content, so the widget alone does not count.
+  const title = str(page?.[0].title);
+  const textLen = str(page?.[0].text).trim().length;
+  const linkCount = (of('links').at(-1)?.[0].links as unknown[] | undefined)?.length ?? 0;
+  const formCount = (forms?.[0].forms as unknown[] | undefined)?.length ?? 0;
+  const thin = textLen < 300 && linkCount < 3;
+  // the status of the page that was asked for (the first document), not of a captcha frame loaded after it
+  const asked = Number(reqs.filter(([e]) => e.resource_type === 'document').map(([e]) => e.status)[0]);
+  const refusedStatus = [401, 403, 404, 410, 429, 451].includes(asked) || asked >= 500;
+  const challengeInfra = reqs.some(([e]) => CHALLENGE_INFRA.test(str(e.url)));
+  const warned = PROVIDER_WARNING_TITLE.test(title);
+  if (warned) add('provider_warning', 'medium', 'Cloudflare shows a warning that this site is suspected of phishing or malware, and does not let a visitor reach the page. The real page was not seen.', page ? [page[1]] : []);
+  const challenged = !warned && (CHALLENGE_TITLE.test(title) || (challengeInfra && (refusedStatus || thin)));
+  if (challenged) add('bot_challenge', 'info', 'The site showed a bot-check page instead of its own content, so the real page was not seen.', page ? [page[1]] : []);
+  const httpError = !challenged && !warned && refusedStatus && page !== undefined;
+  if (httpError) add('http_error', 'info', `The site answered with an error (HTTP ${asked}) instead of its page, so the real page was not seen.`, page ? [page[1]] : []);
+  const empty = !challenged && !warned && !httpError && page !== undefined && navError === '' && title === '' && textLen < 10 && linkCount === 0 && formCount === 0;
+  if (empty) add('empty_page', 'info', 'The page loaded but showed nothing, so there was nothing to judge.', page ? [page[1]] : []);
+
+  const loaded = page !== undefined && navError === '' && !warned && !challenged && !httpError && !empty;
+  if (!loaded && !warned && !challenged && !httpError && !empty && navError !== 'download') add('unreachable', 'info', 'The page could not be loaded or read.', summary ? [summary[1]] : []);
 
   const score = signals.reduce((s, x) => s + POINTS[x.level], 0);
   const top = signals.some((s) => s.level === 'high') ? 'high' : signals.some((s) => s.level === 'medium') ? 'medium' : 'low';

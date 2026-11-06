@@ -239,7 +239,7 @@ test('many other sites contacted; blocked requests', () => {
 });
 
 test('hidden text, pop-ups and dialogs', () => {
-  const hidden = [nav('https://x.example/'), page('https://x.example/', 't', 'x', { hidden_text: { present: true, reasons: ['display_none'], text: 'x' } }), summary('https://x.example/')];
+  const hidden = [nav('https://x.example/'), page('https://x.example/', 't', 'x', { hidden_text: { present: true, reasons: ['zero_size'], text: 'x' } }), summary('https://x.example/')];
   assert.equal(has(hidden, 'hidden_text')?.level, 'low');
   assert.equal(has([...visit('https://x.example/'), ev('popup', { url: 'https://y.example/' })], 'popups_dialogs')?.level, 'low');
   assert.equal(has([...visit('https://x.example/'), ev('dialog', { dialog_type: 'alert', message: 'm' })], 'popups_dialogs')?.level, 'low');
@@ -259,7 +259,7 @@ test('an attempt to address the model makes a task at least suspicious, never be
 test('points: five small signals make a page suspicious, one fewer does not', () => {
   const small = [
     nav('https://bit.ly/a', 'requested'), nav('http://a.example/'), nav('http://b.example/', 'scheduled'),
-    page('http://b.example/', 't', 'x', { hidden_text: { present: true, reasons: ['display_none'], text: 'x' } }), summary('http://b.example/'),
+    page('http://b.example/', 't', 'x', { hidden_text: { present: true, reasons: ['zero_size'], text: 'x' } }), summary('http://b.example/'),
     ev('popup', { url: 'https://p.example/' }),
   ];
   const a = analyze(small);
@@ -270,7 +270,7 @@ test('points: five small signals make a page suspicious, one fewer does not', ()
   const fewer = analyze(small.filter((e) => (e as { kind: string }).kind !== 'popup'));
   assert.equal(fewer.score, 5 * POINTS.low);
   assert.equal(fewer.verdict, 'suspicious');
-  const four = analyze([nav('https://bit.ly/a', 'requested'), nav('https://b.example/'), page('https://b.example/', 't', 'x', { hidden_text: { present: true, reasons: [], text: 'x' } }), summary('https://b.example/'), ev('popup', { url: 'https://p.example/' })]);
+  const four = analyze([nav('https://bit.ly/a', 'requested'), nav('https://b.example/'), page('https://b.example/', 't', 'x', { hidden_text: { present: true, reasons: ['transparent'], text: 'x' } }), summary('https://b.example/'), ev('popup', { url: 'https://p.example/' })]);
   assert.equal(four.verdict, 'benign');
 });
 
@@ -355,4 +355,186 @@ test('the registrable part of an address', () => {
   assert.equal(mixedScripts('pаypal.com'), true);
   assert.equal(mixedScripts('paypal.com'), false);
   assert.equal(mixedScripts('пример.рф'), false);
+});
+
+// ---- a bot-check page is not the site -----------------------------------------------------------------------------
+
+const req = (url: string, status = 200, resource_type = 'document') => ev('request', { url, method: 'GET', resource_type, status, mime: 'text/html', blocked: null, initiator: 'other' });
+
+test('Cloudflare\'s wait page: no verdict, and the report says the real page was not seen', () => {
+  const events = [nav('https://shop.example/', 'requested'), req('https://shop.example/', 403), req('https://shop.example/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1', 200, 'script'),
+    nav('https://shop.example/'), page('https://shop.example/', 'Just a moment...', 'Checking if the site connection is secure'), summary('https://shop.example/')];
+  const a = analyze(events);
+  assert.deepEqual(a.signals.map((s) => s.id), ['bot_challenge']);
+  assert.equal(a.verdict, 'unknown', 'a page nobody read is not "no threat found"');
+  assert.equal(a.confidence, 0);
+});
+
+test('other bot walls are recognised by their title too', () => {
+  for (const title of ['Just a moment...', 'Attention Required! | Cloudflare', 'Checking your browser before accessing example.com', 'Verifying you are human. This may take a few seconds.', 'DDoS protection by Example', 'Access denied', 'Pardon Our Interruption']) {
+    const events = [nav('https://x.example/', 'requested'), nav('https://x.example/'), page('https://x.example/', title, 'wait'), summary('https://x.example/')];
+    assert.equal(has(events, 'bot_challenge') !== undefined, true, title);
+    assert.equal(analyze(events).verdict, 'unknown', title);
+  }
+});
+
+test('a real page that only carries a captcha widget is read as usual', () => {
+  const events = [nav('https://shop.example/login', 'requested'), req('https://shop.example/login', 200), req('https://challenges.cloudflare.com/turnstile/v0/api.js', 200, 'script'),
+    req('https://shop.example/cdn-cgi/challenge-platform/scripts/jsd/main.js', 200, 'script'),
+    nav('https://shop.example/login'), page('https://shop.example/login', 'Sign in to Shop', 'Sign in to your account to see orders, saved items and offers. '.repeat(8)),
+    ev('links', { links: ['a', 'b', 'c', 'd', 'e'].map((x) => ({ ref: x, text: x, href: `https://shop.example/${x}`, origin_differs: false })) }), summary('https://shop.example/login')];
+  assert.equal(has(events, 'bot_challenge'), undefined);
+  assert.equal(analyze(events).verdict, 'benign');
+});
+
+test('a normal page with the word "access" or "security" in its title is not a wall', () => {
+  for (const title of ['Access control in Postgres', 'Security checklist for small teams', 'Moment of truth: a review']) {
+    assert.equal(has(visit('https://blog.example/post', title), 'bot_challenge'), undefined, title);
+  }
+});
+
+test('a wall that also carries a real warning keeps the warning', () => {
+  const events = [nav('https://x.example/', 'requested'), nav('https://x.example/'), page('https://x.example/', 'Just a moment...', 'wait'), forms(form('https://other.example/c')), summary('https://x.example/')];
+  assert.equal(analyze(events).verdict, 'malicious');
+});
+
+// What the real collector saw on 5 November 2026 from this server (see the evidence: statuses, titles and text are as read).
+const live = (url: string, o: { status: number; title: string; text: string; links?: number; forms?: number; extra?: string[] }) => [
+  nav(url, 'requested'), req(url, o.status), ...(o.extra ?? []).map((u) => req(u, 200, 'script')), nav(url), page(url, o.title, o.text),
+  ev('links', { links: Array.from({ length: o.links ?? 0 }, (_, i) => ({ ref: `e${i}`, text: `l${i}`, href: `${url}l${i}`, origin_differs: false })) }),
+  forms(...Array.from({ length: o.forms ?? 0 }, () => form(`${url}x`, false))), summary(url)];
+
+test('a DataDome captcha wall that answers 403 and loads its captcha frame afterwards (g2.com)', () => {
+  const e = live('https://www.g2.com/', { status: 403, title: 'g2.com', text: '', extra: ['https://ct.captcha-delivery.com/c.js', 'https://www.g2.com/cdn-cgi/challenge-platform/scripts/jsd/main.js'] });
+  e.splice(2, 0, req('https://geo.captcha-delivery.com/captcha/?initialCid=x', 200, 'document'));
+  const a = analyze(e);
+  assert.equal(a.verdict, 'unknown');
+  assert.ok(a.signals.some((s) => s.id === 'bot_challenge'), 'the status that counts is the one of the page asked for, not of the captcha frame');
+});
+
+test('a bare "Forbidden" (glassdoor.com) is an error the site answered, not a page', () => {
+  const a = analyze(live('https://www.glassdoor.com/', { status: 403, title: '', text: 'Forbidden' }));
+  assert.equal(a.verdict, 'unknown');
+  assert.deepEqual(a.signals.map((s) => s.id), ['http_error']);
+  assert.match(a.signals[0]!.text, /HTTP 403/);
+});
+
+test('a human-check widget that is the whole page (nowsecure.nl) is a wall too', () => {
+  const a = analyze(live('https://nowsecure.nl/', { status: 200, title: 'nowsecure.nl', text: 'NOWSECURE\nBY NODRIVER', forms: 2, extra: ['https://challenges.cloudflare.com/turnstile/v0/api.js'] }));
+  assert.equal(a.verdict, 'unknown');
+  assert.ok(a.signals.some((s) => s.id === 'bot_challenge'));
+});
+
+test('a block page with its own text and links (indeed.com) is still a wall', () => {
+  const a = analyze(live('https://www.indeed.com/', { status: 403, title: 'Blocked - Indeed.com', text: 'Request Blocked '.repeat(40), links: 10, extra: ['https://www.indeed.com/cdn-cgi/challenge-platform/scripts/jsd/main.js'] }));
+  assert.equal(a.verdict, 'unknown');
+  assert.ok(a.signals.some((s) => s.id === 'bot_challenge'), 'named as a wall: the status and the wall script together');
+});
+
+test('only the status tells: a roomy page that the site refused, with a captcha frame loaded afterwards', () => {
+  const e = live('https://www.g2.com/', { status: 403, title: 'Verify', text: 'Please confirm that you are a person before you continue. '.repeat(12), links: 6, extra: ['https://ct.captcha-delivery.com/c.js'] });
+  e.splice(2, 0, req('https://geo.captcha-delivery.com/captcha/?initialCid=x', 200, 'document'));
+  const a = analyze(e);
+  assert.equal(a.verdict, 'unknown');
+  assert.ok(a.signals.some((s) => s.id === 'bot_challenge'), 'the first document decides, not the captcha frame that follows');
+});
+
+test('a small real landing page with links and a captcha widget, answered 200, is read as usual', () => {
+  const a = analyze(live('https://small.example/', { status: 200, title: 'Small studio', text: 'We make furniture.', links: 5, extra: ['https://challenges.cloudflare.com/turnstile/v0/api.js'] }));
+  assert.equal(a.verdict, 'benign', 'few words but real links: not a wall');
+});
+
+test('an ordinary site behind Cloudflare is read as usual', () => {
+  const a = analyze(live('https://example.com/', { status: 200, title: 'Example Domain', text: 'This domain is for use in documentation examples without needing permission. '.repeat(4), links: 1, extra: ['https://example.com/cdn-cgi/challenge-platform/scripts/jsd/main.js'] }));
+  assert.equal(a.verdict, 'benign');
+  assert.equal(a.signals.some((s) => s.id === 'bot_challenge' || s.id === 'http_error'), false);
+});
+
+test('error statuses are errors, 200 is not, and the real error numbers are named', () => {
+  for (const status of [401, 403, 404, 410, 429, 451, 500, 502, 503]) {
+    const a = analyze(live('https://x.example/', { status, title: 'Oops', text: 'Something happened here. '.repeat(30), links: 4 }));
+    assert.equal(a.verdict, 'unknown', String(status));
+    assert.match(a.signals.find((s) => s.id === 'http_error')!.text, new RegExp(`HTTP ${status}`));
+  }
+  assert.equal(analyze(live('https://x.example/', { status: 200, title: 'Fine', text: 'Words '.repeat(80), links: 4 })).verdict, 'benign');
+});
+
+test('a page with nothing on it is not "no threat found"', () => {
+  const a = analyze(live('https://x.example/', { status: 200, title: '', text: '' }));
+  assert.equal(a.verdict, 'unknown');
+  assert.deepEqual(a.signals.map((s) => s.id), ['empty_page']);
+});
+
+test('a wall never hides a real warning', () => {
+  const e = live('https://x.example/', { status: 403, title: 'Just a moment...', text: 'wait' });
+  e.splice(-1, 0, forms(form('https://other.example/c')));
+  assert.equal(analyze(e).verdict, 'malicious');
+});
+
+// ---- Cloudflare's own warning is a verdict about the site, not a wall ------------------------------------------------
+// Seen on 5 November 2026 on 28 of 50 live phishing addresses from the OpenPhish feed.
+
+test('Cloudflare\'s "Suspected Phishing" page is a warning that raises the verdict, not a bot-check', () => {
+  for (const [status, title, links] of [[403, 'Suspected Phishing | Cloudflare', 2], [200, 'Suspected Phishing | Cloudflare', 4], [403, 'Suspected Malware | Cloudflare', 0], [200, 'Suspected Malware | Cloudflare', 3]] as const) {
+    const a = analyze(live('https://abc.pages.dev/', { status, title, text: 'Warning. Suspected phishing. Learn more.', links, extra: ['https://challenges.cloudflare.com/turnstile/v0/api.js'] }));
+    assert.equal(a.verdict, 'suspicious', `${status} ${title}`);
+    assert.deepEqual(a.signals.map((s) => s.id), ['provider_warning'], 'no bot_challenge, http_error or unreachable beside it');
+    assert.equal(a.signals[0]?.level, 'medium');
+    assert.match(a.signals[0]?.text ?? '', /Cloudflare/);
+  }
+});
+
+test('the warning page is recognised by its title only, and only the Cloudflare one', () => {
+  for (const title of ['Suspected Phishing', 'Suspected phishing sites and how to spot them', 'Report a suspected malware | Example', 'Cloudflare | Suspected Phishing', 'Report: Suspected Phishing | Cloudflare Radar']) {
+    const a = analyze(live('https://blog.example/post', { status: 200, title, text: 'Words '.repeat(80), links: 4 }));
+    assert.equal(a.signals.some((s) => s.id === 'provider_warning'), false, title);
+  }
+});
+
+test('a model that says "benign" cannot lower the warning', () => {
+  const a = analyze(live('https://abc.pages.dev/', { status: 403, title: 'Suspected Phishing | Cloudflare', text: 'x', links: 2 }));
+  assert.equal(raise(a.verdict, 'benign'), 'suspicious');
+});
+
+// ---- hidden text: only the kinds that deceive -------------------------------------------------------------------------
+// On 5 November 2026 the old rule fired on 39 of 50 live pages, because menus and dialogs are `display: none` everywhere.
+
+test('parts of a page that are merely not on screen are not "hidden text"', () => {
+  for (const reasons of [['not_rendered'], ['visibility'], ['clipped'], ['offscreen'], ['not_rendered', 'clipped', 'offscreen', 'visibility']]) {
+    const e = [nav('https://x.example/'), page('https://x.example/', 't', 'x', { hidden_text: { present: true, reasons, text: 'Menu | Close | Skip to content' } }), summary('https://x.example/')];
+    assert.equal(ids(e).includes('hidden_text'), false, reasons.join());
+  }
+});
+
+test('text made invisible on purpose is still reported, whatever else is on the page', () => {
+  for (const reason of ['zero_size', 'transparent', 'low_contrast']) {
+    const e = [nav('https://x.example/'), page('https://x.example/', 't', 'x', { hidden_text: { present: true, reasons: ['not_rendered', reason], text: 'x' } }), summary('https://x.example/')];
+    assert.equal(ids(e).includes('hidden_text'), true, reason);
+  }
+  const absent = [nav('https://x.example/'), page('https://x.example/', 't', 'x', { hidden_text: { present: false, reasons: ['zero_size'], text: '' } }), summary('https://x.example/')];
+  assert.equal(ids(absent).includes('hidden_text'), false, 'present: false wins');
+});
+
+// ---- the age of the domain ----------------------------------------------------------------------------------------------------------------
+test('a domain registered in the last weeks is a reason; an older one is not', () => {
+  const evs = visit('https://shop.example/');
+  const find = (days: number | null | undefined) => analyze(evs, { domainAgeDays: days }).signals.find((s) => s.id === 'young_domain');
+  assert.equal(find(0)?.level, 'medium');
+  assert.match(find(0)?.text ?? '', /registered today/);
+  assert.match(find(1)?.text ?? '', /1 day ago/);
+  assert.equal(find(29)?.level, 'medium');
+  assert.match(find(29)?.text ?? '', /29 days ago/);
+  assert.equal(find(30)?.level, 'low');
+  assert.equal(find(89)?.level, 'low');
+  for (const none of [90, 5000, null, undefined, -1, NaN, Infinity]) assert.equal(find(none as number), undefined, String(none));
+});
+
+test('a young domain adds exactly the weight of a medium reason, and never decides alone', () => {
+  const evs = visit('https://shop.example/');
+  const base = analyze(evs, { domainAgeDays: 5000 });
+  const young = analyze(evs, { domainAgeDays: 3 });
+  assert.equal(young.score - base.score, POINTS.medium);
+  assert.notEqual(young.verdict, 'malicious');
+  const withForm = [...evs, forms(form('https://other.example/login'))];
+  assert.equal(analyze(withForm, { domainAgeDays: 3 }).score - analyze(withForm, { domainAgeDays: 5000 }).score, POINTS.medium);
 });

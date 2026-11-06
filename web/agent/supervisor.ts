@@ -95,6 +95,8 @@ export interface SupervisorClient {
   get(runId: string): Promise<Record<string, unknown>>;
   command(runId: string, line: string): Promise<CommandReceipt>;
   cancel(runId: string): Promise<void>;
+  /** a person's decision on a risky command: the supervisor checks the hash and the time again */
+  approve(runId: string, commandId: string, sha256: string): Promise<void>;
   artifact(runId: string, name: string, maxBytes: number): Promise<Buffer>;
   /** the events of a run after `afterSeq`, until the stream ends; the caller reconnects while the run is not finished */
   events(runId: string, afterSeq: number, signal?: AbortSignal): AsyncGenerator<SseEvent>;
@@ -181,6 +183,12 @@ export function createSupervisorClient(target: Target, opts: ClientOptions = {})
       if (status !== 202) fail(status, value);
       if (typeof value?.command_id !== 'string' || typeof value.status !== 'string' || typeof value.command_sha256 !== 'string') throw new SupervisorError(status, 'bad_response', 'the receipt of a command is malformed');
       return { command_id: value.command_id, status: value.status, command_sha256: value.command_sha256 };
+    },
+    async approve(runId, commandId, sha256) {
+      checkId(runId);
+      if (typeof commandId !== 'string' || !/^[A-Za-z0-9_.:-]{1,64}$/.test(commandId) || typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) throw new SupervisorError(0, 'bad_approval', 'not a command id and hash');
+      const { status, value } = await json('POST', `/v1/runs/${runId}/approvals`, { command_id: commandId, command_sha256: sha256 });
+      if (status !== 202) fail(status, value);
     },
     async cancel(runId) {
       checkId(runId);

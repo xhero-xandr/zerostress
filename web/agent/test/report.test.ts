@@ -204,6 +204,14 @@ const SAFE: Record<string, RegExp> = {
   mode_text: /^[A-Z][^<>]{1,300}$/,
   'signals[].id': /^[a-z_]{1,40}$/,
   'signals[].level': /^(info|low|medium|high)$/,
+  'facts.forms[].asks[]': /^(password|card_number|card_security|card_expiry|one_time_code|id_number|birth_date|email|phone|address|name)$/,
+  'facts.servers[].ip': /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:]{2,45})$/i,
+  'facts.servers[].country': /^[A-Z]{2}$/,
+  'facts.domain.created': /^\d{4}-\d{2}-\d{2}T[\d:.]{8,12}Z$/,
+  'facts.devices[].device': /^(mobile|tablet)$/,
+  'facts.devices[].nav_error': /^[a-zA-Z0-9_]{1,60}$/,
+  'facts.devices[].differs[]': /^(other_site|password_only_here)$/,
+  'facts.links[].goes': /^(nowhere|same|other)$/,
   'steps[].action': /^[a-z_]{1,20}$/,
   'steps[].status': /^[a-z_]{1,20}$/,
   'artifacts[].name': /^[0-9a-f]{16}\.(png|bin)$/,
@@ -217,8 +225,14 @@ function leaves(v: unknown, path = ''): Array<[string, string]> {
   return [];
 }
 
+const withNetwork = async (): Promise<TaskResult> => {
+  const r = await login();
+  const facts = { ...(r.facts as object), servers: [{ ip: '1.2.3.4', country: 'DE', asn: 13335, org: 'Net', hosts: ['a.example'], requests: 3 }], servers_total: 1, devices: [{ device: 'mobile', nav_error: null, final_host: 'a.example', title: 'T', forms: 1, has_password: true, action_hosts: ['e.example'], differs: ['password_only_here'], image: true }, { device: 'tablet', nav_error: 'timeout', final_host: '', title: '', forms: 0, has_password: false, action_hosts: [], differs: [], image: false }], domain: { name: 'a.example', created: '2026-11-01T00:00:00.000Z', age_days: 4, registrar: 'Reg' } };
+  return { ...r, facts } as TaskResult;
+};
+
 test('every text in the public report is either listed as untrusted or has a strict shape of our own', async () => {
-  for (const make of [injection, login, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
+  for (const make of [injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
     const pub: PublicReport = publicReport(await make());
     for (const [path, value] of leaves(pub)) {
       if (UNTRUSTED.includes(path)) continue;
@@ -234,4 +248,43 @@ test('the owner view too: its text fields are decided about', async () => {
   const decided = new Set([...UNTRUSTED, ...Object.keys(SAFE)]);
   const ownerSafe = /^owner\.(rules\.verdict|model\.verdict|versions\.(ruleset|prompt|model)|hook_findings\[\]\.(rule|category|strength)|steps\[\]\.(id|action|line|risk|status)|refused\[\]\.(action|reason)|pending_approval\[\]\.(command_id|cmd|command_sha256)|artifacts\[\]\.(name|sha256|mime)|timeline\[\])$/;
   for (const [path] of leaves(own)) assert.ok(decided.has(path) || ownerSafe.test(path), `undecided: ${path}`);
+});
+
+test('what a form asks for is cut to our own list, and a link goes to one of three places', async () => {
+  const r = await login();
+  const facts = { ...(r.facts as object), forms: [{ action_host: 'x', cross_origin: false, has_password: true, asks: ['password', '<script>alert(1)</script>', 'card_number', 'password', 7] }], links: [{ text: 'a', host: '', other_site: false, goes: '<b>' }, { text: 'b', host: 'h', other_site: true, goes: 'other' }] };
+  const pub = publicReport({ ...r, facts } as never);
+  assert.deepEqual(pub.facts.forms[0]?.asks, ['password', 'card_number']);
+  assert.deepEqual(pub.facts.links.map((l) => l.goes), ['same', 'other']);
+});
+
+test('servers and the domain are cut to their shapes: a place is two capitals, an address is an address, a date is a date', async () => {
+  const r = await login();
+  const facts = {
+    ...(r.facts as object),
+    servers: [
+      { ip: '1.2.3.4', country: 'DE', asn: 13335, org: 'Net', hosts: ['a.example'], requests: 3 },
+      { ip: '<img src=x>', country: 'US', asn: 1, org: 'x', hosts: [], requests: 1 },
+      { ip: '5.6.7.8', country: '<b>', asn: -5, org: '', hosts: ['h'], requests: 'many' },
+      { ip: '9.9.9.9', country: 'de', asn: 1.5, org: 7, hosts: 'no', requests: 1e9 },
+    ],
+    domain: { name: 'x.example', created: 'yesterday <b>', age_days: 4, registrar: 'R'.repeat(500) },
+  };
+  const pub = publicReport({ ...r, facts } as never);
+  assert.deepEqual(pub.facts.servers.map((s) => s.ip), ['1.2.3.4', '5.6.7.8', '9.9.9.9']);
+  assert.deepEqual(pub.facts.servers.map((s) => [s.country, s.asn, s.org, s.requests]), [['DE', 13335, 'Net', 3], [null, null, null, 0], [null, null, null, 99999]]);
+  assert.deepEqual(pub.facts.domain, { name: 'x.example', created: null, age_days: null, registrar: 'R'.repeat(80) });
+  assert.equal(publicReport({ ...r, facts: { ...(r.facts as object), domain: { name: '' } } } as never).facts.domain, null);
+});
+
+test('devices are cut to the two known ones, with our own codes only', async () => {
+  const r = await login();
+  const facts = { ...(r.facts as object), devices: [
+    { device: 'mobile', nav_error: '<b>', final_host: 'h', title: 't', forms: 500, has_password: 'yes', action_hosts: ['a', 'b', 'c', 'd', 'e', 'f'], differs: ['other_site', '<x>', 'password_only_here', 'other_site'], image: 1 },
+    { device: 'watch', nav_error: null }, { device: 'tablet' }, { device: 'tablet' },
+  ] };
+  const d = publicReport({ ...r, facts } as never).facts.devices;
+  assert.equal(d.length, 2, 'at most two, and only mobile and tablet');
+  assert.deepEqual(d[0], { device: 'mobile', nav_error: null, final_host: 'h', title: 't', forms: 99, has_password: false, action_hosts: ['a', 'b', 'c', 'd', 'e'], differs: ['other_site', 'password_only_here'], image: false });
+  assert.deepEqual(publicReport({ ...r, facts: { ...(r.facts as object), devices: 'x' } } as never).facts.devices, []);
 });

@@ -12,6 +12,8 @@
 // markup, script or an instruction (spec 007).
 
 import type { Assessment } from './assess.ts';
+import type { Facts } from './facts.ts';
+import { ASK_CODES } from './fields.ts';
 import type { TaskResult } from './runner.ts';
 
 export const REPORT_SCHEMA = 1;
@@ -28,11 +30,33 @@ export const UNTRUSTED: readonly string[] = [
   'owner.steps[].error',
   'owner.hook_findings[].place',
   'owner.notes[]',
+  // facts are read off the page and the network
+  'facts.final_host',
+  'facts.page_title',
+  'facts.chain[].via',
+  'facts.chain[].host',
+  'facts.forms[].action_host',
+  'facts.tls[].host',
+  'facts.tls[].issuer',
+  'facts.tls[].valid_to',
+  'facts.hosts[]',
+  'facts.servers[].hosts[]',
+  'facts.devices[].final_host',
+  'facts.devices[].title',
+  'facts.devices[].action_hosts[]',
+  // the owner of a network and the registrar are named by third parties
+  'facts.servers[].org',
+  'facts.domain.name',
+  'facts.domain.registrar',
+  'facts.links[].text',
+  'facts.links[].host',
+  'facts.downloads[].filename',
 ];
 
 /** Our own sentence for each reason the model was not used (or not trusted). */
 export const MODE_TEXT: Readonly<Record<string, string>> = {
   hooks_fired: 'The page contains text addressed to an automated reader. The verdict comes from fixed rules only, and no model was asked.',
+  page_not_read: 'The page itself was not seen, so there was nothing for a model to judge. No model was asked.',
   no_model_configured: 'No model was used. The verdict comes from fixed rules.',
   budget: 'The daily limit on model use was reached. The verdict comes from fixed rules.',
   model_unavailable: 'The model could not be reached. The verdict comes from fixed rules.',
@@ -56,6 +80,7 @@ export interface PublicReport {
   signals: Array<{ id: string; level: string; text: string }>;
   summary: string | null;
   reasons: Array<{ claim: string; evidence: string[] }>;
+  facts: Facts;
   steps: Array<{ action: string; status: string }>;
   /** actions waiting for a person; the details are for whoever may decide */
   pending_approval: number;
@@ -84,6 +109,52 @@ const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ?
 const list = <T>(v: unknown, max: number): T[] => (Array.isArray(v) ? (v.slice(0, max) as T[]) : []);
 const o = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
+function publicFacts(v: unknown): Facts {
+  const f = o(v);
+  return {
+    final_host: s(f.final_host, 100),
+    page_title: s(f.page_title, 200),
+    chain: list<Record<string, unknown>>(f.chain, 12).map((x) => ({ via: s(x.via, 20), host: s(x.host, 100) })),
+    forms: list<Record<string, unknown>>(f.forms, 5).map((x) => ({ action_host: s(x.action_host, 100), cross_origin: x.cross_origin === true, has_password: x.has_password === true, asks: ASK_CODES.filter((c) => list<unknown>(x.asks, 20).includes(c)) })),
+    tls: list<Record<string, unknown>>(f.tls, 3).map((x) => ({ host: s(x.host, 100), issuer: s(x.issuer, 80), valid_to: s(x.valid_to, 40) })),
+    blocked_requests: Math.min(9999, n(f.blocked_requests)),
+    third_party_hosts: Math.min(999, n(f.third_party_hosts)),
+    requests_total: Math.min(99999, n(f.requests_total)),
+    hosts: list<unknown>(f.hosts, 20).map((x) => s(x, 100)),
+    links: list<Record<string, unknown>>(f.links, 30).map((x) => ({ text: s(x.text, 80), host: s(x.host, 100), other_site: x.other_site === true, goes: x.goes === 'nowhere' || x.goes === 'other' ? x.goes : 'same' })),
+    servers: list<Record<string, unknown>>(f.servers, 20).map((x) => ({
+      ip: /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:]{2,45})$/i.test(s(x.ip, 45)) ? s(x.ip, 45) : '',
+      country: /^[A-Z]{2}$/.test(s(x.country, 2)) ? s(x.country, 2) : null,
+      asn: typeof x.asn === 'number' && Number.isInteger(x.asn) && x.asn > 0 && x.asn < 4_294_967_296 ? x.asn : null,
+      org: typeof x.org === 'string' && x.org !== '' ? s(x.org, 80) : null,
+      hosts: list<unknown>(x.hosts, 3).map((h) => s(h, 100)),
+      requests: Math.min(99999, n(x.requests)),
+    })).filter((x) => x.ip !== ''),
+    servers_total: Math.min(999, n(f.servers_total)),
+    domain: (() => {
+      const d = o(f.domain);
+      if (typeof d.name !== 'string' || d.name === '') return null;
+      const created = typeof d.created === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]{8,12}Z$/.test(d.created) ? d.created : null;
+      return { name: s(d.name, 100), created, age_days: created !== null && typeof d.age_days === 'number' && d.age_days >= 0 ? Math.min(Math.floor(d.age_days), 99999) : null, registrar: typeof d.registrar === 'string' && d.registrar !== '' ? s(d.registrar, 80) : null };
+    })(),
+    devices: list<Record<string, unknown>>(f.devices, 8).filter((x) => x.device === 'mobile' || x.device === 'tablet').slice(0, 2).map((x) => ({
+      device: x.device as 'mobile' | 'tablet',
+      nav_error: typeof x.nav_error === 'string' && /^[a-zA-Z0-9_]{1,60}$/.test(x.nav_error) ? x.nav_error : null,
+      final_host: s(x.final_host, 100),
+      title: s(x.title, 200),
+      forms: Math.min(99, n(x.forms)),
+      has_password: x.has_password === true,
+      action_hosts: list<unknown>(x.action_hosts, 5).map((h) => s(h, 100)),
+      differs: (['other_site', 'password_only_here'] as const).filter((d) => list<unknown>(x.differs, 4).includes(d)),
+      image: x.image === true,
+    })),
+    hidden_text: f.hidden_text === true,
+    popups: Math.min(99, n(f.popups)),
+    dialogs: Math.min(99, n(f.dialogs)),
+    downloads: list<Record<string, unknown>>(f.downloads, 5).map((x) => ({ filename: s(x.filename, 100), saved: x.saved === true })),
+  };
+}
+
 export function publicReport(r: TaskResult): PublicReport {
   const a = o(r.assessment);
   const reason = typeof a.mode_reason === 'string' && Object.hasOwn(MODE_TEXT, a.mode_reason) ? a.mode_reason : null;
@@ -102,6 +173,7 @@ export function publicReport(r: TaskResult): PublicReport {
     signals: list<Record<string, unknown>>(o(a.rules).signals, 40).map((x) => ({ id: s(x.id, 40), level: s(x.level, 10), text: s(x.text, 300) })),
     summary: typeof a.summary === 'string' ? a.summary.slice(0, 400) : null,
     reasons: list<Record<string, unknown>>(a.reasons, 8).map((x) => ({ claim: s(x.claim, 200), evidence: list<unknown>(x.evidence, 6).map((e) => s(e, 80)) })),
+    facts: publicFacts(r.facts),
     steps: list<Record<string, unknown>>(r.steps, 20).map((x) => ({ action: s(x.action, 20), status: s(x.status, 20) })),
     pending_approval: list(r.pending_approval, 20).length,
     artifacts: list<Record<string, unknown>>(r.artifacts, 16).map((x) => ({ name: s(x.name, 40), mime: s(x.mime, 60) })),

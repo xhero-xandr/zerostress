@@ -5,6 +5,11 @@
 import { assess, type Assessment, type Prompt } from './assess.ts';
 import type { Budget } from './budget.ts';
 import type { AgentConfig } from './config.ts';
+import { pickShots, type Shots } from './devices.ts';
+import { isIpHost, parseUrl, registrable } from './domain.ts';
+import { buildFacts, type Facts } from './facts.ts';
+import type { GeoLookup } from './geo.ts';
+import type { DomainInfo } from './rdap.ts';
 import { createGatekeeper, type Reason } from './gatekeeper.ts';
 import type { ModelClient } from './model.ts';
 import { SupervisorError, type SupervisorClient } from './supervisor.ts';
@@ -45,23 +50,39 @@ export interface TaskResult {
   failure: string | null;
   assessment: Assessment;
   evidence_events: number;
+  /** what the page showed, as plain facts (every string in it comes from the page) */
+  facts: Facts;
   hooks: { triggered: boolean; findings: Array<{ rule: string; category: string; strength: string; place: string; layer: number }>; ruleset: string };
   steps: Step[];
   /** actions a person has to decide; the agent never approves anything itself */
   refused: Array<{ proposal: unknown; reason: Reason }>;
   pending_approval: Array<{ command_id: string; cmd: string; sha256: string }>;
   artifacts: Array<{ name: string; bytes: number; sha256: string; mime: string }>;
+  /** which of the images is the computer's, the phone's and the tablet's */
+  shots: Shots;
   timeline: string[];
   notes: string[];
 }
 
+/** What a watcher may learn while the task runs. Our own words and names only: nothing here comes from the page. */
+export type Progress =
+  | { kind: 'state'; state: string; position: number | null }
+  | { kind: 'artifact'; name: string; mime: string }
+  | { kind: 'step'; action: string; status: string };
+
 export interface RunnerDeps {
+  /** called as the task moves; a failure in it never affects the task */
+  onProgress?: (p: Progress) => void;
   sup: SupervisorClient;
   cfg: AgentConfig;
   prompt: Prompt;
   model?: ModelClient;
   budget?: Budget;
   hooks?: () => GuardedHooks;
+  /** country and network of an address (geo.ts); without it the report names no places */
+  geo?: GeoLookup | null;
+  /** when a domain was registered (rdap.ts); without it the age is simply not known */
+  rdap?: (domain: string) => Promise<DomainInfo | null>;
   limits?: { totalMs?: number; commandWaitMs?: number; maxReconnects?: number; reconnectDelayMs?: number };
 }
 
@@ -75,6 +96,11 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   const runId = sub.run_id;
   const hooks = (deps.hooks ?? createGuardedHooks)();
   const gate = createGatekeeper({ maxSteps: deps.cfg.maxSteps });
+
+  const progress = (p: Progress): void => {
+    try { deps.onProgress?.(p); } catch { /* a watcher must not break the task */ }
+  };
+  progress({ kind: 'state', state: sub.state, position: sub.position });
 
   const events: unknown[] = [];
   const steps: Step[] = [];
@@ -96,7 +122,8 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
 
   const screenshot = async (): Promise<Buffer | null> => {
     if (!deps.cfg.vision) return null;
-    const last = [...artifacts].reverse().find((a) => a.mime === 'image/png');
+    const name = pickShots(events, artifacts).desktop;
+    const last = name === null ? undefined : artifacts.find((a) => a.name === name);
     if (!last) return null;
     if (!screenshots.has(last.name)) {
       try {
@@ -109,8 +136,37 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     return screenshots.get(last.name)!;
   };
 
+  // The age of the site's domain: asked once per name, started at the beginning so it is ready when the page is. The
+  // registry sees only the name. A slow or failed answer means "unknown", never a delay of the task beyond a few seconds.
+  const lookups = new Map<string, Promise<DomainInfo | null>>();
+  const domainFor = (host: string): Promise<DomainInfo | null> => {
+    const name = registrable(host);
+    if (!deps.rdap || name === '' || isIpHost(name)) return Promise.resolve(null);
+    let p = lookups.get(name);
+    if (!p) { p = deps.rdap(name).catch(() => null); lookups.set(name, p); }
+    return p;
+  };
+  const inputHost = parseUrl(input.url)?.hostname ?? '';
+  void domainFor(inputHost);
+  const finalHost = (): string => {
+    for (const e of [...events].reverse()) {
+      if (isObj(e) && (e.kind === 'summary' || e.kind === 'page')) {
+        const h = parseUrl(e.kind === 'summary' ? e.final_url : e.url)?.hostname;
+        if (h) return h;
+      }
+    }
+    return inputHost;
+  };
+  // one limit for the whole task, counted from its start, so that asking again later never waits again
+  const registryUntil = Date.now() + 6000;
+  const domainNow = async (): Promise<DomainInfo | null> => {
+    let timer: NodeJS.Timeout | undefined;
+    const limit = new Promise<null>((res) => { timer = setTimeout(() => res(null), Math.max(0, registryUntil - Date.now())); });
+    try { return await Promise.race([domainFor(finalHost()), limit]); } finally { clearTimeout(timer); }
+  };
+
   const assessNow = async (): Promise<Assessment> =>
-    assess({ events: [...events], hooks: hooks.state(), screenshot: await screenshot() }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+    assess({ events: [...events], hooks: hooks.state(), screenshot: await screenshot(), domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
 
   // ---- the agent's part of a session: look, decide, act, look again ----
   async function drive(): Promise<void> {
@@ -167,6 +223,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (!isObj(s) || typeof s.state !== 'string') return;
       state = s.state;
       timeline.push(state);
+      progress({ kind: 'state', state, position: typeof s.position === 'number' ? s.position : null });
       if (typeof s.reason === 'string' && /^[a-z_]{1,40}$/.test(s.reason)) failure ??= s.reason;
       if (TERMINAL.has(state)) finished = true;
     } else if (type === 'evidence') {
@@ -195,6 +252,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       const step = steps.find((x) => x.id === c.command_id);
       if (step) {
         step.status = c.status;
+        progress({ kind: 'step', action: step.action, status: step.status });
         if (COMMAND_END.has(c.status)) wake(c.command_id);
       }
     } else if (type === 'artifact') {
@@ -202,6 +260,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       try { a = JSON.parse(data); } catch { return; }
       if (isObj(a) && a.saved === true && typeof a.name === 'string' && typeof a.sha256 === 'string' && typeof a.bytes === 'number' && typeof a.mime === 'string') {
         artifacts.push({ name: a.name, bytes: a.bytes, sha256: a.sha256, mime: a.mime });
+        progress({ kind: 'artifact', name: a.name, mime: a.mime });
       }
     }
   }
@@ -243,11 +302,13 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       failure,
       assessment,
       evidence_events: events.length,
+      facts: buildFacts(events, { geo: deps.geo, domain: await domainNow() }),
       hooks: { triggered: hs.triggered, findings: hs.findings.map((f) => ({ rule: f.rule, category: String(f.category), strength: f.strength, place: f.place, layer: f.layer })), ruleset: hs.ruleset },
       steps,
       refused,
       pending_approval: pending,
       artifacts,
+      shots: pickShots(events, artifacts),
       timeline,
       notes: [...notes, ...(ready ? [] : input.session ? ['the session never became ready'] : [])],
     };

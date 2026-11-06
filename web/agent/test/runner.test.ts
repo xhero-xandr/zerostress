@@ -384,3 +384,64 @@ test('the result carries the rule set and the hook findings without the words of
   assert.doesNotMatch(JSON.stringify(r), /IGNORE ALL PREVIOUS/i);
   assert.equal(r.assessment.mode_reason, 'hooks_fired');
 });
+
+// ---- where the servers are and how old the domain is ------------------------------------------------------------------------------------------
+test('the domain is asked about by name only, once, from the start; its age is a reason and is in the facts', async () => {
+  const { sup, deps } = await setup();
+  const asked: string[] = [];
+  deps.rdap = async (name) => { asked.push(name); return { domain: name, created: '2026-11-01T00:00:00.000Z', age_days: 4, registrar: 'Some Registrar' }; };
+  deps.geo = (ip) => ({ country: ip === '93.184.216.34' ? 'US' : null, asn: 15133, org: 'EdgeCast' });
+  begin(sup, [...plain(), ev('request', { url: 'http://page.test/a', method: 'GET', resource_type: 'document', status: 200, mime: null, blocked: null, initiator: '', ip: '93.184.216.34' })], false);
+  finish(sup);
+  const r = await run(runTask({ url: 'http://user:pw@login.page.test/secret/path?token=1' }, deps));
+  assert.deepEqual(asked, ['page.test'], 'one question, the registrable name only: no path, no query, no credentials');
+  assert.ok(r.assessment.rules.signals.some((s) => s.id === 'young_domain'));
+  assert.deepEqual(r.facts.domain, { name: 'page.test', created: '2026-11-01T00:00:00.000Z', age_days: 4, registrar: 'Some Registrar' });
+  assert.deepEqual(r.facts.servers[0], { ip: '93.184.216.34', country: 'US', asn: 15133, org: 'EdgeCast', hosts: ['page.test'], requests: 1 });
+});
+
+test('a registry that fails or hangs does not stop the task and the age is unknown', async () => {
+  for (const rdap of [async () => { throw new Error('down'); }, () => new Promise<never>(() => {})] as const) {
+    const { sup, deps } = await setup();
+    deps.rdap = rdap;
+    deps.limits = { ...deps.limits, totalMs: 20_000 };
+    begin(sup, plain(), false);
+    finish(sup);
+    const t0 = Date.now();
+    const r = await run(runTask({ url: 'http://page.test/' }, deps));
+    assert.equal(r.facts.domain, null);
+    assert.ok(!r.assessment.rules.signals.some((s) => s.id === 'young_domain'));
+    assert.ok(Date.now() - t0 < 10_000, 'the wait for the registry is bounded');
+  }
+});
+
+test('an address instead of a name is never sent to the registry', async () => {
+  const { sup, deps } = await setup();
+  const asked: string[] = [];
+  deps.rdap = async (name) => { asked.push(name); return null; };
+  const at = 'http://93.184.216.34/';
+  begin(sup, [ev('nav', { via: 'requested', from: '', to: at }), ev('page', { url: at, title: 'T', text: 'x', hidden_text: { present: false, reasons: [], text: '' }, meta: [] }), ev('summary', { final_url: at, nav_error: null })], false);
+  finish(sup);
+  await run(runTask({ url: at }, deps));
+  assert.deepEqual(asked, []);
+});
+
+test('phone and tablet images are told apart from the computer\'s; the model is shown the computer\'s even though a phone image came last', async () => {
+  const png = (n: number) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, n, n, n, n]);
+  const { sup, model, deps } = await setup({ INFERENCE_VISION: '1' }, () => chat(answer()));
+  const files = { d: '0123456789abcdef.png', m: 'fedcba9876543210.png', t: '1111111111111111.png' };
+  sup.artifacts.set(files.d, png(1)); sup.artifacts.set(files.m, png(2)); sup.artifacts.set(files.t, png(3));
+  begin(sup, plain(), false);
+  const art = (name: string, n: number) => sup.emit('artifact', { name, bytes: 12, sha256: String(n).repeat(64), mime: 'image/png', saved: true });
+  art(files.d, 1);
+  sup.evidence(ev('device', { device: 'mobile', viewport: { width: 412, height: 839 }, final_url: 'http://page.test/', nav_error: null, title: 'T', forms: 0, has_password: false, action_origins: [], text_chars: 3, file: files.m }));
+  art(files.m, 2);
+  sup.evidence(ev('device', { device: 'tablet', viewport: { width: 820, height: 1180 }, final_url: 'http://page.test/', nav_error: null, title: 'T', forms: 0, has_password: false, action_origins: [], text_chars: 3, file: files.t }));
+  art(files.t, 3);
+  finish(sup);
+  const r = await run(runTask({ url: 'http://page.test/' }, deps));
+  assert.deepEqual(r.shots, { desktop: files.d, mobile: files.m, tablet: files.t });
+  assert.equal(r.facts.devices.length, 2);
+  assert.deepEqual(sup.artifactRequests, [files.d], 'only the computer\'s image goes to the model');
+  assert.equal(model!.seen[0]!.body.messages[1].content[1].image_url.url, `data:image/png;base64,${png(1).toString('base64')}`);
+});

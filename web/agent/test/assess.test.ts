@@ -157,9 +157,15 @@ test('the model asks for less than the rules: the rules stand, and it is written
   assert.equal(a.confidence, a.rules.confidence, 'the confidence is the rules\'');
 });
 
-test('unknown stays unknown when the model says benign; a warning is taken', async () => {
-  assert.equal((await run('unreachable', () => chat(answer({ verdict: 'benign' })))).a.verdict, 'unknown');
-  assert.equal((await run('unreachable', () => chat(answer({ verdict: 'malicious' })))).a.verdict, 'malicious');
+test('a page that was not read is not put to the model: unknown stays unknown, whatever the model would say', async () => {
+  for (const verdict of ['benign', 'suspicious', 'malicious'] as const) {
+    const { a, s } = await run('unreachable', () => chat(answer({ verdict })));
+    assert.equal(a.verdict, 'unknown', verdict);
+    assert.equal(a.mode, 'rules_only');
+    assert.equal(a.mode_reason, 'page_not_read');
+    assert.equal(a.model, null);
+    assert.equal(s.seen.length, 0, 'the model was never asked');
+  }
 });
 
 test('reasons that cite nothing shown are dropped and counted', async () => {

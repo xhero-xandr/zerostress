@@ -6,15 +6,21 @@
 import type { AgentConfig } from './config.ts';
 import type { Usage } from './budget.ts';
 
-export type Message = { role: 'system' | 'user'; content: string | Array<Record<string, unknown>> };
+export type Message = { role: 'system' | 'user' | 'assistant'; content: string | Array<Record<string, unknown>> };
 
 export type ModelResult =
   | { ok: true; content: string; usage: Usage | null }
   | { ok: false; reason: 'timeout' | 'network' | 'rate_limited' | 'server_error' | 'rejected' | 'empty' | 'truncated' | 'bad_response' };
 
 export interface ModelClient {
-  complete(messages: Message[]): Promise<ModelResult>;
+  /** `format` replaces the verdict schema (the chat asks for a different shape) */
+  complete(messages: Message[], format?: ResponseFormat): Promise<ModelResult>;
   inFlight(): number;
+}
+
+export interface ResponseFormat {
+  name: string;
+  schema: Record<string, unknown>;
 }
 
 export interface ClientDeps {
@@ -76,7 +82,7 @@ export function createModelClient(cfg: AgentConfig, deps: ClientDeps = {}): Mode
   // the key must not travel into a log or a report even if a server echoes it back
   const scrub = (s: string) => (cfg.apiKey ? s.split(cfg.apiKey).join('***') : s);
 
-  async function once(messages: Message[]): Promise<{ result: ModelResult; retryAfterMs?: number }> {
+  async function once(messages: Message[], format?: ResponseFormat): Promise<{ result: ModelResult; retryAfterMs?: number }> {
     let res: Response;
     try {
       res = await doFetch(`${cfg.baseUrl}/chat/completions`, {
@@ -90,7 +96,7 @@ export function createModelClient(cfg: AgentConfig, deps: ClientDeps = {}): Mode
           // Models that reason spend most of their tokens on it unless told not to, and each family listens to a different
           // field: the service passes both on and ignores the one a model does not know (measured, spec 008, 8)
           ...(cfg.thinkingOff ? { reasoning_effort: 'low', chat_template_kwargs: { enable_thinking: false } } : {}),
-          response_format: { type: 'json_schema', json_schema: { name: 'verdict', strict: true, schema: ANSWER_SCHEMA } },
+          response_format: { type: 'json_schema', json_schema: { name: format?.name ?? 'verdict', strict: true, schema: format?.schema ?? ANSWER_SCHEMA } },
         }),
         signal: AbortSignal.timeout(cfg.timeoutMs),
         redirect: 'error',
@@ -124,12 +130,12 @@ export function createModelClient(cfg: AgentConfig, deps: ClientDeps = {}): Mode
   }
 
   return {
-    async complete(messages) {
+    async complete(messages, format) {
       await acquire();
       try {
         let last: ModelResult = { ok: false, reason: 'network' };
         for (let attempt = 0; attempt <= cfg.retries; attempt++) {
-          const { result, retryAfterMs } = await once(messages);
+          const { result, retryAfterMs } = await once(messages, format);
           last = result;
           if (result.ok) return result;
           // worth another try: a limit, a server error, a broken connection; not a refusal, an empty answer or a timeout

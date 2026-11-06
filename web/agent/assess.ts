@@ -16,6 +16,7 @@ import { RULESET_SHA256 } from '../hooks/rules.ts';
 export type Mode = 'rules_only' | 'text' | 'vision';
 export type ModeReason =
   | 'hooks_fired'
+  | 'page_not_read'
   | 'no_model_configured'
   | 'budget'
   | 'model_unavailable'
@@ -67,6 +68,8 @@ export interface AssessInput {
   hooks: Pick<HookState, 'triggered'>;
   /** the screenshot as a PNG, if there is one and the model should see it */
   screenshot?: Uint8Array | null;
+  /** days since the final site's domain was registered, if known */
+  domainAgeDays?: number | null;
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -79,7 +82,7 @@ function isPng(b: Uint8Array): boolean {
 
 export async function assess(input: AssessInput, deps: AssessDeps): Promise<Assessment> {
   const nowMs = (deps.now ?? Date.now)();
-  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs });
+  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs, domainAgeDays: input.domainAgeDays });
   const notes: string[] = [];
   const result: Assessment = {
     verdict: rules.verdict,
@@ -104,6 +107,9 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
 
   try {
     if (input.hooks.triggered) return degrade('hooks_fired');
+    // nothing of the site was read (a wall, an error, an empty page): the model would only guess, and a guess must not
+    // turn "we could not see" into "suspicious"
+    if (rules.verdict === 'unknown') return degrade('page_not_read');
     if (!deps.cfg.enabled || !deps.client) return degrade('no_model_configured');
 
     const wantsImage = deps.cfg.vision && input.screenshot != null && isPng(input.screenshot);
