@@ -6,8 +6,8 @@
 | Путь | Что | Откуда |
 |---|---|---|
 | `/opt/zerostress/bin/firecracker` | Firecracker v1.17.0 | официальный релиз, хеш закреплён в `deploy/001-host-baseline.sh` |
-| `/opt/zerostress/bin/zsnet` | скрипт сети слотов (`up N`, `down N`, N от 0 до 3) | `deploy/zsnet`, ставит `deploy/003-network.sh` |
-| `/opt/zerostress/bin/zsvm` | root-помощник: запускает Firecracker юнитом systemd с лимитами (`run`, `stop`, `recover`) | `deploy/zsvm`, ставит `deploy/002-vm-runner.sh` (его вызывает `006-supervisor.sh`) |
+| `/opt/zerostress/bin/zsnet` | скрипт сети слотов (`up N`, `down N`, N от 0 до 3) | `deploy/helpers/zsnet`, ставит `deploy/003-network.sh` |
+| `/opt/zerostress/bin/zsvm` | root-помощник: запускает Firecracker юнитом systemd с лимитами (`run`, `stop`, `recover`) | `deploy/helpers/zsvm`, ставит `deploy/002-vm-runner.sh` (его вызывает `006-supervisor.sh`) |
 | `/opt/zerostress/supervisor/zerostress-supervisor`, `zerostress-supervisor.service` | бинарник и служба супервизора | `supervisor/build.sh`, затем `deploy/006-supervisor.sh` |
 | `/opt/zerostress/images/` | ядро гостя, `guest-rootfs.ext4`, `manifest.json` | `guest-image/build.sh`, ставит `guest-image/install.sh` |
 | `/opt/node` | Node 24.22.2 только для вспомогательных скриптов тестов хоста (супервизору не нужен) | официальный архив, сумма проверена по `SHASUMS256.txt` |

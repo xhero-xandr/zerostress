@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-install -m 0755 -o root -g root zsvm /opt/zerostress/bin/zsvm
+install -m 0755 -o root -g root helpers/zsvm /opt/zerostress/bin/zsvm
 chcon -t bin_t /opt/zerostress/bin/zsvm 2>/dev/null || true
 
 # the supervisor may run exactly these commands; zsvm itself validates every argument again

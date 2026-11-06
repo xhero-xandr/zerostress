@@ -25,7 +25,7 @@ tar --exclude=.git --exclude=node_modules --exclude='*.ext4' --exclude=zerostres
     find /opt/zerostress-src -mindepth 1 -maxdepth 1 -not -name ".build" -not -name ".git" -exec rm -rf {} +
     tar --no-same-owner -xmf - -C /opt/zerostress-src
     find /opt/zerostress-src -type f \( -name "*.sh" -o -name "*.go" -o -name "*.mjs" -o -name "*.ts" -o -name "*.json" -o -name "*.service" -o -name zsnet -o -name "go.*" \) -not -path "*/.git/*" -exec sed -i "s/\r$//" {} +
-    chmod +x /opt/zerostress-src/deploy/*.sh /opt/zerostress-src/deploy/zsnet /opt/zerostress-src/guest-image/*.sh /opt/zerostress-src/guest-image/test/*.sh
+    chmod +x /opt/zerostress-src/deploy/*.sh /opt/zerostress-src/deploy/helpers/zsnet /opt/zerostress-src/deploy/helpers/zsvm /opt/zerostress-src/guest-image/*.sh /opt/zerostress-src/guest-image/test/*.sh
     chmod 755 /opt/zerostress-src
     chown -R linuxuser:linuxuser /opt/zerostress-src
     echo "synced to /opt/zerostress-src"'

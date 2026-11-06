@@ -56,7 +56,7 @@
 |---|---|---|
 | Выбор стека, проверка Firecracker и Chromium в госте | ✅ | PROJECT.md |
 | Хост: пользователи, каталоги, `/dev/kvm` 0660, SELinux Enforcing, проверено после перезагрузки | ✅ | spec 001, `deploy/001-host-baseline.sh` |
-| Сеть гостя: `zsnet`, nftables, зона `firewalld`, изоляция, два гостя, внутренние адреса закрыты | ✅ | spec 003, `deploy/003-network.sh`, `deploy/zsnet` |
+| Сеть гостя: `zsnet`, nftables, зона `firewalld`, изоляция, два гостя, внутренние адреса закрыты | ✅ | spec 003, `deploy/003-network.sh`, `deploy/helpers/zsnet` |
 | Образ гостя: воспроизводимая сборка, Node, Playwright (headless shell), шрифты, без SSH и ключей | ✅ | spec 004, `guest-image/build.sh` |
 | Агент в госте (Go, vsock): статусы, лимиты, убийство группы процессов, тесты `-race` | ✅ | spec 004, `guest-image/agent/` |
 | Дымовой тест образа (Chromium с песочницей, сеть, ключи, часы, порты) и тест сети | ✅ | `guest-image/test/` |

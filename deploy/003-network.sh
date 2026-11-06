@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-install -m 0755 -o root -g root zsnet /opt/zerostress/bin/zsnet
+install -m 0755 -o root -g root helpers/zsnet /opt/zerostress/bin/zsnet
 chcon -t bin_t /opt/zerostress/bin/zsnet 2>/dev/null || true
 
 cat >/etc/sysctl.d/90-zerostress.conf <<'EOF'
