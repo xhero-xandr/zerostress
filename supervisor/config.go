@@ -43,7 +43,6 @@ type Config struct {
 	ImageDir             string
 	ImagePath            string
 	KernelPath           string
-	FirecrackerPath      string
 	ZsnetPath            string
 	ZsvmPath             string
 }
@@ -121,7 +120,6 @@ func LoadConfig(env map[string]string) (Config, error) {
 		ImageDir:             imageDir,
 		ImagePath:            filepath.Join(imageDir, "guest-rootfs.ext4"),
 		KernelPath:           envStr(env, "SUP_KERNEL", filepath.Join(imageDir, "vmlinux-6.18.56")),
-		FirecrackerPath:      envStr(env, "SUP_FIRECRACKER", "/opt/zerostress/bin/firecracker"),
 		ZsnetPath:            envStr(env, "SUP_ZSNET", "/opt/zerostress/bin/zsnet"),
 		ZsvmPath:             envStr(env, "SUP_ZSVM", "/opt/zerostress/bin/zsvm"),
 	}
