@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The real collector (spec 005) in a real microVM, through the real agent and vsock, on a real public page.
 # The installed base image already holds Playwright and Chromium; the collector itself is laid on top by the overlay.
-# Run as root on the host, after dev-sync.
+# Run as root on the host, from the working copy to test.
 # Usage: collector.sh [BASE_IMAGE AGENT_BIN]
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-vm.sh"

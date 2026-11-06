@@ -5,7 +5,7 @@
 #
 # It lays the test collector (guest-image/test/stub-collector.mjs, probe modes) over a COPY of the installed image, swaps
 # that copy in for the duration of the test and always puts the installed image back. While it runs, a real visitor of the
-# service would get test answers: run it when nobody is using the site. Run as root on the host, after deploy/dev-sync.sh,
+# service would get test answers: run it when nobody is using the site. Run as root on the host, from the working copy to test,
 # with the supervisor service running.
 #
 # What this shows: the walls we built hold against a guest that tries to cross them. What it does NOT show: that no

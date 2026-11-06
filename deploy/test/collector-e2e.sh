@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The real collector (spec 005) behind the real supervisor: real microVMs, real Chromium, a real public page.
 # It lays the collector over a COPY of the installed image, swaps that copy in for the duration of the test and always
-# puts the installed image back. Run as root on the host, after deploy/dev-sync.sh and with the supervisor service
+# puts the installed image back. Run as root on the host, from the working copy to test, with the supervisor service
 # running; SUP_CONCURRENCY=2 and the default SUP_SESSION_SLOTS=1.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"

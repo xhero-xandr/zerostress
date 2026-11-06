@@ -25,26 +25,24 @@
 Службы проекта: `zerostress-supervisor` (Go, статический бинарник), `zerostress-web` (Node, Hono, слушает `127.0.0.1`, данные в `/var/lib/zerostress-web`, окружение `/etc/zerostress/web.env`) и `caddy` (Caddy 2.11.8, TLS для `zerostress.space` за Cloudflare в режиме Full (strict), доверенные прокси: диапазоны Cloudflare). Установка и обновление: `DOMAIN=zerostress.space bash deploy/010-web.sh`. Следы экспериментов (Rust, старые образы, ключи, временные файлы) удалены; от сборок остаются только кэши Go в домашнем каталоге `linuxuser`.
 
 ## Рабочая копия
-Репозиторий живёт на сервере: `/opt/zerostress-src` (git, ветка `main`, владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`; `root` добавил каталог в `safe.directory`). Удалённого репозитория нет: публикация на GitHub не делалась и без вашего решения не делается.
+Репозиторий живёт на сервере: `/opt/zerostress-src` (git, ветка `main`, владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`; `root` добавил каталог в `safe.directory`). Удалённый репозиторий: публичный https://github.com/xhero-xandr/zerostress (`origin`).
 - Работа и коммиты идут прямо здесь (`cd /opt/zerostress-src`). Команды ниже дописаны с `ssh vultr '…'` для запуска с другой машины; на сервере `ssh vultr` и кавычки не нужны. Node: `export PATH=/opt/node/bin:$PATH`, Go: `export PATH=/opt/go/bin:$PATH`.
 - Сборка идёт от `linuxuser` (`sudo -u linuxuser env PATH=$PATH …`), тесты хоста от `root`.
-- Забрать коммиты на другую машину: `ssh vultr 'git -C /opt/zerostress-src bundle create - --all' > app.bundle`, затем `git fetch app.bundle` там.
-- `deploy/dev-sync.sh` (с другой машины) сохраняет `.git` и **отказывается**, если на сервере есть несохранённые изменения (`FORCE=1` принудительно). Он перезаписывает отслеживаемые файлы; собранные файлы вне git (бинарники, `node_modules`) стирает, их нужно собрать снова (`build-agent.sh`, `supervisor/build.sh`, `npm ci --ignore-scripts` в `web/`).
+- Другая машина работает через GitHub (`git clone`, `git pull`), не копированием дерева на сервер. Собранные файлы вне git (бинарники, `node_modules`) после `git pull` собираются заново: `build-agent.sh`, `supervisor/build.sh`, `npm ci --ignore-scripts` в `web/`.
 - Не коммитятся (в `.gitignore`): бинарники, `node_modules`, образы, `.env`, ключи.
 
 ## Как работать
 ```
-bash deploy/dev-sync.sh                                   # с другой машины: отправить рабочее дерево на сервер (на сервере не нужно)
 ssh vultr 'sudo -u linuxuser bash /opt/zerostress-src/guest-image/build-agent.sh'   # тесты и сборка агента
 ssh vultr 'AGENT_BIN=/opt/zerostress-src/guest-image/agent/zerostress-agent bash /opt/zerostress-src/guest-image/build.sh'   # образ в /var/tmp/zerostress-build/out
 ssh vultr 'bash /opt/zerostress-src/guest-image/install.sh'                          # установить образ в /opt/zerostress/images
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/smoke.sh'                       # дымовой тест образа, Chromium и сеть
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/net-isolation.sh'               # изоляция сети двух гостей
 ssh vultr 'bash /opt/zerostress-src/guest-image/test/collector.sh'                   # настоящий сборщик в настоящей ВМ на example.com (сборщик кладётся поверх установленного образа)
-ssh vultr 'bash /opt/zerostress-src/deploy/test/mutate-artifacts.sh'                  # проверка тестов выдачи артефактов мутациями: 13 правок, тесты обязаны упасть (после dev-sync)
-ssh vultr 'bash /opt/zerostress-src/deploy/test/agent-e2e.sh'                      # агент (web/agent) целиком: супервизор, ВМ, сборщик, хуки, настоящая модель; сначала dev-sync, build-agent.sh и npm ci в web/ (образ подменяется на время теста и возвращается)
+ssh vultr 'bash /opt/zerostress-src/deploy/test/mutate-artifacts.sh'                  # проверка тестов выдачи артефактов мутациями: 13 правок, тесты обязаны упасть
+ssh vultr 'bash /opt/zerostress-src/deploy/test/agent-e2e.sh'                      # агент (web/agent) целиком: супервизор, ВМ, сборщик, хуки, настоящая модель; сначала build-agent.sh и npm ci в web/ (образ подменяется на время теста и возвращается)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/collector-e2e.sh'                    # настоящий сборщик за супервизором (образ подменяется на время теста и возвращается)
-ssh vultr 'bash /opt/zerostress-src/guest-image/test/session.sh'                     # сессии агента v2 по настоящему vsock (сначала build-agent.sh: dev-sync стирает бинарник)
+ssh vultr 'bash /opt/zerostress-src/guest-image/test/session.sh'                     # сессии агента v2 по настоящему vsock (сначала build-agent.sh)
 ssh vultr 'bash /opt/zerostress-src/deploy/test/unit-compat.sh LABEL PROP...'        # совместимость параметров юнита с SELinux (см. спецификацию 006)
 ssh vultr 'sudo -u linuxuser bash /opt/zerostress-src/supervisor/build.sh'            # проверки, тесты с -race и сборка супервизора
 ssh vultr 'bash /opt/zerostress-src/deploy/006-supervisor.sh'                        # установить и запустить службу супервизора

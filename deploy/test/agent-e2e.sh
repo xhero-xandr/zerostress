@@ -2,7 +2,7 @@
 # The agent (web/agent, spec 008) against the real thing: the real supervisor, real microVMs, the real collector, the
 # real hooks and the real model service. Like collector-e2e.sh it lays the collector over a COPY of the installed
 # image, swaps it in for the duration and always puts the installed image back. Run as root on the host, after
-# deploy/dev-sync.sh (and `npm ci --ignore-scripts` in web/), with the supervisor running and sessions enabled
+# `npm ci --ignore-scripts` in web/ on the working copy to test, with the supervisor running and sessions enabled
 # (SUP_SESSION_SLOTS=1). The key is read from /etc/zerostress/web.env and not printed. Takes a few minutes.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"

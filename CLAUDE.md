@@ -75,4 +75,4 @@ ZeroStress — веб-агент, который открывает подозр
 - Супервизор: `supervisor/build.sh` (проверки, тесты с `-race`, сборка), установка `deploy/006-supervisor.sh`. Агент гостя: `guest-image/build-agent.sh`; образ: `guest-image/build.sh`, `install.sh`.
 - Сборщик: `npm test` в `collector/` (нужен Chromium: `npx playwright install --only-shell chromium`); записать улики ловушек для тестов хуков и агента: `node collector/test/capture-fixtures.mjs`.
 - Сквозные тесты на настоящих ВМ: `deploy/test/` (`supervisor-e2e.sh`, `supervisor-sessions-e2e.sh`, `collector-e2e.sh`, `agent-e2e.sh`, ...).
-- `deploy/dev-sync.sh` отправляет рабочее дерево с другой машины (отказывается, если на сервере есть несохранённые изменения).
+- Публичный репозиторий: https://github.com/xhero-xandr/zerostress (`origin`); другие машины работают через `git clone`/`git pull`.
