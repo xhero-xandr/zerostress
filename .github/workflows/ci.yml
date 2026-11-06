@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [supervisor, guest-image/agent]
+        module: [supervisor, guest/agent]
     defaults:
       run:
         working-directory: ${{ matrix.module }}
@@ -102,7 +102,7 @@ jobs:
         working-directory: web/client
       # the end-to-end check drives the built client behind the real web layer in Chromium (the collector's Playwright)
       - run: npm ci --ignore-scripts && npx playwright install --with-deps --only-shell chromium
-        working-directory: collector
+        working-directory: guest/collector
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: npm run e2e
         working-directory: web/client
@@ -115,11 +115,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: npm ci --ignore-scripts
-        working-directory: collector
+        working-directory: guest/collector
       - run: npx playwright install --with-deps --only-shell chromium
-        working-directory: collector
+        working-directory: guest/collector
       # Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor, and Chromium's own sandbox needs them. The
       # collector keeps chromiumSandbox: true, so the runner is opened up instead of the browser.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: npm test
-        working-directory: collector
+        working-directory: guest/collector

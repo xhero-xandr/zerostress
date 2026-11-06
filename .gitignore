@@ -1,17 +1,15 @@
-# secrets
+# secrets: the real environment files live on the host only (/etc/zerostress); a local copy is web/.env
 .env
 .env.*
-!.env.example
+!*.env.example
 *.pem
 *.key
 *id_rsa*
 
-# dependencies and build output
+# everything generated: binaries, the built client, screenshots of checks (spec 010, 4.2)
+/build/
 node_modules/
-dist/
 *.tsbuildinfo
-guest-image/build/
-guest-image/agent/zerostress-agent
 
 # images and run data never go to the repository
 *.ext4
@@ -25,7 +23,3 @@ runs/
 .idea/
 .DS_Store
 Thumbs.db
-zerostress-supervisor
-
-# screenshots of the client, for review only
-web/client/mockups/

@@ -5,7 +5,7 @@ set -uo pipefail
 D=/var/lib/zerostress/runs/zsvm-probe
 IMG=/opt/zerostress/images/guest-rootfs.ext4
 KERNEL=/opt/zerostress/images/vmlinux-6.18.56
-CLIENT=/opt/zerostress-src/guest-image/test/vsock-client.mjs
+CLIENT=/opt/zerostress-src/deploy/test/vsock-client.mjs
 NODE=/opt/node/bin/node
 UNIT=zsvm-probe
 SUP=zerostress-sup

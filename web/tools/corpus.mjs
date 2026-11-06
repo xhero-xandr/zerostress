@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // False-hit check of the hooks on REAL public pages (spec 009, 8): the real collector reads each page of
 // tools/corpus-urls.txt, the hooks inspect what it reported, and the pages that fire are listed with the rule and the
-// place. Needs the collector's browser (`npx playwright install --only-shell chromium` in collector/) and the network.
+// place. Needs the collector's browser (`npx playwright install --only-shell chromium` in guest/collector/) and the network.
 // The pages are all ordinary, public and harmless; nothing they say is kept: only the verdict per page is printed.
 //
 //   node tools/corpus.mjs [--urls=file] [--jobs=3] [--json=out.json]
@@ -16,7 +16,7 @@ const urlsFile = arg('urls', join(here, 'corpus-urls.txt'));
 const jobs = Number(arg('jobs', '3'));
 const jsonOut = arg('json', '');
 
-const { scanOnce } = await import(pathToFileURL(join(here, '../../collector/test/helpers.mjs')).href);
+const { scanOnce } = await import(pathToFileURL(join(here, '../../guest/collector/test/helpers.mjs')).href);
 const { createHooks } = await import(pathToFileURL(join(here, '../hooks/index.ts')).href);
 
 const urls = readFileSync(urlsFile, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));

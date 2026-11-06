@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end test of interactive sessions (spec 006, 3.7-3.8) on the installed supervisor service with real microVMs
-# and the stub collector in session mode (guest-image/test/stub-collector.mjs). Run as root on the host.
-# Needs: deploy/006-supervisor.sh done with supervisor v2, guest image installed with the current stub
-# (guest-image/build.sh + install.sh), SUP_CONCURRENCY=2 and the default SUP_SESSION_SLOTS=1.
+# and the stub collector in session mode (deploy/test/stub-collector.mjs). Run as root on the host.
+# Needs: deploy/steps/50-supervisor.sh done with supervisor v2, guest image installed with the current stub
+# (guest/image/build.sh + install.sh), SUP_CONCURRENCY=2 and the default SUP_SESSION_SLOTS=1.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
 

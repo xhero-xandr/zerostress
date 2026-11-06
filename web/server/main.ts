@@ -3,6 +3,7 @@
 //
 //   WEB_PORT          port on 127.0.0.1 (default 8080)
 //   WEB_DATA_DIR      where finished reports are kept (default /var/lib/zerostress-web/tasks)
+//   WEB_CLIENT_DIR    the built client (default ../client/dist next to server/, as installed; build/client in a checkout)
 //   SUP_SOCKET        the supervisor's socket (default /run/zerostress/supervisor.sock)
 //   WEB_DEMOS         "label|url;label|url" for the buttons under the input
 //   GEO_DIR           DB-IP Lite files (default /var/lib/zerostress-web/geo); without them no place is named
@@ -61,6 +62,7 @@ const limiter = createLimiter({
 });
 
 const app = createApp({
+  ...(env.WEB_CLIENT_DIR ? { clientDir: env.WEB_CLIENT_DIR.replace(/\/?$/, '/') } : {}),
   run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, limits: { totalMs: 240_000 } }),
   fetchShot: (runId, name) => sup.artifact(runId, name, 4 * 1024 * 1024),
   approve: (runId, commandId, sha) => sup.approve(runId, commandId, sha),

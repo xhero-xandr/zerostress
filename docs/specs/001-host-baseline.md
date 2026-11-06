@@ -72,7 +72,7 @@
 - `useradd`, `groupadd`, `usermod` для пользователей и групп.
 - `install -d` для каталогов с нужными правами.
 - Запись правила udev для `/dev/kvm` и применение (`udevadm control --reload`, `udevadm trigger`).
-- Скачивание Firecracker из официального релиза с проверкой закреплённой контрольной суммы и установка в `/opt/zerostress/bin`; метка SELinux (`semanage fcontext`, `restorecon`). Ядро и образ гостя ставит отдельно `guest-image/install.sh` после сборки.
+- Скачивание Firecracker из официального релиза с проверкой закреплённой контрольной суммы и установка в `/opt/zerostress/bin`; метка SELinux (`semanage fcontext`, `restorecon`). Ядро и образ гостя ставит отдельно `guest/image/install.sh` после сборки.
 - Файл `tmpfiles.d` для `/run/zerostress` (каталог на tmpfs пересоздаётся при каждой загрузке).
 - Установка юнитов systemd и их включение.
 
@@ -95,12 +95,12 @@
 ## 8. Что проверено и что нет
 **Проверено:** таблица фактов в разделе 3; Firecracker запускается от обычного пользователя `linuxuser` через `/dev/kvm` с правами `0666`.
 
-**Проверено 3 ноября 2026 на сервере** (скрипт [deploy/001-host-baseline.sh](../../deploy/001-host-baseline.sh)):
+**Проверено 3 ноября 2026 на сервере** (скрипт [deploy/steps/10-host.sh](../../deploy/steps/10-host.sh)):
 - пользователи `zerostress-sup` (группы `kvm`, `zerostress-ipc`) и `zerostress-web` (группа `zerostress-ipc`), каталоги и права из раздела 4.2, артефакты в `/opt/zerostress`;
 - `/dev/kvm` имеет права `0660 root:kvm`: доступ есть у `zerostress-sup`, у `zerostress-web` и `linuxuser` отказ. Правило udev применяется событием `change` с фильтром `--subsystem-match=misc --sysname-match=kvm`; `trigger --name-match` права не меняет;
 - Firecracker запущен как транзиентная служба systemd (`systemd-run`, `User=zerostress-sup`) при `Enforcing`: гость (2 vCPU, 1 ГиБ, диск только для чтения) загрузился до приглашения входа, отказов AVC нет.
 
-**Проверено после перезагрузки хоста (4 ноября 2026):** права `/dev/kvm` `0660`, `ip_forward=1`, зона и политика `firewalld`, правило sudoers, пользователи и каталоги сохранились; `SELinux` `Enforcing`; наружу слушает только `sshd`. Каталог `/run/zerostress` после ребута отсутствовал (tmpfs), поэтому добавлен `tmpfiles.d`; повторный запуск скрипта на чистой системе (Firecracker скачивается и проверяется по хешу) прошёл. Скрипт без аргументов воспроизводим; Node и Go на хост ставятся вручную (см. [SERVER.md](../SERVER.md)).
+**Проверено после перезагрузки хоста (4 ноября 2026):** права `/dev/kvm` `0660`, `ip_forward=1`, зона и политика `firewalld`, правило sudoers, пользователи и каталоги сохранились; `SELinux` `Enforcing`; наружу слушает только `sshd`. Каталог `/run/zerostress` после ребута отсутствовал (tmpfs), поэтому добавлен `tmpfiles.d`; повторный запуск скрипта на чистой системе (Firecracker скачивается и проверяется по хешу) прошёл. Скрипт без аргументов воспроизводим; Node и Go на хост ставятся вручную (см. [deploy.md](../deploy.md)).
 
 **Не проверено:** юниты `zerostress-*` и их параметры защиты (`ProtectSystem`, `NoNewPrivileges`); запуск с jailer; запись в диск гостя из службы (проверялся диск только для чтения); отключение свопа под нагрузкой; настройки SSH (раздел 4.7) и файрвол Vultr (раздел 4.6) не менялись.
 

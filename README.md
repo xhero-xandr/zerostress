@@ -66,24 +66,23 @@ The directory a piece of code sits in tells you its privilege level and where it
 | Directory | What's in it | Where it runs |
 |---|---|---|
 | `supervisor/` | Go, standard library only: microVM lifecycle, the queue, sessions, artifacts | **Host, privileged** — the only thing allowed to touch Firecracker, cgroups and the guest network |
-| `web/` | `hooks/` (injection detectors), `agent/` (rules, model client, verdict, report), `server/` (the Hono API: tasks, progress stream, report, chat, approvals; serves the built client) | **Host, unprivileged** — no access to Firecracker or the supervisor's socket beyond its own API |
-| `web/client/` | The interface: React, React Router, TanStack Query, Tailwind; light and dark themes, or the system's | **In the visitor's browser**; only the built `dist/` reaches the host |
-| `web/tools/` | Maintained dev tooling: mutation testing, the corpus check, model benchmarking, the DB-IP fetch script | Run by hand or in CI, never by the running service |
-| `collector/` | Node.js + Playwright, driven over a raw CDP session | **Inside the guest micro-VM**, as an unprivileged user, once per task |
-| `guest-image/` | The Go agent that runs inside the guest (`agent/`), plus the scripts that build and install the guest disk image | `agent/` runs **inside the guest**; the build scripts run on the host, but only to produce that image — not part of the running service |
-| `deploy/` | Host setup scripts (numbered, run once each), end-to-end tests in `deploy/test/`; `deploy/helpers/` holds the root helpers `zsvm`/`zsnet`, `deploy/systemd/` the three unit files | **Host**, run by hand during setup or deployment, not by the service itself |
-| `probes/` | One-off, throwaway probes used while deciding something (not part of any test suite or CI) | Run by hand, kept only for reference — don't confuse with `web/tools/` |
-| `docs/` | Specs (one per decision), the live status, the architecture write-up, the backlog | Documentation only |
+| `web/` | `hooks/` (injection detectors, rules as data), `agent/` (rules, model client, verdict, report), `server/` (the Hono API: tasks, progress stream, report, chat, approvals; serves the built client) | **Host, unprivileged** — no access to Firecracker or the supervisor's socket beyond its own API |
+| `web/client/` | The interface: React, React Router, TanStack Query, Tailwind; light and dark themes, or the system's | **In the visitor's browser**; only the build reaches the host |
+| `web/tools/` | Dev tooling: mutation testing, the corpus check, model benchmarking, the DB-IP fetch script | Run by hand or in CI, never by the running service |
+| `guest/` | `agent/` (the Go job receiver, over vsock), `collector/` (Node.js + Playwright over a raw CDP session), `image/` (builds the guest disk image) | `agent/` and `collector/` run **inside the guest micro-VM** as an unprivileged user; `image/` runs on the host only to build the image |
+| `deploy/` | `install.sh` (the one way to install, in steps), `versions.env` (every pinned version and checksum), `files/` (every file that lands on the host, at its path there), `test/` (tests on real micro-VMs) | **Host**, run by hand to install or update |
+| `docs/` | Specs (one per decision), the live status, deployment and configuration guides | Documentation only |
+| `build/` | Everything generated (binaries, the built client, check screenshots); git-ignored | — |
 
 ## Status
 
-Core (isolation, supervisor, collector, injection-detection hooks, agent, web layer) is implemented and tested: see [docs/STATUS.md](docs/STATUS.md) for what's verified, what's measured, and what's still open — it's kept current, not a snapshot.
+Core (isolation, supervisor, collector, injection-detection hooks, agent, web layer) is implemented and tested: see [docs/status.md](docs/status.md) for what's verified, what's measured, and what's still open — it's kept current, not a snapshot.
 
-Design documents, one per decision, are in [docs/specs/](docs/specs/README.md). The overall architecture and the reasoning behind the stack choices are in [docs/PROJECT.md](docs/PROJECT.md). Planned work beyond the core chain is tracked in [docs/BACKLOG.md](docs/BACKLOG.md).
+Design documents, one per decision, are in [docs/specs/](docs/specs/README.md). The overall architecture and the reasoning behind the stack choices are in [docs/project.md](docs/project.md). Planned work beyond the core chain is tracked in [docs/backlog.md](docs/backlog.md).
 
 ## Running it yourself
 
-There is no one-click installer yet — deployment is a Rocky Linux 10 host with `/dev/kvm`, done by hand through the numbered scripts in `deploy/` and `guest-image/` (see `docs/SERVER.md` for the exact sequence). A guided installer is planned; until then, treat this as a reference implementation to read and adapt rather than something to `curl | bash`.
+You need a Rocky Linux 10 host with `/dev/kvm` (on a cloud VM: nested virtualisation) and a Vultr Serverless Inference key. From a checkout, as root: `deploy/install.sh host`, put the key into `/etc/zerostress/web.env`, then `deploy/install.sh all` and `deploy/install.sh verify --live`. Every step is idempotent; every download is checked against a pinned checksum in `deploy/versions.env`. Details, updating and moving to a new host: [docs/deploy.md](docs/deploy.md); every setting: [docs/config.md](docs/config.md). A clean-machine install with the new installer has not been verified yet.
 
 ## License
 

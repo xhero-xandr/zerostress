@@ -16,9 +16,9 @@ restore() {
 }
 trap restore EXIT
 
-[[ -x $SRC/guest-image/agent/zerostress-agent ]] || { echo "build the agent first (guest-image/build-agent.sh)"; exit 1; }
+[[ -x $SRC/build/guest-agent/zerostress-agent ]] || { echo "build the agent first (guest/agent/build.sh)"; exit 1; }
 cp --sparse=always "$IMG" "$BACKUP"
-bash "$SRC/guest-image/apply-overlay.sh" "$IMG" "$SRC/guest-image/agent/zerostress-agent" "$SRC/collector/collect.mjs" | tail -1
+bash "$SRC/guest/image/apply-overlay.sh" "$IMG" "$SRC/build/guest-agent/zerostress-agent" "$SRC/guest/collector/collect.mjs" | tail -1
 echo "real collector laid over the installed image (temporarily)"
 
 post_session() { api -X POST "${JSON[@]}" -d "{\"kind\":\"url\",\"url\":\"$1\",\"session\":$2}" http://localhost/v1/runs; }

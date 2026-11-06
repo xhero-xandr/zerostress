@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: '/',
   plugins: [react(), tailwindcss()],
-  build: { outDir: 'dist', emptyOutDir: true },
-  test: { environment: 'jsdom', include: ['src/**/*.test.{ts,tsx}'] },
+  // generated files live in the repository's build/ only (spec 010, 4.2)
+  build: { outDir: '../../build/client', emptyOutDir: true },
+  test: { environment: 'jsdom', include: ['test/**/*.test.{ts,tsx}'] },
 });

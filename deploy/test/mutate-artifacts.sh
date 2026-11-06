@@ -38,10 +38,10 @@ mut supervisor/run.go 's/r.artBytes+need > s.cfg.MaxArtifactBytes/false/' superv
 mut supervisor/run.go 's/!artifactNameRe.MatchString(name) || //' supervisor 'TestAnnouncementsThat' "name check off in the announcement"
 mut supervisor/api.go 's/w.Header().Set("X-Content-Type-Options", "nosniff")//' supervisor 'TestArtifactIsServedWithSafeHeaders' "nosniff removed"
 mut supervisor/vsock.go 's/if h.Bytes < 0 || h.Bytes > max {/if false {/' supervisor 'TestFetchOverTheWire' "size cap in fetch off"
-mut guest-image/agent/artifact.go 's/syscall.O_NOFOLLOW|//' guest-image/agent 'TestArtifactRefusals' "O_NOFOLLOW off"
-mut guest-image/agent/artifact.go 's/!st.Mode().IsRegular()/false/' guest-image/agent 'TestArtifactRefusals' "regular-file check off"
-mut guest-image/agent/artifact.go 's/ok \&\& a.cred != nil \&\& sys.Uid != a.cred.Uid/ok \&\& false \&\& sys.Uid != 0/' guest-image/agent 'TestArtifactOfAnotherOwner' "owner check off"
-mut guest-image/agent/artifact.go 's/if st.Size() > a.cfg.MaxArtifact {/if false {/' guest-image/agent 'TestArtifactRefusals' "size cap off"
+mut guest/agent/artifact.go 's/syscall.O_NOFOLLOW|//' guest/agent 'TestArtifactRefusals' "O_NOFOLLOW off"
+mut guest/agent/artifact.go 's/!st.Mode().IsRegular()/false/' guest/agent 'TestArtifactRefusals' "regular-file check off"
+mut guest/agent/artifact.go 's/ok \&\& a.cred != nil \&\& sys.Uid != a.cred.Uid/ok \&\& false \&\& sys.Uid != 0/' guest/agent 'TestArtifactOfAnotherOwner' "owner check off"
+mut guest/agent/artifact.go 's/if st.Size() > a.cfg.MaxArtifact {/if false {/' guest/agent 'TestArtifactRefusals' "size cap off"
 
 echo "mutations: $total, problems: $fails"
 exit $((fails > 0))

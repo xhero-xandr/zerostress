@@ -19,7 +19,7 @@ import (
 const consoleKeep = 64 * 1024
 
 // This file is the whole Firecracker client: six REST calls over a Unix socket and the process around them. It is the
-// one piece a library (firecracker-go-sdk) could replace; see docs/TOOLS.md for why it does not.
+// one piece a library (firecracker-go-sdk) could replace; see docs/tools.md for why it does not.
 
 var cleanEnv = []string{"PATH=/usr/bin:/bin"}
 

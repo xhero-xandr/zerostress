@@ -1,0 +1,32 @@
+#tmpl /etc/caddy/Caddyfile, made by deploy/steps/60-web.sh from this template: @DOMAIN@ and @CLOUDFLARE_RANGES@ are
+#tmpl filled in at install time (the ranges are read from Cloudflare itself). Only Cloudflare may say who the visitor is:
+#tmpl the proxy writes X-Real-IP from the address it has checked and drops any such header that came from outside.
+{
+	servers {
+		trusted_proxies static @CLOUDFLARE_RANGES@
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+@DOMAIN@ {
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Real-IP {client_ip}
+		header_up -CF-Connecting-IP
+		header_up -X-Forwarded-For
+		flush_interval -1
+	}
+	header -Server
+	log {
+		output stdout
+		format filter {
+			wrap json
+			# the log keeps no addresses of pages and no cookies
+			fields {
+				request>uri delete
+				request>headers>Cookie delete
+				request>headers>X-Task-Key delete
+			}
+		}
+	}
+}
+

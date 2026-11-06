@@ -8,6 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "node --env-file=.env --disable-warning=ExperimentalWarning server/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=2 hooks/test/*.test.ts agent/test/*.test.ts server/test/*.test.ts",
     "mutate": "node tools/mutate.mjs",

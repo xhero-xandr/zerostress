@@ -3,7 +3,7 @@
 # same unprivileged user the browser runs as, through the real supervisor and the real zsvm limits; then the host is
 # measured to see whether the limits held and nothing was left behind.
 #
-# It lays the test collector (guest-image/test/stub-collector.mjs, probe modes) over a COPY of the installed image, swaps
+# It lays the test collector (deploy/test/stub-collector.mjs, probe modes) over a COPY of the installed image, swaps
 # that copy in for the duration of the test and always puts the installed image back. While it runs, a real visitor of the
 # service would get test answers: run it when nobody is using the site. Run as root on the host, from the working copy to test,
 # with the supervisor service running.
@@ -21,12 +21,12 @@ WORK=$(mktemp -d)
 
 [[ -e $BACKUP ]] && { echo "$BACKUP exists: an earlier run was interrupted. Put it back first (mv -f $BACKUP $IMG) after checking which image is the real one."; exit 1; }
 [[ $(pgrep -c firecracker) == 0 ]] || { echo "a microVM is running; wait until the service is idle"; exit 1; }
-[[ -x $SRC/guest-image/agent/zerostress-agent ]] || { echo "build the agent first (guest-image/build-agent.sh)"; exit 1; }
+[[ -x $SRC/build/guest-agent/zerostress-agent ]] || { echo "build the agent first (guest/agent/build.sh)"; exit 1; }
 
 restore() { [[ -f $BACKUP ]] && mv -f "$BACKUP" "$IMG" && echo "installed image restored"; rm -rf "$WORK"; }
 trap restore EXIT
 cp --sparse=always "$IMG" "$BACKUP"
-bash "$SRC/guest-image/apply-overlay.sh" "$IMG" "$SRC/guest-image/agent/zerostress-agent" "$SRC/guest-image/test/stub-collector.mjs" | tail -1
+bash "$SRC/guest/image/apply-overlay.sh" "$IMG" "$SRC/build/guest-agent/zerostress-agent" "$SRC/deploy/test/stub-collector.mjs" | tail -1
 echo "test collector laid over the installed image (temporarily)"
 
 HOST_IP=$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)
@@ -89,7 +89,7 @@ print(n, f)
 PY
 )
 read -r nwalls nfailed <<<"$walls_line"
-# 19 walls in guest-image/test/stub-collector.mjs (runProbes): if one is added or dropped, change this number on purpose
+# 19 walls in deploy/test/stub-collector.mjs (runProbes): if one is added or dropped, change this number on purpose
 check "the probe ran every wall (a missing result is a failure, not a pass)" "$nwalls" '^19$'
 check "no wall failed" "$nfailed" '^0$'
 check "the run ended well" "$(state "$RUN")" '^done$'

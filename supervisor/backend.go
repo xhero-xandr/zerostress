@@ -162,7 +162,7 @@ func freeGBOf(path string) func() float64 {
 	}
 }
 
-// imageSHAFrom reads the SHA-256 of the installed guest image as recorded by guest-image/build.sh, for /v1/health.
+// imageSHAFrom reads the SHA-256 of the installed guest image as recorded by guest/image/build.sh, for /v1/health.
 func imageSHAFrom(imageDir string) func() string {
 	var cached *string
 	return func() string {

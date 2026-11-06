@@ -1,0 +1,1 @@
+zerostress-sup ALL=(root) NOPASSWD: /opt/zerostress/bin/zsnet up [0-3], /opt/zerostress/bin/zsnet down [0-3]

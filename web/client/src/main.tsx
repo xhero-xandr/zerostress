@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import './index.css';
-import { Home } from './pages/Home.tsx';
-import { NotFound, Task } from './pages/Task.tsx';
+import { Home } from './pages/home.tsx';
+import { NotFound, Task } from './pages/task.tsx';
 import { initTheme } from './theme.ts';
 
 initTheme();

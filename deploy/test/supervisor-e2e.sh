@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end test of the installed supervisor service with real microVMs. Run as root on the host.
-# Needs: deploy/006-supervisor.sh done, guest image installed with the stub collector (guest-image/build.sh default).
+# Needs: deploy/steps/50-supervisor.sh done, guest image installed with the stub collector (COLLECTOR_ENTRY=deploy/test/stub-collector.mjs guest/image/build.sh).
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
 

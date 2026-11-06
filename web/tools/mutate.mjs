@@ -42,7 +42,7 @@ if (args.includes('--list')) {
 }
 
 const work = mkdtempSync(join(tmpdir(), 'zs-mutate-'));
-cpSync(webDir, join(work, 'web'), { recursive: true, filter: (p) => !p.includes('node_modules') && !p.includes('/client/dist') && !p.includes('/client/mockups') });
+cpSync(webDir, join(work, 'web'), { recursive: true, filter: (p) => !p.includes('node_modules') && !p.includes('/client/dist') && !p.includes('/build/') });
 const root = join(work, 'web');
 // the command tests read the supervisor's shared fixture, which lives next to web/ in the repository
 cpSync(join(dirname(webDir), 'supervisor/testdata'), join(work, 'supervisor/testdata'), { recursive: true });
@@ -79,7 +79,7 @@ try {
     process.exit(2);
   }
   if (all.some((m) => (m.tests ?? []).some((f) => f.startsWith('client/')))) {
-    const cbase = vitest(['client/src']);
+    const cbase = vitest(['client/test']);
     if (cbase.status !== 0) {
       console.error('the client tests fail without any mutation:\n' + cbase.stdout.slice(-2000));
       process.exit(2);

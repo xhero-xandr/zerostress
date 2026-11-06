@@ -1,0 +1,1 @@
+zerostress-sup ALL=(root) NOPASSWD: /opt/zerostress/bin/zsvm run [0-3] * * *, /opt/zerostress/bin/zsvm stop *, /opt/zerostress/bin/zsvm recover

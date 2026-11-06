@@ -1,20 +1,20 @@
 // The built client behind the real web layer (web/server/app.ts with stand-ins for the supervisor and the model), driven
 // in a real Chromium through what a person does: start a check, watch it, read every section, ask Explain, decide as
 // the owner, look as a visitor without the key, both themes, a phone. Every step counts CSP violations and requests to
-// other origins; both must stay at zero. Screenshots go to mockups/ for review.
+// other origins; both must stay at zero. Screenshots go to build/e2e/ for review.
 //
 //   npm run build && node e2e-check.mjs        (as a non-root user: Chromium's own sandbox stays on)
 import { serve } from '@hono/node-server';
 import { mkdirSync } from 'node:fs';
 import { crc32, deflateSync } from 'node:zlib';
-import { chromium } from '../../collector/node_modules/playwright/index.mjs';
+import { chromium } from '../../guest/collector/node_modules/playwright/index.mjs';
 import { createApp } from '../server/app.ts';
 import { createLimiter, DEFAULT_LIMITS } from '../server/limits.ts';
 import { createStore } from '../server/store.ts';
 
 const PORT = Number(process.env.PORT ?? 8097);
 const BASE = `http://127.0.0.1:${PORT}`;
-const OUT = new URL('./mockups/', import.meta.url).pathname;
+const OUT = new URL('../../build/e2e/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const EVIL = '"><img src=x onerror=alert(1)><script>alert(1)</script>';
 
@@ -74,6 +74,7 @@ const approvals = [];
 // the run asks the owner about a download while it is live, and ends once they have decided
 let decided = null;
 const app = createApp({
+  clientDir: new URL('../../build/client/', import.meta.url).pathname,
   run: (_input, onProgress) => new Promise((resolve) => {
     onProgress({ kind: 'state', state: 'queued', position: 1 });
     setTimeout(() => onProgress({ kind: 'state', state: 'running', position: null }), 300);
@@ -205,7 +206,7 @@ try {
   const { ctx: vctx, page: v } = await open({ width: 390, height: 844 });
   await v.goto(reportUrl.split('#')[0]);
   await v.getByRole('heading', { level: 1, name: 'Dangerous' }).waitFor();
-  // the decision belongs to the live check (covered in src/pages/Task.test.tsx); a finished report asks nobody
+  // the decision belongs to the live check (covered in test/task.test.tsx); a finished report asks nobody
   check((await v.getByText('The agent needs your decision').count()) === 0, 'a visitor of a finished report is asked nothing');
   check((await v.getByRole('button', { name: 'Allow', exact: true }).count()) === 0, 'a visitor gets no buttons to decide');
   const overflow = await v.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
