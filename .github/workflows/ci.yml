@@ -1,0 +1,102 @@
+# Checks that need no KVM: unit tests, static analysis, vulnerability scan, the Go mutation check, and the collector
+# against a real Chromium. End-to-end tests on real microVMs (deploy/test/) stay manual on the host.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.3"
+  NODE_VERSION: "24.22.2"
+
+jobs:
+  go:
+    name: go (${{ matrix.module }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [supervisor, guest-image/agent]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "not gofmt-ed:"; echo "$out"; exit 1; fi
+      - run: go vet ./...
+      - run: go test -count=1 -race -cover ./...
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
+          "$(go env GOPATH)/bin/staticcheck" -checks all ./...
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          "$(go env GOPATH)/bin/govulncheck" ./...
+      # Excluded after a review of every hit on 2026-11-06: G204 is exec with an argument array and no shell, G304 paths
+      # built only from regexp-checked names, G302 the supervisor socket's 0660 for the web layer's group, G104 Close
+      # errors ignored only on error paths. Everything else stays on.
+      - name: gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.30.0
+          "$(go env GOPATH)/bin/gosec" -quiet -tests=false -exclude=G104,G204,G302,G304 ./...
+
+  go-mutations:
+    name: go mutations (artifact hand-over)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - run: SRC="$GITHUB_WORKSPACE" bash deploy/test/mutate-artifacts.sh
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+
+  collector:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --ignore-scripts
+        working-directory: collector
+      - run: npx playwright install --with-deps --only-shell chromium
+        working-directory: collector
+      # Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor, and Chromium's own sandbox needs them. The
+      # collector keeps chromiumSandbox: true, so the runner is opened up instead of the browser.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: npm test
+        working-directory: collector
+      - name: demo pages behave as intended
+        run: node demo-site/check.mjs
