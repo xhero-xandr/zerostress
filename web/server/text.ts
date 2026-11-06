@@ -9,6 +9,7 @@ export interface Demo { label: string; url: string }
 export const T = {
   queued: (n: number | null) => (n && n > 1 ? `Waiting in line (${n - 1} ahead of you)` : 'Waiting for a free sandbox'),
   stageNow: { queued: 'Waiting for a free sandbox', starting: 'Starting a disposable sandbox', opening: 'Opening the page and recording what it does', analysing: 'Weighing the evidence', done: 'Done', failed: 'Stopped' } as Readonly<Record<Stage, string>>,
+  waitingForOwner: 'Waiting for your decision',
   approved: 'Allowed. The agent is carrying it out in the sandbox.',
   denied: 'Not allowed. The sandbox will close without taking the action.',
   expired: 'This decision is no longer possible: the action changed or the time ran out.',

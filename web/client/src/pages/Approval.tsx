@@ -15,7 +15,10 @@ export function Approval({ id }: { id: string }) {
   const [sent, setSent] = useState(false);
   const p = pending.data?.pending[0];
 
-  if (!key || !p) return <p className="text-[15px] text-muted">{T.approvalOnlyOwner}</p>;
+  if (!key) return <p className="text-[15px] text-muted">{T.approvalOnlyOwner}</p>;
+  // decided: the answer stays, even when nothing is waiting any more
+  if (sent && result) return <p role="status" className="rounded-2xl border border-line bg-surface p-5 text-muted">{result}</p>;
+  if (!p) return null;
   const choose = async (allow: boolean) => {
     setSent(true);
     try {

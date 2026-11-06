@@ -19,7 +19,8 @@ export interface AppDeps {
   run(input: TaskInput, onProgress: (p: Progress) => void): Promise<TaskResult>;
   fetchShot(runId: string, name: string): Promise<Buffer>;
   approve(runId: string, commandId: string, sha256: string): Promise<void>;
-  cancel(runId: string): Promise<void>;
+  /** a person's "no" to one risky command: only that command is dropped, the run closes normally */
+  reject(runId: string, commandId: string): Promise<void>;
   /** the talk about a finished report (Explain and questions); without it the endpoint is absent */
   chat?: { reply(report: PublicReport, input: ChatInput): Promise<ChatReply> };
   store: Store;
@@ -173,17 +174,30 @@ export function createApp(deps: AppDeps): Hono {
       };
       const onProgress = (p: Progress) => {
         if (!taken) { taken = true; resolve(); }
+        if (p.kind === 'approval') {
+          task.runId = p.run_id;
+          task.pending.push({ command_id: p.command_id, cmd: p.cmd, sha256: p.sha256 });
+          deps.store.emit(task, 'approval', { waiting: true });
+          return;
+        }
+        if (p.kind === 'decided') {
+          task.pending = task.pending.filter((x) => x.command_id !== p.command_id);
+          deps.store.emit(task, 'approval', { waiting: task.pending.length > 0 });
+          return;
+        }
         if (p.kind !== 'state') return;
         const s = stageOf(p.state);
         if (s && s !== task.stage || (s === 'queued' && p.position !== task.position)) setStage(s!, p.position);
       };
       deps.run({ url: task.url, ...(deep ? { session: deps.session } : {}) }, onProgress).then((result) => {
+        task.pending = [];
         task.result = result;
         task.runId = result.run_id;
         task.stage = result.state === 'done' ? 'done' : 'failed';
         deps.store.save(task);
         deps.store.emit(task, 'final', {});
       }).catch((e) => {
+        task.pending = [];
         if (!taken) { taken = true; reject(e); return; }
         task.stage = 'failed';
         deps.store.emit(task, 'final', {});
@@ -200,11 +214,12 @@ export function createApp(deps: AppDeps): Hono {
     return json(c, 200, {
       id: task.id,
       stage: task.stage,
-      label: task.stage === 'queued' ? T.queued(task.position) : T.stageNow[task.stage],
+      label: task.pending.length > 0 ? T.waitingForOwner : task.stage === 'queued' ? T.queued(task.position) : T.stageNow[task.stage],
       at: STAGE_AT[task.stage],
       position: task.position,
       host: hostOf(task.url),
       has_report: r !== null,
+      awaiting: task.pending.length > 0,
       checked_at: task.createdAt,
       shots: { desktop: !!r && shotName(r, 'desktop') !== null, tablet: !!r && shotName(r, 'tablet') !== null, mobile: !!r && shotName(r, 'mobile') !== null },
     });
@@ -325,7 +340,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/api/tasks/:id/pending', (c) => {
     const t = owned(c);
     if (t instanceof Response) return t;
-    const pending = (t.result?.pending_approval ?? []).map((p) => ({ command_id: p.command_id, command_sha256: p.sha256, label: T.actions[p.cmd] ?? T.actionOther }));
+    const pending = t.pending.map((p) => ({ command_id: p.command_id, command_sha256: p.sha256, label: T.actions[p.cmd] ?? T.actionOther }));
     return json(c, 200, { pending });
   });
 
@@ -337,11 +352,12 @@ export function createApp(deps: AppDeps): Hono {
     if (text.length > MAX_BODY) return fail(c, 413, 'bad_request');
     let b: any;
     try { b = JSON.parse(text); } catch { return fail(c, 400, 'bad_request'); }
-    const listed = t.result?.pending_approval.find((p) => p.command_id === b?.command_id && p.sha256 === b?.command_sha256);
+    // only what is waiting now, in a live run: a decision on a finished run has nothing left to act on
+    const listed = t.pending.find((p) => p.command_id === b?.command_id && p.sha256 === b?.command_sha256);
     if (!listed || !t.runId || typeof b.allow !== 'boolean') return fail(c, 400, 'bad_request');
     try {
       if (b.allow) await deps.approve(t.runId, listed.command_id, listed.sha256);
-      else await deps.cancel(t.runId);
+      else await deps.reject(t.runId, listed.command_id);
     } catch (e) {
       if (e instanceof SupervisorError && (e.status === 409 || e.status === 410)) return json(c, 400, { code: 'expired', message: T.expired });
       return fail(c, 503, 'supervisor_unavailable');

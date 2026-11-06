@@ -5,6 +5,7 @@ import { ApiError, getStatus, type TaskStatus } from '../api.ts';
 import { isTaskId } from '../logic.ts';
 import { T } from '../text.ts';
 import { btnPrimary, Card, Page } from '../ui.tsx';
+import { Approval } from './Approval.tsx';
 import { Report, TABS, type Tab } from './Report.tsx';
 
 export function Message({ title, text }: { title: string; text: string }) {
@@ -29,6 +30,9 @@ function Progress({ status }: { status: TaskStatus }) {
   const qc = useQueryClient();
   const [live, setLive] = useState({ label: status.label, at: status.at });
   const [polling, setPolling] = useState(false);
+  // once asked, the card stays until the report comes, so the owner sees the answer to what they chose
+  const [asked, setAsked] = useState(status.awaiting);
+  if (status.awaiting && !asked) setAsked(true);
   useEffect(() => {
     if (!polling) return;
     const t = setInterval(() => void qc.invalidateQueries({ queryKey: ['status', status.id] }), POLL_MS);
@@ -44,13 +48,15 @@ function Progress({ status }: { status: TaskStatus }) {
         setLive((cur) => ({ label: typeof d.label === 'string' ? d.label : cur.label, at: typeof d.at === 'number' ? d.at : cur.at }));
       } catch { /* not ours */ }
     });
+    // the agent waits for the owner, or stopped waiting: the status says which
+    es.addEventListener('approval', () => void qc.invalidateQueries({ queryKey: ['status', status.id] }));
     es.addEventListener('final', () => {
       es.close();
       void qc.invalidateQueries({ queryKey: ['status', status.id] });
     });
     return () => es.close();
   }, [status.id, qc]);
-  const shown = polling ? { label: status.label, at: status.at } : live;
+  const shown = polling || status.awaiting ? { label: status.label, at: status.at } : live;
 
   return (
     <Page>
@@ -72,6 +78,7 @@ function Progress({ status }: { status: TaskStatus }) {
         </ol>
         <p aria-live="polite" className="text-[15px] text-muted">{shown.label}</p>
       </Card>
+      {asked && <div className="mx-auto w-full max-w-2xl"><Approval id={status.id} /></div>}
     </Page>
   );
 }

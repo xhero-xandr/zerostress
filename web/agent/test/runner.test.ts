@@ -230,18 +230,72 @@ test('a session: look, follow a link the model chose, look again, close', async 
   assert.ok(second.includes('other.test'), 'the second look sees the page that was opened');
 });
 
-test('a download is proposed to the supervisor and left for a person; the session is not closed over their head', async () => {
-  const { sup, deps } = await setup({}, () => chat(answer({ next: { action: 'download', ref: refOfPlain() } })));
+/** The command a person is asked about: the supervisor holds it until the web layer passes the decision on. */
+const held = (cmd: any) => ({ body: { command_id: cmd.id, status: 'awaiting_approval', command_sha256: 'b'.repeat(64) } });
+const download = () => chat(answer({ next: { action: 'download', ref: refOfPlain() } }));
+
+test('a download waits for a person: the watcher learns of it while the session is open, with the run to decide in', async () => {
+  const { sup, deps } = await setup({}, download);
+  const seen: unknown[] = [];
+  deps.onProgress = (p) => { if (p.kind === 'approval' || p.kind === 'decided') seen.push(p); };
   sup.onCommand = (cmd, s) => {
-    setTimeout(() => finish(s), 250); // the run goes on for a while after the command, so a close would be possible
-    return { body: { command_id: cmd.id, status: 'awaiting_approval', command_sha256: 'b'.repeat(64) } };
+    if (cmd.cmd === 'download') {
+      // the person allows it at the web layer; the supervisor runs it and the collector saves the file
+      setTimeout(() => {
+        s.emit('command', { command_id: cmd.id, status: 'approved' });
+        s.emit('command', { command_id: cmd.id, status: 'sent' });
+        s.evidence(ev('download', { url: 'http://page.test/invoice.pdf.exe', filename: 'invoice.pdf.exe', mime: 'application/octet-stream', saved: true, status: 200 }));
+        s.evidence(ev('cmd_result', { id: cmd.id, ok: true }));
+        s.emit('command', { command_id: cmd.id, status: 'done' });
+      }, 200);
+      return held(cmd);
+    }
+    if (cmd.cmd === 'close') finish(s);
   };
   begin(sup, plain(), true);
   const r = await run(runTask({ url: 'http://page.test/', session: {} }, deps));
-  assert.deepEqual(sup.commands.map((c) => c.cmd), ['download'], 'no close');
-  assert.deepEqual(r.pending_approval, [{ command_id: 'a1', cmd: 'download', sha256: 'b'.repeat(64) }]);
+  assert.deepEqual(seen, [
+    { kind: 'approval', run_id: RUN_ID, command_id: 'a1', cmd: 'download', sha256: 'b'.repeat(64) },
+    { kind: 'decided', command_id: 'a1', status: 'done' },
+  ]);
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['download', 'close'], 'closed only after the decided command finished');
+  assert.deepEqual(r.pending_approval, [], 'nothing is left waiting in a finished run');
   assert.equal(r.steps[0]!.risk, 'risky');
-  assert.equal(r.steps[0]!.status, 'awaiting_approval');
+  assert.equal(r.steps[0]!.status, 'done');
+  assert.ok(r.assessment.rules.signals.some((x) => x.id === 'executable_download'), 'the file fetched after approval is part of the verdict');
+  assert.equal(r.assessment.verdict, 'malicious');
+});
+
+test('a person says no: the command is dropped and the session closed', async () => {
+  const { sup, deps } = await setup({}, download);
+  sup.onCommand = (cmd, s) => {
+    if (cmd.cmd === 'download') { setTimeout(() => s.emit('command', { command_id: cmd.id, status: 'rejected' }), 100); return held(cmd); }
+    if (cmd.cmd === 'close') finish(s);
+  };
+  begin(sup, plain(), true);
+  const r = await run(runTask({ url: 'http://page.test/', session: {} }, deps));
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['download', 'close']);
+  assert.equal(r.steps[0]!.status, 'rejected');
+  assert.deepEqual(r.pending_approval, []);
+});
+
+test('nobody decides: the agent stops waiting in time and closes the session itself', async () => {
+  const { sup, deps } = await setup({}, download);
+  deps.limits = { ...deps.limits, approvalWaitMs: 300 };
+  const seen: unknown[] = [];
+  deps.onProgress = (p) => { if (p.kind === 'decided') seen.push(p); };
+  sup.onCommand = (cmd, s) => {
+    if (cmd.cmd === 'download') return held(cmd);
+    if (cmd.cmd === 'close') finish(s);
+  };
+  begin(sup, plain(), true);
+  const t0 = Date.now();
+  const r = await run(runTask({ url: 'http://page.test/', session: {} }, deps));
+  assert.ok(Date.now() - t0 < 5000, 'well before the total limit');
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['download', 'close']);
+  assert.deepEqual(seen, [{ kind: 'decided', command_id: 'a1', status: 'expired' }]);
+  assert.ok(r.notes.some((n) => n.includes('nobody decided')));
+  assert.equal(r.state, 'done');
 });
 
 test('the agent never approves: nothing but commands is sent to a run', async () => {

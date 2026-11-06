@@ -11,7 +11,7 @@ export type Stage = 'queued' | 'starting' | 'opening' | 'analysing' | 'done' | '
 
 export interface TaskEvent {
   seq: number;
-  type: 'stage' | 'final';
+  type: 'stage' | 'approval' | 'final';
   data: string;
 }
 
@@ -27,6 +27,8 @@ export interface Task {
   runId: string | null;
   deep: boolean;
   result: TaskResult | null;
+  /** risky commands waiting for the owner while the run is live; empty once the run has ended */
+  pending: Array<{ command_id: string; cmd: string; sha256: string }>;
   events: TaskEvent[];
   listeners: Set<(e: TaskEvent) => void>;
   cancel: (() => void) | null;
@@ -51,7 +53,7 @@ export function createStore(dir: string | null, ttlMs = 24 * 3_600_000, now: () 
   if (dir) mkdirSync(dir, { recursive: true, mode: 0o700 });
 
   const fresh = (id: string, keyHash: string, url: string, deep: boolean): Task => ({
-    id, keyHash, createdAt: now(), url, stage: 'queued', position: null, runId: null, deep, result: null, events: [], listeners: new Set(), cancel: null,
+    id, keyHash, createdAt: now(), url, stage: 'queued', position: null, runId: null, deep, result: null, pending: [], events: [], listeners: new Set(), cancel: null,
   });
 
   // finished tasks survive a restart

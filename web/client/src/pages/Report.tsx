@@ -7,7 +7,6 @@ import { getReport, reportJsonUrl, type TaskStatus } from '../api.ts';
 import { fmtTime } from '../logic.ts';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary, Notice, Page } from '../ui.tsx';
-import { Approval } from './Approval.tsx';
 import { Explain } from './Explain.tsx';
 import { Behavior, Links, Network, Security, Summary } from './tabs.tsx';
 import { Message } from './Task.tsx';
@@ -74,7 +73,6 @@ export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
         </div>
       </section>
 
-      {r.pending_approval > 0 && <Approval id={status.id} />}
       {r.injection_attempt && tab !== 'security' && <Notice>{T.injection}</Notice>}
 
       <nav aria-label={T.tabsLabel} className="flex gap-1 overflow-x-auto border-b border-line">

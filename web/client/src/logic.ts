@@ -67,8 +67,9 @@ export function serversLine(r: PublicReport): string {
 export function agentLines(r: PublicReport): string[] {
   const lines: string[] = [T.agent.address, T.agent.sandbox, T.agent.opened(redirects(r))];
   lines.push(r.mode === 'rules_only' ? T.agent.rules : T.agent.model);
-  for (const s of r.steps) lines.push(T.agent.action(s.action, s.status));
-  if (r.pending_approval > 0) lines.push(T.agent.waiting);
+  for (const s of r.steps) lines.push(T.agent.decided[`${s.action}:${s.status}`] ?? T.agent.action(s.action, s.status));
+  // a finished check has nothing left to decide: an action still listed here waited in vain
+  if (r.pending_approval > 0) lines.push(T.agent.notDecided);
   lines.push(r.status.state === 'done' ? T.agent.destroyed : T.agent.stopped);
   return lines;
 }

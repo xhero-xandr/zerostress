@@ -68,7 +68,11 @@ export interface TaskResult {
 export type Progress =
   | { kind: 'state'; state: string; position: number | null }
   | { kind: 'artifact'; name: string; mime: string }
-  | { kind: 'step'; action: string; status: string };
+  | { kind: 'step'; action: string; status: string }
+  /** a risky command waits for a person: the web layer shows it to the task's owner and passes their decision on */
+  | { kind: 'approval'; run_id: string; command_id: string; cmd: string; sha256: string }
+  /** the person decided, or the time for it ran out: the command is no longer waiting */
+  | { kind: 'decided'; command_id: string; status: string };
 
 export interface RunnerDeps {
   /** called as the task moves; a failure in it never affects the task */
@@ -83,12 +87,14 @@ export interface RunnerDeps {
   geo?: GeoLookup | null;
   /** when a domain was registered (rdap.ts); without it the age is simply not known */
   rdap?: (domain: string) => Promise<DomainInfo | null>;
-  limits?: { totalMs?: number; commandWaitMs?: number; maxReconnects?: number; reconnectDelayMs?: number };
+  limits?: { totalMs?: number; commandWaitMs?: number; approvalWaitMs?: number; maxReconnects?: number; reconnectDelayMs?: number };
 }
 
 export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskResult> {
   const totalMs = deps.limits?.totalMs ?? 240_000;
   const commandWaitMs = deps.limits?.commandWaitMs ?? 45_000;
+  // how long a person has to decide, and the decided command to finish; the supervisor's own approval time is longer
+  const approvalWaitMs = deps.limits?.approvalWaitMs ?? 150_000;
   const maxReconnects = deps.limits?.maxReconnects ?? 5;
   const reconnectDelayMs = deps.limits?.reconnectDelayMs ?? 300;
 
@@ -170,7 +176,6 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
 
   // ---- the agent's part of a session: look, decide, act, look again ----
   async function drive(): Promise<void> {
-    let closeNeeded = true;
     for (let i = 0; i < deps.cfg.maxSteps && !finished; i++) {
       const a = await assessNow();
       if (a.mode === 'rules_only' || !a.next) break;
@@ -188,9 +193,16 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
         // the result may have arrived before the receipt did: a finished command is not made unfinished again
         if (!COMMAND_END.has(step.status)) step.status = receipt.status;
         if (d.needsApproval) {
-          // a person decides; the session is left open for them (the supervisor closes it when it has been idle)
-          pending.push({ command_id: receipt.command_id, cmd: step.action, sha256: receipt.command_sha256 });
-          closeNeeded = false;
+          // A person decides, at the web layer and the supervisor; the agent only waits for the outcome. The session
+          // stays open meanwhile (the supervisor's idle clock stops while a command waits for approval). Whatever the
+          // outcome, the agent then closes the session, so the report says what happened in it.
+          const p = { command_id: receipt.command_id, cmd: step.action, sha256: receipt.command_sha256 };
+          pending.push(p);
+          progress({ kind: 'approval', run_id: runId, ...p });
+          if (!COMMAND_END.has(step.status)) await Promise.race([done, new Promise<void>((r) => setTimeout(r, approvalWaitMs).unref())]);
+          if (!COMMAND_END.has(step.status)) notes.push(`nobody decided on command ${id} in time`);
+          pending.splice(pending.indexOf(p), 1);
+          progress({ kind: 'decided', command_id: p.command_id, status: COMMAND_END.has(step.status) ? step.status : 'expired' });
           break;
         }
       } catch (e) {
@@ -204,7 +216,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
         break;
       }
     }
-    if (closeNeeded && !finished) {
+    if (!finished) {
       try {
         await deps.sup.command(runId, '{"cmd":"close","id":"close-1"}');
       } catch {

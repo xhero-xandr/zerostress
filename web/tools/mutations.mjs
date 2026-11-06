@@ -213,7 +213,8 @@ export const MUTATIONS = [
   ["reasoning is on by default", "agent/config.ts", "thinkingOff: env.AGENT_MODEL_THINKING !== 'default',", "thinkingOff: env.AGENT_MODEL_THINKING === 'off',", MODEL],
   // the task runner and the supervisor client (agent/runner.ts, agent/supervisor.ts, spec 008, 5)
   ["the session is never closed", "agent/runner.ts", "await deps.sup.command(runId, '{\"cmd\":\"close\",\"id\":\"close-1\"}');", "", RUN],
-  ["a command left for a person closes the session", "agent/runner.ts", "closeNeeded = false;", "", RUN],
+  ["the agent does not wait for the person's decision", "agent/runner.ts", "if (!COMMAND_END.has(step.status)) await Promise.race", "if (false) await Promise.race", RUN],
+  ["a finished run keeps a command listed as waiting", "agent/runner.ts", "pending.splice(pending.indexOf(p), 1);", "", RUN],
   ["refusals are not recorded", "agent/runner.ts", "refused.push({ proposal: a.next, reason: d.reason });", "", RUN],
   ["a receipt undoes a result", "agent/runner.ts", "if (!COMMAND_END.has(step.status)) step.status = receipt.status;", "step.status = receipt.status;", RUN],
   ["a command is not waited for", "agent/runner.ts", "await Promise.race([done, new Promise<void>((r) => setTimeout(r, commandWaitMs).unref())]);", "", RUN],

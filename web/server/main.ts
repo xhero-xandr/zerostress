@@ -64,7 +64,7 @@ const app = createApp({
   run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, limits: { totalMs: 240_000 } }),
   fetchShot: (runId, name) => sup.artifact(runId, name, 4 * 1024 * 1024),
   approve: (runId, commandId, sha) => sup.approve(runId, commandId, sha),
-  cancel: (runId) => sup.cancel(runId),
+  reject: (runId, commandId) => sup.reject(runId, commandId),
   chat: { reply: (report, input) => chatReply(report, input, { cfg, client: model, budget, prompt: chatPrompt }) },
   store,
   limiter,

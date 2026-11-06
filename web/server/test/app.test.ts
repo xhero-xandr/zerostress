@@ -56,25 +56,26 @@ const CLIENT = (() => {
   return dir;
 })();
 
-interface Rig { app: ReturnType<typeof createApp>; calls: { approve: unknown[][]; cancel: string[]; inputs: TaskInput[]; shots: string[] }; finish(r?: TaskResult): void; fail(): void }
+interface Rig { app: ReturnType<typeof createApp>; calls: { approve: unknown[][]; reject: unknown[][]; inputs: TaskInput[]; shots: string[] }; finish(r?: TaskResult): void; fail(): void; progress(p: Progress): void }
 
 function rig(opts: { chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error; shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
-  const calls = { approve: [] as unknown[][], cancel: [] as string[], inputs: [] as TaskInput[], shots: [] as string[] };
+  const calls = { approve: [] as unknown[][], reject: [] as unknown[][], inputs: [] as TaskInput[], shots: [] as string[] };
   const dones: Array<(r: TaskResult) => void> = [];
+  const watchers: Array<(p: Progress) => void> = [];
   const bads: Array<(e: Error) => void> = [];
   const deps: AppDeps = {
     run(input, onProgress: (p: Progress) => void) {
       calls.inputs.push(input);
       if (opts.submitError) return Promise.reject(opts.submitError);
       return new Promise<TaskResult>((resolve, reject) => {
-        dones.push(resolve); bads.push(reject);
+        dones.push(resolve); bads.push(reject); watchers.push(onProgress);
         onProgress({ kind: 'state', state: 'queued', position: 1 });
         onProgress({ kind: 'state', state: 'running', position: null });
       });
     },
     fetchShot: async (_run, name) => { calls.shots.push(name); return opts.shot ?? PNG; },
     approve: async (...a) => { calls.approve.push(a); },
-    cancel: async (id) => { calls.cancel.push(id); },
+    reject: async (...a) => { calls.reject.push(a); },
     chat: opts.chat,
     store: createStore(null, undefined, opts.now),
     limiter: createLimiter({ ...DEFAULT_LIMITS, ...opts.limits }, opts.now),
@@ -83,7 +84,7 @@ function rig(opts: { chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; subm
     clientIp: (c) => c.req.header('x-test-ip') ?? '9.9.9.9',
     clientDir: CLIENT,
   };
-  return { app: createApp(deps), calls, finish: (r) => { for (const d of dones) d(r ?? opts.result ?? hostile()); }, fail: () => { for (const b of bads) b(new Error('x')); } };
+  return { app: createApp(deps), calls, finish: (r) => { for (const d of dones) d(r ?? opts.result ?? hostile()); }, fail: () => { for (const b of bads) b(new Error('x')); }, progress: (p) => { for (const w of watchers) w(p); } };
 }
 
 const post = (app: Rig['app'], body: unknown, headers: Record<string, string> = {}) =>
@@ -251,7 +252,7 @@ test('while it runs the state says which step it is at; afterwards that there is
   assert.deepEqual({ stage: end.stage, has_report: end.has_report }, { stage: 'done', has_report: true });
   assert.deepEqual(end.shots, { desktop: true, tablet: false, mobile: false });
   assert.equal(typeof end.checked_at, 'number');
-  assert.deepEqual(Object.keys(end).sort(), ['at', 'checked_at', 'has_report', 'host', 'id', 'label', 'position', 'shots', 'stage'], 'the state says nothing more');
+  assert.deepEqual(Object.keys(end).sort(), ['at', 'awaiting', 'checked_at', 'has_report', 'host', 'id', 'label', 'position', 'shots', 'stage'], 'the state says nothing more');
 });
 
 test('the pages carry no report text: the same static index for every section, whatever the page said', async () => {
@@ -362,12 +363,23 @@ test('one person may hold only so many streams', async () => {
 
 // ---- the owner's decisions ---------------------------------------------------------------------------------------
 
-const pendingResult = () => hostile({ pending_approval: [{ command_id: 'cmd-1', cmd: 'submit_form', sha256: 'b'.repeat(64) }] });
+const RUN = '11111111-2222-4333-8444-555555555555';
 const keyed = (key: string) => ({ ...JSONH, 'x-task-key': key });
+const WAITING: Progress = { kind: 'approval', run_id: RUN, command_id: 'cmd-1', cmd: 'download', sha256: 'b'.repeat(64) };
+
+/** A deep check whose agent is waiting for the owner: the run is live, there is no report yet. */
+async function waiting(r: Rig): Promise<{ id: string; key: string }> {
+  const j = (await (await post(r.app, { url: 'https://example.com/', deep: true })).json()) as { id: string; key: string };
+  await tick();
+  r.progress(WAITING);
+  return j;
+}
+const decide = (r: Rig, id: string, key: string, body: unknown) =>
+  r.app.request(`/api/tasks/${id}/approvals`, { method: 'POST', headers: keyed(key), body: JSON.stringify(body) });
 
 test('without the key nobody can read or decide', async () => {
   const r = rig();
-  const { id, key } = await finished(r, pendingResult());
+  const { id, key } = await waiting(r);
   for (const h of [{}, { 'x-task-key': 'wrong' }, { 'x-task-key': 'x'.repeat(43) }, { 'x-task-key': key.slice(0, -1) + (key.endsWith('A') ? 'B' : 'A') }]) {
     assert.equal((await r.app.request(`/api/tasks/${id}/pending`, { headers: h })).status, 403);
     assert.equal((await r.app.request(`/api/tasks/${id}/approvals`, { method: 'POST', headers: { ...JSONH, ...h }, body: JSON.stringify({ command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: true }) })).status, 403);
@@ -375,39 +387,65 @@ test('without the key nobody can read or decide', async () => {
   assert.equal(r.calls.approve.length, 0);
   const ok = await r.app.request(`/api/tasks/${id}/pending`, { headers: { 'x-task-key': key } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { pending: [{ command_id: 'cmd-1', command_sha256: 'b'.repeat(64), label: 'Submit a form on the page' }] });
+  assert.deepEqual(await ok.json(), { pending: [{ command_id: 'cmd-1', command_sha256: 'b'.repeat(64), label: 'Download a file from the page' }] });
 });
 
 test('a key of another task does not open this one, and guessing is slowed down', async () => {
   const r = rig({ limits: { active: 9 } });
-  const a = await finished(r, pendingResult());
-  const b = await finished(r, pendingResult());
+  const a = await waiting(r);
+  const b = await waiting(r);
   assert.equal((await r.app.request(`/api/tasks/${a.id}/pending`, { headers: { 'x-task-key': b.key } })).status, 403);
   let last = 0;
   for (let i = 0; i < 12; i++) last = (await r.app.request(`/api/tasks/${a.id}/pending`, { headers: { 'x-task-key': 'g'.repeat(43) } })).status;
   assert.equal(last, 429);
 });
 
-test('the owner allows the very command that was shown, and only that one', async () => {
+test('while the agent waits, the state and the stream say so, before any report exists', async () => {
   const r = rig();
-  const { id, key } = await finished(r, pendingResult());
-  const send = (body: unknown) => r.app.request(`/api/tasks/${id}/approvals`, { method: 'POST', headers: keyed(key), body: JSON.stringify(body) });
-  assert.equal((await send({ command_id: 'cmd-1', command_sha256: 'c'.repeat(64), allow: true })).status, 400, 'another hash');
-  assert.equal((await send({ command_id: 'cmd-2', command_sha256: 'b'.repeat(64), allow: true })).status, 400, 'another command');
-  assert.equal((await send({ command_id: 'cmd-1', command_sha256: 'b'.repeat(64) })).status, 400, 'no decision');
-  assert.equal(r.calls.approve.length + r.calls.cancel.length, 0);
-  const yes = await send({ command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: true });
-  assert.equal(yes.status, 202);
-  assert.deepEqual(r.calls.approve[0], ['11111111-2222-4333-8444-555555555555', 'cmd-1', 'b'.repeat(64)]);
+  const { id } = await waiting(r);
+  const st = (await (await r.app.request(`/api/tasks/${id}`)).json()) as Record<string, unknown>;
+  assert.equal(st.has_report, false);
+  assert.equal(st.awaiting, true);
+  assert.equal(st.label, 'Waiting for your decision');
+  r.progress({ kind: 'decided', command_id: 'cmd-1', status: 'done' });
+  const after = (await (await r.app.request(`/api/tasks/${id}`)).json()) as Record<string, unknown>;
+  assert.equal(after.awaiting, false);
+  r.finish();
+  await tick();
+  const text = await (await r.app.request(`/api/tasks/${id}/events`)).text();
+  assert.match(text, /event: approval\ndata: \{"waiting":true\}/);
+  assert.match(text, /event: approval\ndata: \{"waiting":false\}/);
 });
 
-test('refusing closes the session and approves nothing; a late decision is told so', async () => {
+test('the owner allows the very command that was shown, and only that one, in the run that asked', async () => {
   const r = rig();
-  const { id, key } = await finished(r, pendingResult());
-  const no = await r.app.request(`/api/tasks/${id}/approvals`, { method: 'POST', headers: keyed(key), body: JSON.stringify({ command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: false }) });
+  const { id, key } = await waiting(r);
+  assert.equal((await decide(r, id, key, { command_id: 'cmd-1', command_sha256: 'c'.repeat(64), allow: true })).status, 400, 'another hash');
+  assert.equal((await decide(r, id, key, { command_id: 'cmd-2', command_sha256: 'b'.repeat(64), allow: true })).status, 400, 'another command');
+  assert.equal((await decide(r, id, key, { command_id: 'cmd-1', command_sha256: 'b'.repeat(64) })).status, 400, 'no decision');
+  assert.equal(r.calls.approve.length + r.calls.reject.length, 0);
+  const yes = await decide(r, id, key, { command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: true });
+  assert.equal(yes.status, 202);
+  assert.deepEqual(r.calls.approve, [[RUN, 'cmd-1', 'b'.repeat(64)]]);
+});
+
+test('refusing drops only that command and approves nothing', async () => {
+  const r = rig();
+  const { id, key } = await waiting(r);
+  const no = await decide(r, id, key, { command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: false });
   assert.equal(no.status, 202);
   assert.equal(r.calls.approve.length, 0);
-  assert.deepEqual(r.calls.cancel, ['11111111-2222-4333-8444-555555555555']);
+  assert.deepEqual(r.calls.reject, [[RUN, 'cmd-1']]);
+});
+
+test('once the run has ended nothing is waiting, whatever the result lists', async () => {
+  const r = rig();
+  const { id, key } = await waiting(r);
+  r.finish(hostile({ pending_approval: [{ command_id: 'cmd-1', cmd: 'download', sha256: 'b'.repeat(64) }] }));
+  await tick();
+  assert.deepEqual(await (await r.app.request(`/api/tasks/${id}/pending`, { headers: { 'x-task-key': key } })).json(), { pending: [] });
+  assert.equal((await decide(r, id, key, { command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: true })).status, 400);
+  assert.equal(r.calls.approve.length, 0);
 });
 
 // How the report reads (walls, the Cloudflare warning, forms, dead links, servers, the domain, devices) is the client's

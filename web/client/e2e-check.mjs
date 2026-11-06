@@ -61,8 +61,9 @@ const result = {
     hidden_text: false, popups: 0, dialogs: 0, downloads: [],
   },
   hooks: { triggered: false, findings: [], ruleset: 'x' },
-  steps: [], refused: [],
-  pending_approval: [{ command_id: 'cmd-1', cmd: 'submit_form', sha256: 'b'.repeat(64) }],
+  // what the run leaves once the owner has allowed the download it was asked about
+  steps: [{ id: 'cmd-1', action: 'download', line: '{}', risk: 'risky', status: 'done' }], refused: [],
+  pending_approval: [],
   artifacts: [{ name: 'aaaaaaaaaaaaaaaa.png', bytes: 1, sha256: 'a'.repeat(64), mime: 'image/png' }, { name: 'bbbbbbbbbbbbbbbb.png', bytes: 1, sha256: 'a'.repeat(64), mime: 'image/png' }, { name: 'cccccccccccccccc.png', bytes: 1, sha256: 'a'.repeat(64), mime: 'image/png' }],
   shots: { desktop: 'aaaaaaaaaaaaaaaa.png', mobile: 'bbbbbbbbbbbbbbbb.png', tablet: 'cccccccccccccccc.png' },
   timeline: [], notes: [],
@@ -70,15 +71,18 @@ const result = {
 
 const SHOTS = { 'aaaaaaaaaaaaaaaa.png': png(1280, 800), 'bbbbbbbbbbbbbbbb.png': png(412, 839), 'cccccccccccccccc.png': png(820, 1180) };
 const approvals = [];
+// the run asks the owner about a download while it is live, and ends once they have decided
+let decided = null;
 const app = createApp({
   run: (_input, onProgress) => new Promise((resolve) => {
     onProgress({ kind: 'state', state: 'queued', position: 1 });
     setTimeout(() => onProgress({ kind: 'state', state: 'running', position: null }), 300);
-    setTimeout(() => resolve(result), 1500);
+    setTimeout(() => onProgress({ kind: 'approval', run_id: result.run_id, command_id: 'cmd-1', cmd: 'download', sha256: 'b'.repeat(64) }), 1000);
+    decided = (status) => { onProgress({ kind: 'decided', command_id: 'cmd-1', status }); setTimeout(() => resolve(result), 300); };
   }),
   fetchShot: async (_run, name) => SHOTS[name],
-  approve: async (...a) => { approvals.push(a); },
-  cancel: async () => {},
+  approve: async (...a) => { approvals.push(a); decided('done'); },
+  reject: async () => { decided('rejected'); },
   chat: { reply: async (_r, input) => ({ text: input.kind === 'explain' ? `Explained: the form sends your password to another site. ${EVIL}` : `Answered: ${input.message}`, source: 'model', reason: null }) },
   store: createStore(null),
   limiter: createLimiter({ ...DEFAULT_LIMITS, perHour: 100, active: 5 }),
@@ -127,18 +131,27 @@ try {
   const id = /\/r\/([0-9a-f]{32})/.exec(reportUrl)[1];
   await page.getByText('Checking the link').waitFor();
   await shot(page, 'e2e-02-progress');
+  // the agent asks while the sandbox is live: the owner decides on the progress page
+  await page.getByText('The agent needs your decision').waitFor({ timeout: 10_000 });
+  check(await page.getByText('Download a file from the page').isVisible(), 'the owner sees the decision while the check runs');
+  await shot(page, 'e2e-02b-approval');
+  await clean(page, 'approval');
+  await page.getByRole('button', { name: 'Allow', exact: true }).click();
+  await page.getByText(/Allowed\. The agent is carrying it out/).waitFor();
+  check(approvals.length === 1 && approvals[0][1] === 'cmd-1', 'the owner allows the very command that was shown');
   await page.getByRole('heading', { level: 1, name: 'Dangerous' }).waitFor({ timeout: 10_000 });
   check(true, 'progress turns into the report by itself (stream, then state)');
   await shot(page, 'e2e-03-report-summary-light');
   await clean(page, 'report summary');
   const linksToChecked = await page.evaluate(() => [...document.querySelectorAll('a[href]')].filter((a) => /example/.test(a.getAttribute('href'))).length);
   check(linksToChecked === 0, 'no address from the report is a link');
-  check(await page.getByText('The agent needs your decision').isVisible(), 'the owner sees the decision');
+  check(!(await page.getByText('The agent needs your decision').isVisible()), 'a finished report asks nothing');
 
   for (const [tab, heading] of [['Security', 'The domain'], ['Network', 'Servers it talked to'], ['Links', 'Links on the page'], ['Behavior', 'What the agent did']]) {
     await page.getByRole('link', { name: tab, exact: true }).click();
     await page.getByRole('heading', { name: heading }).waitFor();
     check(new URL(page.url()).hash.startsWith('#k='), `${tab}: the key stays in the fragment`);
+    if (tab === 'Behavior') check(await page.getByText('Downloaded the file inside the sandbox, after your approval').isVisible(), 'the report says what came of the decision');
     await shot(page, `e2e-04-tab-${tab.toLowerCase()}`);
     await clean(page, `tab ${tab}`);
   }
@@ -161,10 +174,6 @@ try {
 
   await page.getByRole('button', { name: 'Phone' }).click();
   check((await page.locator('img[src*="screenshot.png?device=mobile"]').count()) === 1, 'the phone screenshot is shown on demand');
-
-  await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  await page.getByText(/Allowed\. The agent is carrying it out/).waitFor();
-  check(approvals.length === 1 && approvals[0][1] === 'cmd-1', 'the owner allows the very command that was shown');
 
   await page.getByRole('button', { name: 'Dark' }).click();
   check((await page.evaluate(() => document.documentElement.getAttribute('data-theme'))) === 'dark', 'the dark theme is chosen');
@@ -196,7 +205,8 @@ try {
   const { ctx: vctx, page: v } = await open({ width: 390, height: 844 });
   await v.goto(reportUrl.split('#')[0]);
   await v.getByRole('heading', { level: 1, name: 'Dangerous' }).waitFor();
-  check(await v.getByText('The person who started this check can decide here.').isVisible(), 'a visitor is told who decides');
+  // the decision belongs to the live check (covered in src/pages/Task.test.tsx); a finished report asks nobody
+  check((await v.getByText('The agent needs your decision').count()) === 0, 'a visitor of a finished report is asked nothing');
   check((await v.getByRole('button', { name: 'Allow', exact: true }).count()) === 0, 'a visitor gets no buttons to decide');
   const overflow = await v.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check(overflow <= 0, `the report fits a phone, no sideways scroll (${overflow}px too wide)`);

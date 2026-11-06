@@ -138,13 +138,21 @@ export const T = {
     rules: 'Analysed the evidence with fixed rules',
     model: 'Analysed the evidence with fixed rules and an AI model',
     action: (a: string, st: string) => `Agent action: ${a} (${st})`,
-    waiting: 'Waiting for your decision',
+    notDecided: 'An action waited for your decision, but the check ended first',
+    /** a risky action and what became of it */
+    decided: {
+      'download:done': 'Downloaded the file inside the sandbox, after your approval',
+      'download:error': 'Tried to download the file after your approval; the download failed',
+      'download:rejected': 'Did not download the file: you said no',
+      'download:expired': 'Did not download the file: nobody decided in time',
+      'download:voided': 'Did not download the file: the sandbox closed first',
+    } as Readonly<Record<string, string>>,
     destroyed: 'Destroyed the sandbox and its disk',
     stopped: 'The check stopped early',
   },
 
   approvalTitle: 'The agent needs your decision',
-  approvalText: 'This action changes something on the page, so it only happens if you allow it.',
+  approvalText: 'This action is risky, so the agent does it only if you allow it, and only inside the sandbox.',
   allow: 'Allow',
   deny: 'Don’t allow',
   approvalOnlyOwner: 'The person who started this check can decide here.',

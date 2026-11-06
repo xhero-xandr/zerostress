@@ -16,6 +16,8 @@ export interface TaskStatus {
   /** the host of the submitted address (the submitter's text) */
   host: string;
   has_report: boolean;
+  /** the agent waits for the owner's decision on a risky action; the run is live meanwhile */
+  awaiting: boolean;
   checked_at: number;
   shots: { desktop: boolean; tablet: boolean; mobile: boolean };
 }

@@ -97,6 +97,8 @@ export interface SupervisorClient {
   cancel(runId: string): Promise<void>;
   /** a person's decision on a risky command: the supervisor checks the hash and the time again */
   approve(runId: string, commandId: string, sha256: string): Promise<void>;
+  /** a person's "no" to one risky command; the run goes on without it */
+  reject(runId: string, commandId: string): Promise<void>;
   artifact(runId: string, name: string, maxBytes: number): Promise<Buffer>;
   /** the events of a run after `afterSeq`, until the stream ends; the caller reconnects while the run is not finished */
   events(runId: string, afterSeq: number, signal?: AbortSignal): AsyncGenerator<SseEvent>;
@@ -188,6 +190,13 @@ export function createSupervisorClient(target: Target, opts: ClientOptions = {})
       checkId(runId);
       if (typeof commandId !== 'string' || !/^[A-Za-z0-9_.:-]{1,64}$/.test(commandId) || typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) throw new SupervisorError(0, 'bad_approval', 'not a command id and hash');
       const { status, value } = await json('POST', `/v1/runs/${runId}/approvals`, { command_id: commandId, command_sha256: sha256 });
+      if (status !== 202) fail(status, value);
+    },
+    async reject(runId, commandId) {
+      checkId(runId);
+      // the id goes into the path: only the supervisor's own id characters, so nothing like ".." can get there
+      if (typeof commandId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(commandId)) throw new SupervisorError(0, 'bad_approval', 'not a command id');
+      const { status, value } = await json('DELETE', `/v1/runs/${runId}/commands/${commandId}`);
       if (status !== 202) fail(status, value);
     },
     async cancel(runId) {

@@ -48,6 +48,50 @@ describe('the progress page', () => {
   });
 });
 
+/** An EventSource that stays open and lets the test send it events. */
+class LiveStream {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+  static last: LiveStream | null = null;
+  readyState = LiveStream.OPEN;
+  onerror: (() => void) | null = null;
+  private handlers = new Map<string, (e: MessageEvent<string>) => void>();
+  constructor() { LiveStream.last = this; }
+  addEventListener(type: string, h: (e: MessageEvent<string>) => void) { this.handlers.set(type, h); }
+  send(type: string, data: unknown) { this.handlers.get(type)?.(new MessageEvent(type, { data: JSON.stringify(data) })); }
+  close() { this.readyState = LiveStream.CLOSED; }
+}
+
+describe('the decision during a live check', () => {
+  const running = { stage: 'opening' as const, label: 'Loading example.com', at: 1, has_report: false };
+  const pending = { pending: [{ command_id: 'a1', command_sha256: 'b'.repeat(64), label: 'Download a file from the page' }] };
+
+  test('when the agent starts waiting, the owner gets the buttons on the progress page', async () => {
+    let awaiting = false;
+    vi.stubGlobal('EventSource', LiveStream);
+    vi.stubGlobal('fetch', (url: string) => (url === `/api/tasks/${ID}`
+      ? json(status(awaiting ? { ...running, awaiting, label: 'Waiting for your decision' } : running))
+      : url.endsWith('/pending') ? json(pending) : json({}, 404)));
+    show(`/r/${ID}#k=${'k'.repeat(32)}`);
+    expect(await screen.findByText('Loading example.com')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: T.allow })).toBeNull();
+    awaiting = true;
+    LiveStream.last!.send('approval', { waiting: true });
+    expect(await screen.findByRole('button', { name: T.allow })).toBeTruthy();
+    expect(screen.getByText('Download a file from the page')).toBeTruthy();
+    expect(screen.getByText('Waiting for your decision')).toBeTruthy();
+  });
+
+  test('someone without the key sees that the owner decides, and no buttons', async () => {
+    vi.stubGlobal('EventSource', LiveStream);
+    vi.stubGlobal('fetch', (url: string) => (url === `/api/tasks/${ID}` ? json(status({ ...running, awaiting: true })) : json(pending)));
+    show(`/r/${ID}`);
+    expect(await screen.findByText(T.approvalOnlyOwner)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: T.allow })).toBeNull();
+  });
+});
+
 describe('addresses', () => {
   test('/r/:id/summary is not an address, as on the server', async () => {
     vi.stubGlobal('fetch', (url: string) => (url === `/api/tasks/${ID}` ? json(status()) : url === `/api/reports/${ID}` ? json(hostile()) : json({}, 404)));

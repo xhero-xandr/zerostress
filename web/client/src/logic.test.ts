@@ -1,6 +1,6 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
-import { ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from './logic.ts';
+import { agentLines, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from './logic.ts';
 import { hostile, unread } from './test/fixtures.ts';
 
 describe('the sentence under the verdict', () => {
@@ -76,4 +76,20 @@ test('the task key is read from the fragment only in its own shape', () => {
   expect(keyFromHash('#k=short')).toBe('');
   expect(keyFromHash(`#k=${'A'.repeat(20)}"><img`)).toBe('A'.repeat(20));
   expect(keyFromHash('')).toBe('');
+});
+
+describe('what the agent did', () => {
+  test('a risky action says what became of it, in words', () => {
+    const line = (status: string) => agentLines(hostile({ steps: [{ action: 'download', status }] }));
+    expect(line('done')).toContain('Downloaded the file inside the sandbox, after your approval');
+    expect(line('rejected')).toContain('Did not download the file: you said no');
+    expect(line('expired')).toContain('Did not download the file: nobody decided in time');
+    expect(agentLines(hostile({ steps: [{ action: 'scroll', status: 'done' }] }))).toContain('Agent action: scroll (done)');
+  });
+
+  test('a finished report never says it is still waiting', () => {
+    const lines = agentLines(hostile({ pending_approval: 1 }));
+    expect(lines.join(' ')).not.toMatch(/^Waiting|Waiting for your decision/);
+    expect(lines).toContain('An action waited for your decision, but the check ended first');
+  });
 });

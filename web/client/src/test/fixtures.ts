@@ -50,7 +50,7 @@ export function hostile(over: Partial<PublicReport> = {}, facts: Partial<PublicR
 export const ID = '0123456789abcdef0123456789abcdef';
 
 export function status(over: Partial<TaskStatus> = {}): TaskStatus {
-  return { id: ID, stage: 'done', label: 'Done', at: 3, position: null, host: 'example.com', has_report: true, checked_at: 1_793_990_000_000, shots: { desktop: true, tablet: false, mobile: false }, ...over };
+  return { id: ID, stage: 'done', label: 'Done', at: 3, position: null, host: 'example.com', has_report: true, awaiting: false, checked_at: 1_793_990_000_000, shots: { desktop: true, tablet: false, mobile: false }, ...over };
 }
 
 /** A report whose verdict was not reached, with one signal saying why. */
