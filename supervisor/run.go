@@ -32,7 +32,6 @@ type runExec struct {
 	id     string
 	slot   int
 	runDir string
-	ctx    context.Context
 	cancel context.CancelCauseFunc
 
 	vm         VM
@@ -58,17 +57,17 @@ type runExec struct {
 }
 
 // execute never fails: every outcome ends in a terminal state, and resources are released in teardown.
-func (s *Supervisor) execute(rec RunRecord, slot int, ctx context.Context, cancel context.CancelCauseFunc, a *activeRun) {
+func (s *Supervisor) execute(ctx context.Context, rec RunRecord, slot int, cancel context.CancelCauseFunc, a *activeRun) {
 	defer close(a.done)
 	r := &runExec{
-		s: s, rec: rec, id: rec.ID, slot: slot, runDir: filepath.Join(s.cfg.RunsDir, rec.ID), ctx: ctx, cancel: cancel,
+		s: s, rec: rec, id: rec.ID, slot: slot, runDir: filepath.Join(s.cfg.RunsDir, rec.ID), cancel: cancel,
 		out:     outcome{state: StateFailed, reason: ReasonInternal},
 		artSeen: map[string]bool{},
 	}
 	r.startTimers()
 	r.startSession()
-	if err := r.steps(); err != nil {
-		r.recordFailure(err)
+	if err := r.steps(ctx); err != nil {
+		r.recordFailure(ctx, err)
 	}
 	r.teardown()
 }
@@ -114,49 +113,49 @@ func (r *runExec) startSession() {
 }
 
 // failed turns an error from a step into the run's failure: the cause of an aborted run beats the step's own error.
-func (r *runExec) failed(err error, fallback FailReason) error {
-	if r.ctx.Err() != nil {
-		return causeOf(r.ctx, ReasonInternal)
+func (r *runExec) failed(ctx context.Context, err error, fallback FailReason) error {
+	if ctx.Err() != nil {
+		return causeOf(ctx, ReasonInternal)
 	}
 	return asRunError(err, fallback)
 }
 
 // steps runs the VM from disk copy to the agent's final status. On success it sets r.out; an error is the run's failure.
-func (r *runExec) steps() error {
-	s, id, ctx := r.s, r.id, r.ctx
+func (r *runExec) steps(ctx context.Context) error {
+	s, id := r.s, r.id
 	s.setState(id, StatePreparing, func(rec *RunRecord) {
 		rec.Slot = &r.slot
 		rec.StartedAt = ptr(s.now())
 	})
 	if err := s.backend.PrepareDisk(ctx, r.runDir); err != nil {
-		return r.failed(err, ReasonDiskCopy)
+		return r.failed(ctx, err, ReasonDiskCopy)
 	}
 	r.netTouched = true
 	if err := s.backend.NetUp(ctx, r.slot, id); err != nil {
-		return r.failed(err, ReasonNetSetup)
+		return r.failed(ctx, err, ReasonNetSetup)
 	}
 	s.setState(id, StateBooting, nil)
 	v, err := s.backend.Start(ctx, StartOptions{RunID: id, RunDir: r.runDir, Slot: r.slot, VCPU: s.cfg.VCPU, MemMiB: s.cfg.MemMiB})
 	if err != nil {
-		return r.failed(err, ReasonFcAPI)
+		return r.failed(ctx, err, ReasonFcAPI)
 	}
 	r.vm = v
 	exitHandled := r.watchExit(v)
 	if err := v.WaitReady(ctx, s.cfg.BootTimeout); err != nil {
-		return r.failed(err, ReasonBootTimeout)
+		return r.failed(ctx, err, ReasonBootTimeout)
 	}
 	r.vmForCommands.Store(&vmBox{vm: v})
 
 	s.setState(id, StateRunning, nil)
 	// The guest gets only the total time. Idle time belongs to the supervisor (it alone knows when a human is
 	// deciding about a risky command), which sends a normal close when the session has been idle for too long.
-	if err := v.RunJob(ctx, jobLine(id, r.rec), r.onLine); err != nil {
-		return r.failed(err, ReasonAgentError)
+	if err := v.RunJob(ctx, jobLine(id, r.rec), func(line string) { r.onLine(ctx, line) }); err != nil {
+		return r.failed(ctx, err, ReasonAgentError)
 	}
 	if ctx.Err() != nil {
 		return causeOf(ctx, ReasonInternal)
 	}
-	return r.finishStream(exitHandled)
+	return r.finishStream(ctx, exitHandled)
 }
 
 // watchExit returns a channel closed once the exit of the VM has been fully accounted for (flag set, run cancelled if
@@ -180,7 +179,7 @@ func (r *runExec) watchExit(v VM) <-chan struct{} {
 }
 
 // onLine is called for every line of the stream, in order.
-func (r *runExec) onLine(line string) {
+func (r *runExec) onLine(ctx context.Context, line string) {
 	r.evidenceBytes += len(line) + 1
 	if r.evidenceBytes > r.s.cfg.MaxEvidenceBytes {
 		r.cancel(newRunError(ReasonOversize, "evidence cap exceeded"))
@@ -197,7 +196,7 @@ func (r *runExec) onLine(line string) {
 	r.s.emit(r.id, "evidence", line)
 	r.evidence++
 	r.onControlLine(line)
-	r.onArtifactLine(line)
+	r.onArtifactLine(ctx, line)
 }
 
 func (r *runExec) flushHeld() {
@@ -210,7 +209,7 @@ func (r *runExec) flushHeld() {
 
 // finishStream decides the outcome once the stream has ended. Only the LAST line decides: a "status" line forged by
 // the collector earlier in the stream is plain evidence.
-func (r *runExec) finishStream(exitHandled <-chan struct{}) error {
+func (r *runExec) finishStream(ctx context.Context, exitHandled <-chan struct{}) error {
 	status := ""
 	if r.held != nil {
 		status = parseStatus(*r.held)
@@ -228,8 +227,8 @@ func (r *runExec) finishStream(exitHandled <-chan struct{}) error {
 		case <-exitHandled:
 		case <-time.After(300 * time.Millisecond):
 		}
-		if r.ctx.Err() != nil {
-			return causeOf(r.ctx, ReasonInternal) // the VM's exit cancelled the run: fc_crashed, or supervisor_restart while draining
+		if ctx.Err() != nil {
+			return causeOf(ctx, ReasonInternal) // the VM's exit cancelled the run: fc_crashed, or supervisor_restart while draining
 		}
 		reason := ReasonAgentError
 		if r.vmDead.Load() {
@@ -283,7 +282,7 @@ func (r *runExec) onControlLine(line string) {
 // onArtifactLine starts a fetch for an artifact the collector announces, while the VM is alive (spec 005, 3.6). The
 // event the collector wrote is only a claim: it names the file and the size to expect, and everything published
 // about the file is measured here. Fetches run beside the stream and are all finished before the VM is stopped.
-func (r *runExec) onArtifactLine(line string) {
+func (r *runExec) onArtifactLine(ctx context.Context, line string) {
 	s := r.s
 	if s.artifacts == nil || len(line) > controlLineMax || !strings.Contains(line, `"artifact"`) {
 		return
@@ -315,34 +314,34 @@ func (r *runExec) onArtifactLine(line string) {
 	r.artBytes += need
 	r.artMu.Unlock()
 	r.fetches.Add(1)
-	go r.fetchArtifact(b.vm, name, need)
+	go r.fetchArtifact(ctx, b.vm, name, need)
 }
 
-func (r *runExec) fetchArtifact(vm VM, name string, need int64) {
+func (r *runExec) fetchArtifact(ctx context.Context, vm VM, name string, need int64) {
 	defer r.fetches.Done()
 	s := r.s
 	timeout := s.cfg.ArtifactFetchTimeout
 	if timeout <= 0 {
 		timeout = 20 * time.Second
 	}
-	fctx, fcancel := context.WithTimeout(r.ctx, timeout)
+	fctx, fcancel := context.WithTimeout(ctx, timeout)
 	defer fcancel()
 	info, code := s.artifacts.Put(r.id, name, need, func(w io.Writer, max int64) (int64, error) {
 		return vm.FetchArtifact(fctx, name, w, max)
 	})
 	if code != "" {
 		info = ArtifactInfo{Name: name, Error: code}
-		if r.ctx.Err() == nil {
+		if ctx.Err() == nil {
 			s.log("warn", "artifact not stored", map[string]any{"run_id": r.id, "name": name, "error": code})
 		}
 	}
 	s.emit(r.id, "artifact", toJSON(info))
 }
 
-func (r *runExec) recordFailure(err error) {
+func (r *runExec) recordFailure(ctx context.Context, err error) {
 	var re *RunError
-	if r.ctx.Err() != nil {
-		re = causeOf(r.ctx, ReasonInternal)
+	if ctx.Err() != nil {
+		re = causeOf(ctx, ReasonInternal)
 	} else {
 		re = asRunError(err, ReasonInternal)
 	}

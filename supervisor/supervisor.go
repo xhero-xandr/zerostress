@@ -539,7 +539,7 @@ func (s *Supervisor) pumpLocked() {
 		}
 		a := &activeRun{cancel: cancel, done: make(chan struct{})}
 		s.active[id] = a
-		go s.execute(rec, slot, ctx, cancel, a)
+		go s.execute(ctx, rec, slot, cancel, a)
 	}
 	if moved {
 		s.announcePositionsLocked()
