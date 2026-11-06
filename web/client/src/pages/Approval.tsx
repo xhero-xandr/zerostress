@@ -21,7 +21,9 @@ export function Approval({ id }: { id: string }) {
     try {
       setResult((await decide(id, key, p, allow)).message);
     } catch (e) {
+      // nothing was decided: the buttons come back so the owner can try again
       setResult(e instanceof ApiError ? e.message : T.serverError);
+      setSent(false);
     }
   };
   return (
