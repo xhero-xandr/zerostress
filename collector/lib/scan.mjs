@@ -5,6 +5,7 @@ import { sha256 } from './emitter.mjs';
 import { probePage, shapeProbe } from './extract.mjs';
 import { takeSnapshot, withOrigins } from './snapshot.mjs';
 import { attachTracker } from './tracker.mjs';
+import { captureDevices } from './devices.mjs';
 
 export const VIEWPORT = Object.freeze({ width: 1280, height: 800 });
 
@@ -100,6 +101,7 @@ export async function runScan({ job, browser, context, page, emitter, artifactDi
     const s = await reportSnapshot(page, emitter, state, finalUrl);
     links = s.links;
     artifact = await saveScreenshot(page, emitter, artifactDir, state);
+    await captureDevices({ browser, job, emitter, artifactDir, state });
   }
   return { cdp, tracker, state, navError, finalUrl, loaded, links, artifact };
 }

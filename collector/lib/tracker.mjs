@@ -8,6 +8,9 @@ const originOf = (u) => {
   }
 };
 
+// The address the browser actually connected to (CDP gives it without brackets for IPv6); only its shape is kept.
+const ipOf = (v) => (typeof v === 'string' && /^[0-9a-fA-F:.]{2,45}$/.test(v) ? v : null);
+
 /**
  * Everything the network and the navigation machinery report, read from ONE CDP session so the order of the events is
  * deterministic (CLAUDE.md). The page cannot influence this layer: it sees the browser, not the page's JavaScript.
@@ -34,7 +37,7 @@ export async function attachTracker({ page, context, cdp, emitter }) {
     emit('request', {
       url: cut(entry.url, LIMITS.urlChars), method: entry.method, resource_type: entry.type,
       status: entry.status ?? null, mime: entry.mime ?? null, blocked: entry.blocked ?? null,
-      initiator: cut(entry.initiator, LIMITS.urlChars), ...extra,
+      initiator: cut(entry.initiator, LIMITS.urlChars), ip: entry.ip ?? null, ...extra,
     });
   };
 
@@ -44,6 +47,7 @@ export async function attachTracker({ page, context, cdp, emitter }) {
       if (prev) {
         prev.status = e.redirectResponse.status;
         prev.mime = e.redirectResponse.mimeType;
+        prev.ip = ipOf(e.redirectResponse.remoteIPAddress);
         done(prev);
       }
       if (e.type === 'Document' && e.frameId === mainFrameId) {
@@ -66,6 +70,7 @@ export async function attachTracker({ page, context, cdp, emitter }) {
     if (entry) {
       entry.status = e.response.status;
       entry.mime = e.response.mimeType;
+      entry.ip = ipOf(e.response.remoteIPAddress);
     }
     const sec = e.response.securityDetails;
     if (sec) {
@@ -75,7 +80,7 @@ export async function attachTracker({ page, context, cdp, emitter }) {
         emit('tls', {
           host: cut(host, 300), issuer: cut(sec.issuer, 300), subject: cut(sec.subjectName, 300),
           valid_from: new Date(sec.validFrom * 1000).toISOString(), valid_to: new Date(sec.validTo * 1000).toISOString(),
-          san_count: (sec.sanList ?? []).length, protocol: cut(sec.protocol, 40),
+          san_count: (sec.sanList ?? []).length, protocol: cut(sec.protocol, 40), ip: ipOf(e.response.remoteIPAddress),
         });
       }
     }

@@ -64,8 +64,8 @@
 | `kind` | Поля | Источник |
 |---|---|---|
 | `nav` | `via` (`requested` наш переход, `http` ответ-редирект, `scheduled` переход, запланированный страницей, `commit` смена адреса главного фрейма), `from`, `to`, `status`, `reason`, `delay_s`, `origin_changed`, `same_document` (для `pushState` и якорей) | CDP, как в PROJECT.md, «Схема улик» |
-| `request` | `url`, `method`, `resource_type`, `status`, `mime`, `blocked`, `initiator`; не более 300 на запуск, дальше счётчик `requests_seen` в `summary` | CDP `Network.*` |
-| `tls` | `host` (origin), `issuer`, `subject`, `valid_from`, `valid_to`, `san_count`, `protocol`; по одному на origin, не более 20 | CDP `Network.responseReceived` (`securityDetails`) |
+| `request` | `url`, `method`, `resource_type`, `status`, `mime`, `blocked`, `initiator`, `ip` (адрес сервера, к которому подключился браузер, или `null`); не более 300 на запуск, дальше счётчик `requests_seen` в `summary` | CDP `Network.*` |
+| `tls` | `host` (origin), `issuer`, `subject`, `valid_from`, `valid_to`, `san_count`, `protocol`, `ip`; по одному на origin, не более 20 | CDP `Network.responseReceived` (`securityDetails`) |
 | `page` | `url`, `title`, `lang`, `text` (видимый, до 20 КиБ) и `text_truncated`, `hidden_text` (`present`, `reasons`, `text` до 4 КиБ), `meta` (до 20 пар, включая `refresh`), `comments_count` | DOM, **изолированный мир** CDP (`Page.createIsolatedWorld`): страница не видит наш код и не может подменить `querySelectorAll`, `form.action` и т. п. |
 | `forms` | `forms` (до 20 форм, до 40 полей в каждой, см. 3.4), `total`, `loose_password_fields` (поля пароля вне форм) | DOM, изолированный мир |
 | `links` | `snap`, `links`: до 100 ссылок со всего снимка, у каждой `ref`, `text` (до 200), `href`, `origin_differs` | `ariaSnapshot` |
@@ -78,6 +78,7 @@
 | `session_ready` | нет | сборщик закончил проход `scan` и ждёт команды; по нему супервизор переводит запуск в состояние `session` (006, 3.7). Только в сессии, один раз |
 | `cmd_result` | `id`, `ok` (логическое, обязательно), `error` (код из строчных букв, цифр и `_`, до 40 знаков), `snap` (новый, если был снимок) | ответ на команду; супервизор засчитывает его только команде, которая сейчас в полёте |
 | `error` | `code`, `message` (до 300) | сборщик |
+| `device` | `device` (`mobile` или `tablet`), `viewport`, `final_url`, `nav_error`, `title`, `forms` (число), `has_password`, `action_origins` (до 5), `text_chars`, `file` (имя снимка среди артефактов или `null`) | 3.7 |
 | `summary` | `final_url`, `nav_error` (`timeout`, `download`, код браузера вида `ERR_NAME_NOT_RESOLVED` или `null`), `counts` (по видам плюс `requests_seen`, `blocked`, `dialogs`, `downloads`, `popups`), `truncated` (какие виды обрезаны), `dropped` (что не влезло в бюджет вывода), `session_end` (`close`, `max_time`, `eof`), `duration_ms` | сборщик |
 
 **Недоверенные поля (приходят от страницы):** `url`, `from`, `to`, `title`, `text`, `hidden_text`, `meta`, названия и значения полей, `text` и `href` ссылок, `filename`, `message`, `console.text`, `issuer`, `subject`. Хуки-детекторы (009) проверяют их на стороне хоста до передачи модели; сборщик ничего не вырезает сам, чтобы скомпрометированный гость не мог скрыть следы.
@@ -198,3 +199,7 @@
 4. **`window.open` и iframe:** `iframe` частично решён: содержимое попадает в снимок `ai` со своими `ref` (проверено локально); остаются улики из вложенных кадров (запросы, формы) и `window.open`.
 5. **Вложения** (`kind: "file"`): как открыть файл в госте.
 6. **Нужен ли режим `session` в первой версии продукта** или достаточно автономного прохода и анализа улик моделью (решение по продукту; протокол v2 допускает оба).
+
+
+### 3.7. Телефон и планшет (5 ноября 2026)
+После обычного прохода, если страница открылась, сборщик открывает **тот же адрес задачи** ещё дважды, каждый раз в **новом контексте браузера** (без cookie первого захода): как телефон (412×839, пользовательский агент Android Chrome с «Mobile») и как планшет (820×1180, агент Android без «Mobile»). Масштаб экрана 1, чтобы снимок оставался небольшим. Для каждого устройства: переход (не больше 20 с), ожидание 2 с, проба страницы в изолированном мире, снимок экрана (отдельный артефакт, имя при показе `screenshot-<device>.png`), событие `device`. Всё, что сайт открывает сам (окна), закрывается; загрузки и сервис-воркеры выключены, как в основном контексте. Сбой устройства (таймаут, ошибка сети, падение страницы) это результат: `device` с `nav_error` и `file: null`, проход не прерывается. Если на компьютере страница не открылась, устройства не запускаются. Каждое устройство ограничено 45 с. Сравнение с компьютером делает хост (`web/agent/devices.ts`): форма пароля только на устройстве даёт сигнал `device_cloaking` (high), конечный адрес на другом сайте (по регистрируемому имени) даёт `device_redirect` (medium).

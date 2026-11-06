@@ -26,6 +26,10 @@ const routes = {
 <form action="/search"><input name="action" value="x"><input name="q"></form>
 <input type="password" name="loose">`,
     '<title>Account login</title><meta name="description" content="login page">'),
+  // shows a sign-in form with a password only to a phone: the desktop robot and the tablet get a harmless page
+  '/cloak': (req, res, origin, other) => /Mobile/.test(req.headers['user-agent'] ?? '')
+    ? html(`<h1>Sign in</h1><form action="${other}/collect" method="post"><input name="p" type="password"></form>`, '<title>Sign in</title>')
+    : html('<h1>Welcome</h1><p>Nothing to see.</p>', '<title>Welcome</title>'),
   '/search': (req) => html(`<h1>Results</h1><p>q=${new URL(req.url, 'http://x').searchParams.get('q') ?? ''}</p>`, '<title>Results</title>'),
   '/submit': (req, res, origin, other, body) => html(`<h1>Received</h1><p>${body.replace(/[<>&]/g, '_')}</p>`, '<title>Received</title>'),
   '/form': () => html(

@@ -39,11 +39,11 @@ test('a plain page: ordered, well-formed events, summary last, exit 0', async ()
   const shot = r.first('artifact');
   assert.equal(shot.saved, true);
   assert.equal(shot.mime, 'image/png');
-  assert.equal(r.filesAtExit.length, 1);
-  assert.equal(shot.file, r.filesAtExit[0], 'the announced file name is the name on disk (the host fetches it by that name)');
+  assert.equal(r.filesAtExit.length, 3, 'the desktop shot plus the phone and tablet captures taken after it');
+  assert.ok(r.filesAtExit.includes(shot.file), 'the announced file name is one of the names on disk (the host fetches it by that name)');
   assert.match(shot.file, /^[0-9a-f]{16}\.png$/);
   assert.equal(shot.file.slice(0, 16), shot.sha256.slice(0, 16));
-  assert.equal(r.artifactBytes[r.filesAtExit[0]], shot.bytes, 'the file on disk has the size that was reported');
+  assert.equal(r.artifactBytes[shot.file], shot.bytes, 'the file on disk has the size that was reported');
   const sum = r.first('summary');
   assert.equal(sum.final_url, `${pages.origin}/`);
   assert.equal(sum.nav_error, null);
@@ -58,6 +58,8 @@ test('HTTP redirects are reported hop by hop with their status codes', async () 
   assert.equal(r.first('summary').final_url, `${pages.origin}/final`);
   const statuses = r.kinds('request').map((q) => q.status);
   assert.deepEqual(statuses, [302, 301, 200]);
+  // every hop, redirects included, carries the address the browser connected to (the local test server here)
+  assert.deepEqual(r.kinds('request').map((q) => q.ip), ['127.0.0.1', '127.0.0.1', '127.0.0.1']);
 });
 
 test('a meta refresh is reported as scheduled and followed', async () => {
@@ -235,4 +237,33 @@ test('a bad job: error event and exit code 2, no browser', async () => {
     assert.equal(r.events[0].kind, 'error');
     assert.equal(r.events[0].code, 'bad_job');
   }
+});
+
+test('the same address is opened as a phone and as a tablet; a page that shows itself only to a phone is caught', async () => {
+  const r = await scanOnce(`${pages.origin}/cloak`);
+  assert.equal(r.code, 0, r.stderr());
+  assert.equal(r.first('page').title, 'Welcome', 'the desktop sees the harmless page');
+  assert.equal(r.first('forms').forms.length, 0);
+  const dev = Object.fromEntries(r.kinds('device').map((d) => [d.device, d]));
+  assert.deepEqual(Object.keys(dev), ['mobile', 'tablet']);
+  assert.deepEqual(dev.mobile.viewport, { width: 412, height: 839 });
+  assert.deepEqual(dev.tablet.viewport, { width: 820, height: 1180 });
+  assert.equal(dev.mobile.title, 'Sign in');
+  assert.equal(dev.mobile.has_password, true);
+  assert.equal(dev.mobile.forms, 1);
+  assert.deepEqual(dev.mobile.action_origins, [pages.other]);
+  assert.equal(dev.tablet.title, 'Welcome');
+  assert.equal(dev.tablet.has_password, false);
+  // every screenshot is a saved artifact, and each device event names its own
+  const arts = r.kinds('artifact');
+  assert.equal(arts.length, 3);
+  assert.equal(new Set(arts.map((a) => a.file)).size, 3, 'three different images');
+  for (const d of [dev.mobile, dev.tablet]) assert.ok(arts.some((a) => a.file === d.file && a.saved), `${d.device} names its image`);
+  assert.notEqual(arts[0].file, dev.mobile.file, 'the desktop image comes first and is not a device image');
+});
+
+test('a device that cannot load the page is a result, and a page that fails for the desktop gets no device runs', async () => {
+  const bad = await scanOnce('http://127.0.0.1:1/');
+  assert.equal(bad.code, 0, bad.stderr());
+  assert.equal(bad.kinds('device').length, 0);
 });
