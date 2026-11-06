@@ -37,7 +37,7 @@ if node "$S/web/tools/fetch-geo.mjs" /var/lib/zerostress-web/geo; then chown -R 
 rmdir /var/lib/zerostress/web/tasks /var/lib/zerostress/web 2>/dev/null || true
 # the model is chosen by measurement (spec 008, 8); the key stays as the owner wrote it
 if grep -q '^INFERENCE_MODEL=$' /etc/zerostress/web.env; then sed -i 's/^INFERENCE_MODEL=$/INFERENCE_MODEL=qwen3.8-27b/' /etc/zerostress/web.env; fi
-install -m 0644 -o root -g root "$S/deploy/zerostress-web.service" /etc/systemd/system/zerostress-web.service
+install -m 0644 -o root -g root "$S/deploy/systemd/zerostress-web.service" /etc/systemd/system/zerostress-web.service
 
 # ---- Caddy: the official binary, checked against a pinned hash ----
 if [[ ! -x /usr/local/bin/caddy ]] || ! /usr/local/bin/caddy version | grep -q "v$CADDY_VERSION"; then
@@ -92,7 +92,7 @@ $DOMAIN {
 C
 chmod 0644 /etc/caddy/Caddyfile
 /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile >/dev/null
-install -m 0644 -o root -g root "$S/deploy/caddy.service" /etc/systemd/system/caddy.service
+install -m 0644 -o root -g root "$S/deploy/systemd/caddy.service" /etc/systemd/system/caddy.service
 
 # ---- the host's own firewall: the web ports ----
 if systemctl is-active --quiet firewalld; then

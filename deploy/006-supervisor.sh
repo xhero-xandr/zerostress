@@ -19,7 +19,7 @@ systemctl stop zerostress-supervisor 2>/dev/null || true
 rm -rf "$DEST"
 mv "$DEST.new" "$DEST"
 
-install -m 0644 -o root -g root "$S/deploy/zerostress-supervisor.service" /etc/systemd/system/zerostress-supervisor.service
+install -m 0644 -o root -g root "$S/deploy/systemd/zerostress-supervisor.service" /etc/systemd/system/zerostress-supervisor.service
 systemctl daemon-reload
 systemctl enable zerostress-supervisor >/dev/null 2>&1
 systemctl restart zerostress-supervisor

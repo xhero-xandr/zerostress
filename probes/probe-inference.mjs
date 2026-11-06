@@ -1,5 +1,5 @@
 // Probe Vultr Serverless Inference: for each chat-capable model check plain chat, strict json_schema and image input.
-// Usage on the server:  set -a; . /etc/zerostress/web.env; set +a; node tools/probe-inference.mjs [model ...]
+// Usage on the server:  set -a; . /etc/zerostress/web.env; set +a; node probes/probe-inference.mjs [model ...]
 // The key is read from the environment and never printed.
 import { deflateSync, crc32 } from 'node:zlib';
 
