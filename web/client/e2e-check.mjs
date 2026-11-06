@@ -198,6 +198,14 @@ try {
   await v.getByRole('heading', { level: 1, name: 'Dangerous' }).waitFor();
   check(await v.getByText('The person who started this check can decide here.').isVisible(), 'a visitor is told who decides');
   check((await v.getByRole('button', { name: 'Allow', exact: true }).count()) === 0, 'a visitor gets no buttons to decide');
+  const overflow = await v.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  check(overflow <= 0, `the report fits a phone, no sideways scroll (${overflow}px too wide)`);
+  await v.goto(`${BASE}/`);
+  await v.getByRole('heading', { level: 1 }).waitFor();
+  const homeOverflow = await v.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  check(homeOverflow <= 0, `the home page fits a phone (${homeOverflow}px too wide)`);
+  await v.goto(reportUrl.split('#')[0]);
+  await v.getByRole('heading', { level: 1, name: 'Dangerous' }).waitFor();
   await shot(v, 'e2e-09-report-phone');
   await clean(v, 'phone, visitor');
   await v.goto(`${BASE}/r/${'f'.repeat(32)}`);

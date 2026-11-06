@@ -53,7 +53,7 @@ export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
           </div>
           <span className="text-sm text-muted">{T.checkedAt(fmtTime(status.checked_at))}</span>
         </div>
-        <div className="flex flex-none flex-wrap justify-end gap-2.5">
+        <div className="flex min-w-0 flex-wrap gap-2.5 sm:flex-none sm:justify-end">
           <button type="button" onClick={() => explain.current?.open()} className={btnPrimary}>
             <MessageCircle className="size-[18px]" aria-hidden /> {T.chat.open}
           </button>
