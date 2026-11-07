@@ -51,7 +51,7 @@
 | настройка | `./zs config web` |
 
 ## Переезд со старой раскладки (один раз)
-Сервер до 7 ноября 2026 жил по старой раскладке (переехал 7 ноября; осталось `cleanup`): программа в `/opt/zerostress`, рабочая копия в `/opt/zerostress-src`, настройки в `/etc/zerostress`, данные в `/var/lib/zerostress*`. Переезд:
+Сервер до 7 ноября 2026 жил по старой раскладке (переехал 7 ноября, старые места удалены `cleanup` в тот же день): программа в `/opt/zerostress`, рабочая копия в `/opt/zerostress-src`, настройки в `/etc/zerostress`, данные в `/var/lib/zerostress*`. Переезд:
 ```
 sudo mv /opt/zerostress-src /zerostress && cd /zerostress
 sudo deploy/migrate-from-opt.sh prepare     # без простоя

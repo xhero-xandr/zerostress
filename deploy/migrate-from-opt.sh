@@ -75,9 +75,15 @@ case ${1:-} in
     ;;
   rollback) rollback ;;
   cleanup)
-    systemctl is-active --quiet zerostress-web || { echo "the new zerostress-web is not running: not cleaning up" >&2; exit 1; }
+    for u in zerostress-supervisor zerostress-web caddy; do
+      systemctl is-active --quiet "$u" || { echo "$u is not running: not cleaning up" >&2; exit 1; }
+    done
+    semanage fcontext -d '/opt/zerostress/bin(/.*)?' 2>/dev/null || true
     rm -rf /opt/zerostress /etc/zerostress /var/lib/zerostress-web /etc/caddy /var/lib/caddy /opt/node /opt/go /usr/local/bin/caddy /etc/tmpfiles.d/zerostress.conf
-    rm -rf /var/lib/zerostress && usermod -d /nonexistent zerostress-sup
+    rm -rf /var/lib/zerostress
+    # usermod refuses while the supervisor runs as this user; the stale home field is harmless (the directory is gone)
+    usermod -d /nonexistent zerostress-sup 2>/dev/null ||
+      echo "zerostress-sup is busy: its home stays /var/lib/zerostress until 'usermod -d /nonexistent zerostress-sup' with the supervisor stopped"
     rm -rf "$BACKUP" /var/tmp/zerostress-build
     echo "old layout removed"
     ;;
