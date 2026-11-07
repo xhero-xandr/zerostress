@@ -28,6 +28,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 - In a deep check the model is asked to propose a download when a page offers a file (the person still decides), so that the file itself becomes evidence.
 
 ### Fixed
+- wellsfargo.com was "malicious": a password sent to another host of the same site (connect.secure.wellsfargo.com) counted as "another site", and "purchase" in the page text named Chase. Forms are compared by site; brand names in the text are whole words; a brand's own site may name other brands.
 - Bot walls in other languages are recognised (VK's "Проверяем, что вы не робот", Cloudflare's translated "Just a moment"), so such a page is "could not check" with Cloudflare's second opinion, not a verdict on a captcha. One owner's sites under two top-level domains (vk.com and vk.ru) are not "a phone sent elsewhere". The side panel tells a second opinion that was ready before the report was read.
 - A sign-in form that only phones see no longer makes a big site "malicious" (tiktok.com was): it counts as cloaking when the form sends the password to another site, the phone lands elsewhere, or the domain is young; on an old domain with the form on the site itself it is told (`mobile_sign_in`, info) and not counted.
 - The agent log no longer says the model "proposes" an action after the microVM is gone (the last verdict has nothing to act on).

@@ -177,16 +177,21 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   };
   for (const v of pages) {
     const here = parseUrl(v.url) ?? (v === land ? finalParsed : null);
-    const hereOrigin = here?.origin ?? '';
     const vForms = list(v.forms?.forms).filter(isObj);
     const passwordForms = vForms.filter((f) => f.has_password === true);
     const hasPassword = passwordForms.length > 0 || Number(v.forms?.loose_password_fields) > 0;
     const formRef = v.formsAt !== undefined ? [v.formsAt] : [];
 
+    // another SITE, not another origin: a bank's sign-in form posting to connect.secure.bank.example from
+    // www.bank.example sends the password to the bank itself
     const cross = passwordForms.filter((f) => {
-      const target = parseUrl(f.action);
-      const actionOrigin = str(f.action_origin) || target?.origin || '';
-      return (actionOrigin !== '' && hereOrigin !== '' && actionOrigin !== hereOrigin) || f.origin_differs === true;
+      const stated = parseUrl(str(f.action_origin));
+      // the collector read where the form really goes: compare sites
+      if (stated && here) return registrable(stated.hostname) !== registrable(here.hostname);
+      const target = parseUrl(str(f.action));
+      if (target && here) return registrable(target.hostname) !== registrable(here.hostname);
+      // no address to compare: the collector's own flag decides
+      return f.origin_differs === true;
     });
     if (cross.length) addOnce('password_form_cross_origin', 'high', 'A form that asks for a password sends it to a different site than the one shown.', formRef);
 
@@ -197,9 +202,12 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
       const title = str(v.page.title).toLowerCase();
       const body = str(v.page.text).slice(0, 3000).toLowerCase();
       const loginish = hasPassword || LOGIN_WORDS.test(title);
-      for (const b of BRANDS) {
-        const named = b.words.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(title)) ||
-          (hasPassword && b.words.some((w) => body.includes(w)));
+      // a brand's own site names other brands (Apple Pay, PayPal): only a site that is no brand's can pretend to be one
+      const ownBrand = BRANDS.some((b) => belongsTo(b, here.hostname));
+      const word = (w: string, text: string) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(text);
+      for (const b of ownBrand ? [] : BRANDS) {
+        // whole words in the text too: "purchase" does not name Chase
+        const named = b.words.some((w) => word(w, title)) || (hasPassword && b.words.some((w) => word(w, body)));
         if (named && loginish && !belongsTo(b, here.hostname)) {
           addOnce('brand_domain_mismatch', hasPassword ? 'high' : 'medium', `The page presents itself as ${b.words[0]!} but its address is ${sld(here.hostname)}.`, [v.at]);
           break;

@@ -14,7 +14,7 @@ const page = (url: string, title = 'Title', text = 'Some text', extra: Record<st
   ev('page', { url, title, text, text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [], ...extra });
 const summary = (finalUrl: string, extra: Record<string, unknown> = {}) => ev('summary', { final_url: finalUrl, nav_error: null, ...extra });
 const form = (action: string, hasPassword = true, extra: Record<string, unknown> = {}) => ({
-  form: 0, action, method: 'post', action_origin: new URL(action).origin, has_password: hasPassword, fields: [], ...extra,
+  form: 0, action, method: 'post', ...(action ? { action_origin: new URL(action).origin } : {}), has_password: hasPassword, fields: [], ...extra,
 });
 const forms = (...f: unknown[]) => ev('forms', { forms: f, total: f.length, loose_password_fields: 0 });
 const visit = (url: string, title = 'Title', text = 'Some text') => [nav(url, 'requested'), nav(url), page(url, title, text), summary(url)];
@@ -167,8 +167,28 @@ test('the collector\'s own flag is not needed, and is not the only word', () => 
   const lie = [...visit('https://shop.example/login'), forms(form('https://collect.example/post', true, { action_origin: 'https://shop.example', origin_differs: false }))];
   // the address of the action tells the truth where the stated origin does not
   assert.equal(has(lie, 'password_form_cross_origin'), undefined, 'the stated origin is what is compared (this is the collector\'s own reading of the DOM)');
-  const flagged = [...visit('https://shop.example/login'), forms(form('https://shop.example/x', true, { origin_differs: true }))];
+  // the collector's flag decides only where the form gives no address of its own to compare
+  const flagged = [...visit('https://shop.example/login'), forms(form('', true, { origin_differs: true }))];
   assert.equal(has(flagged, 'password_form_cross_origin')?.level, 'high');
+  const sameSite = [...visit('https://shop.example/login'), forms(form('https://shop.example/x', true, { origin_differs: true }))];
+  assert.equal(has(sameSite, 'password_form_cross_origin'), undefined);
+});
+
+test('a password sent to another host of the same site is not "another site"; a lookalike site is', () => {
+  const bank = [...visit('https://www.bank.example/'), forms(form('https://connect.secure.bank.example/signon', true, { action_origin: 'https://connect.secure.bank.example', origin_differs: true }))];
+  assert.equal(has(bank, 'password_form_cross_origin'), undefined);
+  const away = [...visit('https://www.bank.example/'), forms(form('https://bank-example.evil.test/signon', true, { action_origin: 'https://bank-example.evil.test', origin_differs: true }))];
+  assert.equal(has(away, 'password_form_cross_origin')?.level, 'high');
+});
+
+test('a brand is named by whole words only, and a brand\'s own site may name other brands', () => {
+  const page = (url: string, title: string, text: string) => [...visit(url, title, text), forms(form(url, true))];
+  // "purchase" does not name Chase
+  assert.equal(has(page('https://www.shop.example/login', 'Sign in', 'Sign in to finish your purchase'), 'brand_domain_mismatch'), undefined);
+  // Wells Fargo's own site mentions other brands: it is no one's lookalike
+  assert.equal(has(page('https://www.wellsfargo.com/', 'Wells Fargo Sign On', 'Pay with PayPal or Apple Pay. Chase alternatives.'), 'brand_domain_mismatch'), undefined);
+  // a site that is no brand's, with a sign-in naming one, still is
+  assert.equal(has(page('https://secure-login.example/', 'Chase Online Sign in', 'Chase'), 'brand_domain_mismatch')?.level, 'high');
 });
 
 test('a form without a password is not a login', () => {
@@ -537,4 +557,13 @@ test('a young domain adds exactly the weight of a medium reason, and never decid
   assert.notEqual(young.verdict, 'malicious');
   const withForm = [...evs, forms(form('https://other.example/login'))];
   assert.equal(analyze(withForm, { domainAgeDays: 3 }).score - analyze(withForm, { domainAgeDays: 5000 }).score, POINTS.medium);
+});
+
+test('a brand\'s own site that names other brands, or a word that only contains a brand, is no impersonation', () => {
+  const bank = (title: string, text: string) => [...visit('https://www.wellsfargo.com/', title, text), forms(form('https://connect.secure.wellsfargo.com/auth', true))];
+  assert.equal(has(bank('Wells Fargo Bank', 'Sign on. Pay with Apple Pay or PayPal. Chase your goals.'), 'brand_domain_mismatch'), undefined);
+  const shop = [...visit('https://shop.example/login', 'Sign in', 'Your purchase history'), forms(form('https://shop.example/session', true))];
+  assert.equal(has(shop, 'brand_domain_mismatch'), undefined, '"purchase" does not name Chase');
+  const fake = [...visit('https://secure-login.example/', 'Sign in', 'Chase online banking'), forms(form('https://secure-login.example/s', true))];
+  assert.equal(has(fake, 'brand_domain_mismatch')?.level, 'high');
 });
