@@ -17,7 +17,7 @@ import { serve } from '@hono/node-server';
 import { fileURLToPath } from 'node:url';
 import { loadPrompt } from '../agent/assess.ts';
 import { createBudget } from '../agent/budget.ts';
-import { describeConfig, loadAgentConfig } from '../agent/config.ts';
+import { describeConfig, loadAgentConfig, loadScannerConfig } from '../agent/config.ts';
 import { loadChatPrompt, reply as chatReply } from '../agent/chat.ts';
 import { loadGeo } from '../agent/geo.ts';
 import { createModelClient } from '../agent/model.ts';
@@ -40,6 +40,8 @@ const num = (name: string, def: number): number => {
 };
 
 const cfg = loadAgentConfig(env);
+// checked at start even before anything uses it, so a broken value shows up now and not in the middle of a check
+const scanner = loadScannerConfig(env);
 const prompt = loadPrompt();
 const chatPrompt = loadChatPrompt();
 const budget = createBudget({ dailyRequests: cfg.dailyRequests, dailyTokens: cfg.dailyTokens });
@@ -82,5 +84,5 @@ setInterval(() => { store.sweep(); }, 10 * 60_000).unref();
 
 const port = num('WEB_PORT', 8080);
 serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) => {
-  console.log(JSON.stringify({ at: new Date().toISOString(), msg: 'listening', port: info.port, agent: describeConfig(cfg) }));
+  console.log(JSON.stringify({ at: new Date().toISOString(), msg: 'listening', port: info.port, agent: describeConfig(cfg), url_scanner: scanner.enabled }));
 });

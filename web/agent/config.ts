@@ -77,3 +77,24 @@ export function loadAgentConfig(env: Env): AgentConfig {
 export function describeConfig(c: AgentConfig): Record<string, unknown> {
   return { enabled: c.enabled, base: c.baseUrl === '' ? '' : new URL(c.baseUrl).origin, model: c.model, vision: c.vision, timeout_ms: c.timeoutMs, max_tokens: c.maxTokens, thinking_off: c.thinkingOff, retries: c.retries, max_concurrent: c.maxConcurrent };
 }
+
+/**
+ * Cloudflare's URL Scanner as a second opinion on pages the sandbox could not read (notes: tools 2b). The token lives
+ * only in the web service's environment, like the model key (docs/containment.md, rule 2). Both empty: off. One without
+ * the other, or a value of the wrong shape, stops the service at start; an error never repeats the value.
+ */
+export interface ScannerConfig {
+  enabled: boolean;
+  accountId: string;
+  token: string;
+}
+
+export function loadScannerConfig(env: Env): ScannerConfig {
+  const accountId = (env.CF_URLSCANNER_ACCOUNT_ID ?? '').trim();
+  const token = (env.CF_URLSCANNER_TOKEN ?? '').trim();
+  if (accountId === '' && token === '') return { enabled: false, accountId: '', token: '' };
+  if (accountId === '' || token === '') throw new ConfigError('CF_URLSCANNER_ACCOUNT_ID and CF_URLSCANNER_TOKEN are set together or not at all');
+  if (!/^[0-9a-f]{32}$/.test(accountId)) throw new ConfigError('CF_URLSCANNER_ACCOUNT_ID must be the 32 hex characters of a Cloudflare account id');
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) throw new ConfigError('CF_URLSCANNER_TOKEN has an unexpected shape');
+  return { enabled: true, accountId, token };
+}

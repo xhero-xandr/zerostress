@@ -39,6 +39,16 @@ On a development machine: `cp config/web.env.example config/web.env`, add a key 
 | `AGENT_DAILY_TOKENS` | 4000000 | daily token budget |
 | `AGENT_MAX_STEPS` | 5 (0–20) | agent actions in one deep check |
 
+### Cloudflare URL Scanner (second opinion)
+A second opinion on pages the sandbox could not read because of a bot wall. Cloudflare's scanner gets through most bot protections (measured on 7 November 2026: 3 of 4 walled sites), though not an explicit "verify you are human" widget. On the free plan every scan is **public** at Cloudflare, so a visitor's link may only be sent with their consent.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `CF_URLSCANNER_ACCOUNT_ID` | empty | the Cloudflare account id (32 hex characters) |
+| `CF_URLSCANNER_TOKEN` | empty | an account-scoped API token with *Account > URL Scanner > Edit* (*Radar Read* only reads); a secret like the model key |
+
+Both empty turns it off. One without the other, or a value of the wrong shape, stops the service at start; the error never repeats the value.
+
 ### Service
 `<root>` is the directory two levels above `web/server/`: `/zerostress` on a server, your checkout on a development machine.
 
