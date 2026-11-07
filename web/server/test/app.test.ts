@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import type { ChatInput, ChatReply } from '../../agent/chat.ts';
 import type { Progress, TaskInput, TaskResult } from '../../agent/runner.ts';
 import { SupervisorError } from '../../agent/supervisor.ts';
+import { MAX_RUN_LOG } from '../../agent/agent-log.ts';
 import { createApp, MAX_BODY, type AppDeps } from '../app.ts';
 import { createLimiter, DEFAULT_LIMITS, type LimitConfig } from '../limits.ts';
 import { createStore } from '../store.ts';
@@ -706,8 +707,8 @@ const WALLED = (): TaskResult => hostile({
 } as never);
 const OPINION = { uuid: '11111111-2222-4333-8444-555555555555', source: 'found' as const, scanned_at: '2026-11-04T12:08:00.000Z', final_url: 'https://www.decathlon.si/', status: 200, title: 'Decathlon | Športna oprema', malicious: false };
 function scanner(outcome: Awaited<ReturnType<NonNullable<AppDeps['urlscan']>['opinion']>> | ((publish: boolean) => Awaited<ReturnType<NonNullable<AppDeps['urlscan']>['opinion']>>)) {
-  const calls: Array<{ url: string; publish: boolean }> = [];
-  return { calls, urlscan: { opinion: async (url: string, publish: boolean) => { calls.push({ url, publish }); return typeof outcome === 'function' ? outcome(publish) : outcome; } } };
+  const calls: Array<{ url: string; publish: boolean; submitted?: string }> = [];
+  return { calls, urlscan: { opinion: async (url: string, publish: boolean, submitted?: string) => { calls.push({ url, publish, ...(submitted ? { submitted } : {}) }); return typeof outcome === 'function' ? outcome(publish) : outcome; } } };
 }
 async function walledTask(r: Rig) {
   const j = (await (await post(r.app, { url: 'https://www.decathlon.si/' })).json()) as { id: string; key: string };
@@ -764,6 +765,56 @@ test('second opinion: a title that talks to the model is withheld, a checked pag
   read.finish();
   await tick();
   assert.equal((await ask(read, k.id, k.key)).status, 400, 'a page we judged ourselves');
+});
+
+test('second opinion: a scan still running is polled on the next ask, never sent again', async () => {
+  let n = 0;
+  const s = scanner(() => (++n === 1 ? { ok: false, reason: 'pending', submitted: OPINION.uuid } : { ok: true, opinion: { ...OPINION, source: 'submitted' }, screenshot: null }));
+  const r = rig({ urlscan: s.urlscan });
+  const j = await walledTask(r);
+  const first = await ask(r, j.id, j.key, { publish: true });
+  assert.equal(first.status, 503);
+  assert.equal(((await first.json()) as { code: string }).code, 'scan_pending');
+  assert.equal((await ask(r, j.id, j.key, { publish: true })).status, 200);
+  assert.deepEqual(s.calls.map((x) => x.submitted), [undefined, OPINION.uuid]);
+});
+
+test('second opinion: a link Cloudflare will not scan, and the day\'s scans used up, are told as such', async () => {
+  for (const [reason, status, code] of [['refused', 400, 'scan_refused'], ['quota', 503, 'scan_quota']] as const) {
+    const r = rig({ urlscan: scanner({ ok: false, reason }).urlscan });
+    const j = await walledTask(r);
+    const res = await ask(r, j.id, j.key, { publish: true });
+    assert.equal(res.status, status, reason);
+    assert.equal(((await res.json()) as { code: string }).code, code);
+  }
+});
+
+test('second opinion: one ask at a time per check', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const calls: string[] = [];
+  const r = rig({ urlscan: { opinion: async (url: string) => { calls.push(url); await gate; return { ok: true, opinion: OPINION, screenshot: null }; } } });
+  const j = await walledTask(r);
+  const a = ask(r, j.id, j.key);
+  await tick();
+  setTimeout(release, 200); // without the guard the second ask would wait for Cloudflare too, then answer 200
+  const b = await ask(r, j.id, j.key);
+  assert.equal(b.status, 429);
+  assert.equal((await a).status, 200);
+  assert.equal(calls.length, 1);
+});
+
+test('second opinion: its two entries reach the report even after a full log', async () => {
+  const s = scanner({ ok: true, opinion: OPINION, screenshot: null });
+  const r = rig({ urlscan: s.urlscan });
+  const j = (await (await post(r.app, { url: 'https://www.decathlon.si/' })).json()) as { id: string; key: string };
+  const full = WALLED();
+  full.log = Array.from({ length: MAX_RUN_LOG }, (_, i) => ({ t: i, code: 'screenshot' as const, d: {} }));
+  r.finish(full);
+  await tick();
+  assert.equal((await ask(r, j.id, j.key)).status, 200);
+  const rep = await (await r.app.request(`/r/${j.id}/report.json`)).json() as { log: Array<{ code: string }> };
+  assert.deepEqual(rep.log.map((e) => e.code).slice(-2), ['second_opinion_asked', 'second_opinion']);
 });
 
 test('second opinion: the body is ours only, from this site', async () => {

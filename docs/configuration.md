@@ -40,7 +40,7 @@ On a development machine: `cp config/web.env.example config/web.env`, add a key 
 | `AGENT_MAX_STEPS` | 5 (0–20) | agent actions in one deep check |
 
 ### Cloudflare URL Scanner (second opinion)
-A second opinion on pages the sandbox could not read because of a bot wall. Cloudflare's scanner gets through most bot protections (measured on 7 November 2026: 3 of 4 walled sites), though not an explicit "verify you are human" widget. On the free plan every scan is **public** at Cloudflare, so a visitor's link may only be sent with their consent.
+A second opinion on pages the sandbox could not read because of a bot wall. Cloudflare's scanner gets through most bot protections (measured on 7 November 2026: 3 of 4 walled sites), though not an explicit "verify you are human" widget. On the free plan every scan is **public** at Cloudflare, so a new scan of a visitor's link is only sent with their consent. Looking for an existing scan sends the exact link to Cloudflare's search (it is not published); that happens only when the owner of a report asks for a second opinion. A scan still running when the answer is due is polled on the next ask, never sent twice, and the whole service sends at most 50 new scans a day.
 
 | Variable | Default | What it does |
 |---|---|---|

@@ -114,7 +114,45 @@ test('Cloudflare away or a scan that never finishes ends in a plain refusal, nev
   assert.deepEqual(await away.opinion(URL1, true), { ok: false, reason: 'unavailable' });
   let t = NOW;
   const { c } = client({ '/search': () => js({ results: [] }), '/scan': () => js({ uuid: UUID }), [`/result/${UUID}`]: () => js({}, 404) }, { now: () => (t += 10_000), waitMs: 30_000 });
-  assert.deepEqual(await c.opinion(URL1, true), { ok: false, reason: 'pending' });
+  assert.deepEqual(await c.opinion(URL1, true), { ok: false, reason: 'pending', submitted: UUID }, 'with the scan to poll next time');
   const off = createUrlScanClient({ ...CFG, enabled: false });
   assert.deepEqual(await off.opinion(URL1, true), { ok: false, reason: 'unavailable' });
+});
+
+test('a scan still running is polled on the next ask: nothing is searched or sent again', async () => {
+  let done = false;
+  const { c, calls } = client({
+    '/search': () => js({ results: [] }),
+    '/scan': () => js({ uuid: UUID, visibility: 'public' }),
+    [`/result/${UUID}`]: () => (done ? js(result) : js({ message: 'in progress' }, 404)),
+    [`/screenshots/${UUID}.png`]: () => new Response(PNG),
+  }, { waitMs: 3, now: (() => { let t = NOW; return () => (t += 1); })() });
+  assert.deepEqual(await c.opinion(URL1, true), { ok: false, reason: 'pending', submitted: UUID });
+  const sent = calls.filter((x) => x.method === 'POST').length;
+  const searched = calls.filter((x) => x.url.includes('/search')).length;
+  done = true;
+  const again = await c.opinion(URL1, true, UUID);
+  assert.ok(again.ok);
+  assert.equal(again.opinion.source, 'submitted');
+  assert.equal(calls.filter((x) => x.method === 'POST').length, sent, 'no second scan');
+  assert.equal(calls.filter((x) => x.url.includes('/search')).length, searched, 'no second search');
+  const before = calls.length;
+  assert.deepEqual(await c.opinion(URL1, true, '../../x'), { ok: false, reason: 'unavailable' });
+  assert.equal(calls.length, before, 'a malformed id is never sent anywhere');
+});
+
+test('new public scans are capped per day for the whole service; finding a scan is not', async () => {
+  let t = NOW;
+  const { c, calls } = client({
+    '/search': (u) => js({ results: u.searchParams.get('q')!.includes('found.example') ? [hit('https://found.example/', '2026-11-06T12:00:00Z')] : [] }),
+    '/scan': () => js({ uuid: UUID, visibility: 'public' }),
+    [`/result/${UUID}`]: () => js(result),
+  }, { maxScansPerDay: 1, now: () => t });
+  assert.ok((await c.opinion('https://a.example/', true)).ok);
+  assert.deepEqual(await c.opinion('https://b.example/', true), { ok: false, reason: 'quota' });
+  assert.equal(calls.filter((x) => x.method === 'POST').length, 1);
+  assert.ok((await c.opinion('https://found.example/', true)).ok, 'a found scan costs nothing');
+  t = NOW + 86_400_000;
+  assert.ok((await c.opinion('https://b.example/', true)).ok, 'a new day');
+  assert.equal(calls.filter((x) => x.method === 'POST').length, 2);
 });

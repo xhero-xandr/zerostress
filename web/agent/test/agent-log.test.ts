@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, test } from 'node:test';
-import { cleanEntry, cleanLog, createLog, MAX_LOG } from '../agent-log.ts';
+import { cleanEntry, cleanLog, createLog, MAX_LOG, MAX_RUN_LOG } from '../agent-log.ts';
 import { loadPrompt } from '../assess.ts';
 import { loadAgentConfig } from '../config.ts';
 import { createModelClient } from '../model.ts';
@@ -33,7 +33,8 @@ test('an entry keeps only our codes and values of their own shape', () => {
 test('a log is bounded, and cleaning drops what is not an entry', () => {
   const log = createLog(() => 0);
   for (let i = 0; i < MAX_LOG + 20; i++) log.add('screenshot');
-  assert.equal(log.entries.length, MAX_LOG);
+  assert.equal(log.entries.length, MAX_RUN_LOG);
+  assert.equal(MAX_RUN_LOG, MAX_LOG - 2, 'room for the two entries of a second opinion');
   assert.deepEqual(cleanLog([null, 5, { t: 1, code: 'verdict', d: { verdict: 'benign', by: 'vision' } }, 'x']), [{ t: 1, code: 'verdict', d: { verdict: 'benign', by: 'vision' } }]);
   assert.deepEqual(cleanLog('not a list'), []);
 });

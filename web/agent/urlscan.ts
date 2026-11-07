@@ -31,7 +31,9 @@ export interface ScanOpinion {
 
 export type ScanOutcome =
   | { ok: true; opinion: ScanOpinion; screenshot: Uint8Array | null }
-  | { ok: false; reason: 'not_found' | 'needs_consent' | 'pending' | 'refused' | 'unavailable' };
+  | { ok: false; reason: 'not_found' | 'needs_consent' | 'refused' | 'unavailable' | 'quota' }
+  /** still scanning; `submitted` is the scan we sent, to be polled on the next ask instead of sending another */
+  | { ok: false; reason: 'pending'; submitted?: string };
 
 export interface UrlScanDeps {
   fetch?: typeof fetch;
@@ -42,6 +44,8 @@ export interface UrlScanDeps {
   pollMs?: number;
   /** how old a found scan may be */
   maxAgeDays?: number;
+  /** new public scans the whole service may send per day (UTC): each is published under our account */
+  maxScansPerDay?: number;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -60,6 +64,8 @@ export function createUrlScanClient(cfg: ScannerConfig, deps: UrlScanDeps = {}) 
   const waitMs = deps.waitMs ?? 75_000;
   const pollMs = deps.pollMs ?? 10_000;
   const maxAge = (deps.maxAgeDays ?? 30) * 86_400_000;
+  const maxScans = deps.maxScansPerDay ?? 50;
+  let scans = { day: '', count: 0 };
   const base = `${API}/${cfg.accountId}/urlscanner/v2`;
   const auth = { authorization: `Bearer ${cfg.token}` };
 
@@ -127,17 +133,34 @@ export function createUrlScanClient(cfg: ScannerConfig, deps: UrlScanDeps = {}) 
     return { ok: true, opinion, screenshot: await screenshot(uuid) };
   }
 
+  /** Polls a scan we sent until it is finished or the wait is over. */
+  async function waitFor(uuid: string): Promise<ScanOutcome> {
+    const until = now() + waitMs;
+    while (now() < until) {
+      await sleep(pollMs);
+      const done = await finish(uuid, 'submitted');
+      if (done.ok) return done;
+    }
+    return { ok: false, reason: 'pending', submitted: uuid };
+  }
+
   return {
     /**
      * A second opinion on one address. Without `publish` only a recent public scan of this exact address is used;
-     * with it, a new public scan is sent when none is found, and waited for.
+     * with it, a new public scan is sent when none is found, and waited for. `submitted` is a scan sent on an earlier
+     * ask that was still running: it is polled, and nothing new is sent.
      */
-    async opinion(url: string, publish: boolean): Promise<ScanOutcome> {
+    async opinion(url: string, publish: boolean, submitted?: string): Promise<ScanOutcome> {
       if (!cfg.enabled) return { ok: false, reason: 'unavailable' };
+      if (submitted !== undefined) return UUID.test(submitted) ? waitFor(submitted) : { ok: false, reason: 'unavailable' };
       const found = await find(url);
       if (found) return finish(found.uuid, 'found');
       if (!publish) return { ok: false, reason: 'needs_consent' };
       if (!searchFor(url)) return { ok: false, reason: 'refused' };
+      const day = new Date(now()).toISOString().slice(0, 10);
+      if (scans.day !== day) scans = { day, count: 0 };
+      if (scans.count >= maxScans) return { ok: false, reason: 'quota' };
+      scans.count++;
       const res = await call('/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, screenshotsResolutions: ['desktop'] }) });
       if (!res) return { ok: false, reason: 'unavailable' };
       if (res.status === 409) {
@@ -149,13 +172,7 @@ export function createUrlScanClient(cfg: ScannerConfig, deps: UrlScanDeps = {}) 
       const body = await json(res);
       const uuid = isObj(body) && typeof body.uuid === 'string' && UUID.test(body.uuid) ? body.uuid : null;
       if (!res.ok || !uuid) return { ok: false, reason: res.status === 400 || res.status === 422 ? 'refused' : 'unavailable' };
-      const until = now() + waitMs;
-      while (now() < until) {
-        await sleep(pollMs);
-        const done = await finish(uuid, 'submitted');
-        if (done.ok) return done;
-      }
-      return { ok: false, reason: 'pending' };
+      return waitFor(uuid);
     },
   };
 }

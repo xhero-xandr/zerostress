@@ -61,6 +61,8 @@ export interface LogEntry {
 }
 
 export const MAX_LOG = 200;
+/** the run itself stops two short of MAX_LOG: a second opinion asked later adds its two entries */
+export const MAX_RUN_LOG = MAX_LOG - 2;
 const CODES = new Set<string>(LOG_CODES);
 
 /** One entry of the right shape, or null. Unknown keys and values of the wrong shape are dropped, never repaired. */
@@ -91,7 +93,7 @@ export function createLog(now: () => number = Date.now) {
   return {
     entries,
     add(code: LogCode, d: Record<string, unknown> = {}): LogEntry | null {
-      if (entries.length >= MAX_LOG) return null;
+      if (entries.length >= MAX_RUN_LOG) return null;
       const e = cleanEntry({ t: Math.max(0, Math.round(now() - start)), code, d });
       if (e) entries.push(e);
       return e;

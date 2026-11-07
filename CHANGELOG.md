@@ -32,8 +32,10 @@ The first tagged release: everything built for the Vultr: Agent Rush hackathon u
 - A guest process that leaves its process group no longer outlives its job or stretches its timeout.
 - Request bodies are cut off while they are read; a start the supervisor refused costs no allowance.
 - Isolation tested from inside a real guest: 19 of 19 walls hold (`deploy/test/containment-e2e.sh`).
+- The second opinion sends at most 50 new public scans a day for the whole service, and a scan still running is polled on the next ask instead of being sent again.
 - In an email, only Google's own domains count as its redirector: a link on `google.attacker.example/url?q=…` is no longer unwrapped to the address it carries.
 
 ### Fixed
 - A report blamed the page for text addressed to AI assistants when only the model's own answer had tripped the detectors; the verdict still comes from the rules alone then, but the notice says what happened.
 - A link right-clicked into the panel with "let the agent act" ticked ran a quick check instead of a deep one.
+- A link Cloudflare will not scan was answered with "try again shortly"; a full agent log no longer drops the second opinion's entries from the report.

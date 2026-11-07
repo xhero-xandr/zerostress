@@ -1,7 +1,7 @@
 // The web layer's routes (spec 007). The app is built from its parts (the task runner, the supervisor calls, the store and the
 // limiter are passed in), so a test can drive it without a supervisor.
 
-import { cleanEntry } from '../agent/agent-log.ts';
+import { cleanEntry, MAX_LOG } from '../agent/agent-log.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanText } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -385,6 +385,8 @@ export function createApp(deps: AppDeps): Hono {
 
   // ---- a second opinion from Cloudflare's URL Scanner, on a page the sandbox could not read ----
   const asking = new Set<string>();
+  // a scan we sent that was still running when the answer was due: the next ask polls it instead of sending another
+  const submitted = new Map<string, string>();
   app.post('/api/tasks/:id/second-opinion', async (c) => {
     if (!deps.urlscan) return fail(c, 404, 'not_found');
     const t = owned(c);
@@ -401,12 +403,18 @@ export function createApp(deps: AppDeps): Hono {
     try {
       const publish = read.body.publish === true;
       const at = () => Math.min(86_400_000, Math.max(0, Date.now() - t.createdAt));
-      const out = await deps.urlscan.opinion(t.result.url, publish);
+      const out = await deps.urlscan.opinion(t.result.url, publish, submitted.get(t.id));
       if (!out.ok) {
         if (out.reason === 'needs_consent') return json(c, 409, { code: 'needs_consent', message: errorText('needs_consent') });
-        if (out.reason === 'pending') return json(c, 503, { code: 'scan_pending', message: errorText('scan_pending') }, { 'retry-after': '30' });
+        if (out.reason === 'pending') {
+          if (out.submitted) submitted.set(t.id, out.submitted);
+          return json(c, 503, { code: 'scan_pending', message: errorText('scan_pending') }, { 'retry-after': '30' });
+        }
+        if (out.reason === 'refused') return json(c, 400, { code: 'scan_refused', message: errorText('scan_refused') });
+        if (out.reason === 'quota') return json(c, 503, { code: 'scan_quota', message: errorText('scan_quota') });
         return fail(c, 503, 'supervisor_unavailable');
       }
+      submitted.delete(t.id);
       // the title was written by the page: it goes through the hooks like any text of a page
       const withheld = out.opinion.title !== '' && scanText('second_opinion', out.opinion.title).triggered;
       if (out.screenshot) deps.store.saveImage(t, 'second-opinion', out.screenshot);
@@ -415,7 +423,7 @@ export function createApp(deps: AppDeps): Hono {
       for (const entry of [
         cleanEntry({ t: at(), code: 'second_opinion_asked', d: { publish } }),
         cleanEntry({ t: at(), code: 'second_opinion', d: { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() } }),
-      ]) if (entry && t.result.log.length < 220) t.result.log.push(entry);
+      ]) if (entry && t.result.log.length < MAX_LOG) t.result.log.push(entry);
       deps.store.save(t);
       return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
     } finally {
