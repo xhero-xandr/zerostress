@@ -30,6 +30,7 @@ import { createLimiter, DEFAULT_LIMITS } from './limits.ts';
 import { createStore } from './store.ts';
 import type { Demo } from './text.ts';
 import { DEFAULT_DEMOS, parseDemos } from './demo.ts';
+import { createSenderCheck } from './sender.ts';
 
 const env = process.env;
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -82,6 +83,7 @@ const app = createApp({
   demos,
   session: { idle_s: 90, max_s: 240 },
   publicUrl: env.WEB_PUBLIC_URL ?? 'https://zerostress.space',
+  sender: createSenderCheck({ rdap }),
 });
 
 setInterval(() => { store.sweep(); }, 10 * 60_000).unref();

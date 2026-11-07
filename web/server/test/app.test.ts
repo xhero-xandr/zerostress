@@ -60,7 +60,7 @@ after(() => rmSync(CLIENT, { recursive: true, force: true }));
 
 interface Rig { app: ReturnType<typeof createApp>; calls: { approve: unknown[][]; reject: unknown[][]; inputs: TaskInput[]; shots: string[] }; finish(r?: TaskResult): void; fail(): void; progress(p: Progress): void }
 
-function rig(opts: { urlscan?: AppDeps['urlscan']; chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error | (() => Error | null); shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
+function rig(opts: { sender?: AppDeps['sender']; urlscan?: AppDeps['urlscan']; chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error | (() => Error | null); shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
   const calls = { approve: [] as unknown[][], reject: [] as unknown[][], inputs: [] as TaskInput[], shots: [] as string[] };
   const dones: Array<(r: TaskResult) => void> = [];
   const watchers: Array<(p: Progress) => void> = [];
@@ -81,6 +81,7 @@ function rig(opts: { urlscan?: AppDeps['urlscan']; chat?: AppDeps['chat']; limit
     reject: async (...a) => { calls.reject.push(a); },
     chat: opts.chat,
     ...(opts.urlscan ? { urlscan: opts.urlscan } : {}),
+    ...(opts.sender ? { sender: opts.sender } : {}),
     store: createStore(null, undefined, opts.now),
     limiter: createLimiter({ ...DEFAULT_LIMITS, ...opts.limits }, opts.now),
     demos: [{ label: 'Demo', url: 'https://example.com/' }],
@@ -974,4 +975,19 @@ test('an email check: each link\'s own screenshot is served by its number, and o
   assert.equal((await r.app.request(`/r/${j.id}/screenshot.png?link=0`)).status, 200);
   assert.deepEqual(r.calls.shots, ['link-1.png']);
   for (const bad of ['1', '-1', 'x', '0.5']) assert.equal((await r.app.request(`/r/${j.id}/screenshot.png?link=${bad}`)).status, 404, bad);
+});
+
+test('the sender of an email: only a domain is taken, cleaned; a few asks a minute per address', async () => {
+  const seen: string[] = [];
+  const r = rig({ sender: async (d) => { seen.push(d); return { domain: d, age_days: 3, created: null, dmarc: null, spf: false, mx: false, brand: null, lookalike: 'paypal', freemail: false }; } });
+  const ask = (body: unknown, ip = '1.1.1.1') => r.app.request('/api/sender', { method: 'POST', headers: { ...JSONH, 'x-test-ip': ip }, body: JSON.stringify(body) });
+  const ok = await ask({ domain: ' Secure-PayPal.COM. ' });
+  assert.equal(ok.status, 200);
+  assert.equal(((await ok.json()) as { sender: { lookalike: string } }).sender.lookalike, 'paypal');
+  assert.deepEqual(seen, ['secure-paypal.com']);
+  for (const bad of [{ domain: 'alice@shop.example' }, { domain: 'localhost' }, { domain: 'shop.example', address: 'alice@shop.example' }, { domain: 'a b.example' }, {}]) assert.equal((await ask(bad)).status, 400, JSON.stringify(bad));
+  for (let i = 0; i < 20; i++) assert.equal((await ask({ domain: 'x.example' }, '2.2.2.2')).status, 200);
+  assert.equal((await ask({ domain: 'x.example' }, '2.2.2.2')).status, 429);
+  assert.equal((await ask({ domain: 'x.example' }, '3.3.3.3')).status, 200, 'another address is not held back');
+  assert.equal((await rig().app.request('/api/sender', { method: 'POST', headers: JSONH, body: '{"domain":"x.example"}' })).status, 404);
 });

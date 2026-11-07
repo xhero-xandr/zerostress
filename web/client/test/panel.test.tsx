@@ -177,7 +177,8 @@ test('an email pasted after a check is read here: its links are offered, nothing
   fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: mail } });
   fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
   await waitFor(() => expect(document.body.textContent).toMatch(/I found 1 link in it/));
-  expect(sent.slice(before)).toEqual([]);
+  // only the sender's domain is looked up: never the address, never the email
+  await waitFor(() => expect(sent.slice(before).map((x) => [x.url, x.body])).toEqual([['/api/sender', JSON.stringify({ domain: 'bank.example' })]]));
   expect(document.body.textContent).not.toContain('Dear customer');
   expect(document.body.textContent).toMatch(/The email shows “https:\/\/www.paypal.com\/”, but the link goes somewhere else/);
   fireEvent.click(screen.getByRole('button', { name: 'Check this link' }));
@@ -201,7 +202,8 @@ test('the source of an email ("Show original"), sent with Enter: its sender chec
   expect(card.textContent).toMatch(/Replies go to x@elsewhere\.test/);
   expect(document.body.textContent).toMatch(/I found 1 link in it/);
   expect(document.body.textContent).toContain('https://login-phish.test/a');
-  expect(sent.slice(before)).toEqual([]);
+  // only the sender's domain is looked up: never the address, never the email
+  await waitFor(() => expect(sent.slice(before).map((x) => [x.url, x.body])).toEqual([['/api/sender', JSON.stringify({ domain: 'paypal.com' })]]));
 });
 
 test('a bare address typed after a check ("google.com") is a new check, not a question', async () => {

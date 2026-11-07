@@ -2,6 +2,7 @@
 // attachments. The links come after it, on the home page and in the side panel, each with its own button.
 import type { EmailCheck } from './email.ts';
 import { T } from './text.ts';
+import { SenderFacts } from './email-sender.tsx';
 
 const M = T.mail;
 
@@ -21,6 +22,7 @@ export function EmailFindings({ mail, compact = false }: { mail: EmailCheck; com
         </dl>
       )}
       {mail.source && !mail.auth && <p className={`${small} text-muted`}>{M.authNone}</p>}
+      {mail.source && <SenderFacts mail={mail} small={small} />}
       {!mail.source && <p className={`${small} text-muted`}>{M.textOnly}</p>}
       {mail.warnings.length > 0
         ? <ul aria-label={M.warnings} className={`flex flex-col gap-1 ${small}`}>{mail.warnings.map((w) => <li key={w.id + w.text} className={w.level === 'high' ? 'font-semibold text-danger' : 'text-warn'}>{w.text}</li>)}</ul>

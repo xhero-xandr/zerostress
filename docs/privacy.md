@@ -42,6 +42,7 @@ We do not send your data anywhere else.
 - **contextMenus**: adds "Check this link in a sandbox" to the right-click menu of a link, and "Check this page's address in a sandbox" to the menu of a page. Only that one address is taken, and only when you choose the item.
 - **sidePanel**: shows the ZeroStress agent (https://zerostress.space/panel) in the browser's side panel.
 - **storage**: keeps the link you right-clicked in the browser's session storage for the moment it takes the side panel to open, then removes it. Nothing is stored after you close the browser.
+- To tell who sent an email, the domain of its sender (for example `shop.example`, never the address) is looked up: its registration date and the mail policies it publishes in DNS.
 - An email you paste into the panel is read in your browser to find its links. The email is not sent to us; only the link you pick, or its links when you check the whole email, are sent. Unsubscribe links are left out.
 - Its code is open: https://github.com/xhero-xandr/zerostress
 

@@ -5,6 +5,7 @@ import { cleanEntry, MAX_LOG } from '../agent/agent-log.ts';
 import { DEMO_CSP, DEMO_FILE, DEMO_FILE_NAME, DEMO_PAGE } from './demo.ts';
 import { LEGAL_CSP, loadLegal } from './legal.ts';
 import { emailListPage } from './demo.ts';
+import { DOMAIN, type SenderInfo } from './sender.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanText } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -39,6 +40,8 @@ export interface AppDeps {
   clientIp?: (c: Context) => string;
   /** the built client (spec 012): index.html and assets/; the default is build/client at the project root (spec 010) */
   clientDir?: string;
+  /** what can be learnt about an email sender's domain (sender.ts); without it the endpoint is absent */
+  sender?: (domain: string) => Promise<SenderInfo>;
   /** this site's public address: the sandbox opens an email's list of links there (the default: zerostress.space) */
   publicUrl?: string;
   /** Cloudflare's URL Scanner for a second opinion on a page we could not read; without it the endpoint is absent */
@@ -212,6 +215,23 @@ export function createApp(deps: AppDeps): Hono {
       return fail(c, 503, 'supervisor_unavailable');
     }
     return json(c, 202, { id: task.id, key });
+  });
+
+  // ---- an email's sender: only its domain comes here (sender.ts); a few asks a minute per address ----
+  const senderAsks = new Map<string, number[]>();
+  app.post('/api/sender', async (c) => {
+    if (!deps.sender) return fail(c, 404, 'not_found');
+    const read = await readJsonBody(c);
+    if (!read.ok) return read.res;
+    const domain = typeof read.body.domain === 'string' ? read.body.domain.trim().toLowerCase().replace(/\.$/, '') : '';
+    if (Object.keys(read.body).some((k) => k !== 'domain') || !DOMAIN.test(domain)) return fail(c, 400, 'bad_request');
+    const who = ip(c);
+    const t = Date.now();
+    const recent = (senderAsks.get(who) ?? []).filter((x) => t - x < 60_000);
+    if (recent.length >= 20) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
+    senderAsks.set(who, [...recent, t]);
+    if (senderAsks.size > 10_000) senderAsks.clear();
+    return json(c, 200, { sender: await deps.sender(domain) });
   });
 
   // ---- an email: its links, each through the gate, all opened in one microVM (runner.ts, TaskInput.links) ----

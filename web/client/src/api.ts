@@ -57,6 +57,11 @@ export const startTask = (url: string, deep: boolean): Promise<{ id: string; key
 export const startEmailCheck = (links: string[]): Promise<{ id: string; key: string; links: number; skipped: number }> =>
   fetch('/api/email-checks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ links }) }).then((r) => read<{ id: string; key: string; links: number; skipped: number }>(r));
 
+export interface SenderInfo { domain: string; age_days: number | null; created: string | null; dmarc: 'reject' | 'quarantine' | 'none' | null; spf: boolean; mx: boolean; brand: string | null; lookalike: string | null; freemail: boolean }
+/** what is known about the domain an email came from: only the domain is sent */
+export const getSender = (domain: string): Promise<{ sender: SenderInfo }> =>
+  fetch('/api/sender', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ domain }) }).then((r) => read<{ sender: SenderInfo }>(r));
+
 export interface ChatAnswer { text: string; source: 'model' | 'rules'; note: string | null }
 export const askChat = (id: string, payload: { kind: 'explain' } | { kind: 'ask'; message: string }): Promise<ChatAnswer> =>
   fetch(`/api/reports/${id}/chat`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) }).then((r) => read<ChatAnswer>(r));
