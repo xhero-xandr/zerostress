@@ -279,8 +279,11 @@ test('an email: every link opened in this one microVM from our list, each judged
         ev('links', { snap, links: [] }),
       ]);
     } else if (cmd.cmd === 'screenshot') {
-      sup.emit('artifact', { saved: true, name: `shot-${++shots}.png`, sha256: 'b'.repeat(64), bytes: 100, mime: 'image/png' });
-      ack(cmd, []);
+      // the image of each link is told by its own file name, whatever order the uploads arrive in
+      const name = `shot-${++shots}.png`;
+      ack(cmd, [ev('artifact', { id: `a${shots}`, file: name, name: 'screenshot.png', bytes: 100, sha256: 'b'.repeat(64), mime: 'image/png', saved: true })]);
+      // out of order: the first upload is told only after the second
+      if (shots === 2) for (const n of ['shot-2.png', 'shot-1.png']) sup.emit('artifact', { saved: true, name: n, sha256: 'b'.repeat(64), bytes: 100, mime: 'image/png' });
     } else if (cmd.cmd === 'back') {
       snap++;
       ack(cmd, list());

@@ -298,7 +298,6 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   // evidence is the stretch between its click and the way back, read afterwards as a visit of its own.
   interface Stretch { url: string; start: number; end: number; error: string | null; shot: boolean }
   const stretches: Stretch[] = [];
-  let shotBase = 0;
   let cmdNo = 0;
   async function send(cmd: Record<string, unknown>): Promise<Step | null> {
     const id = `e${++cmdNo}`;
@@ -332,7 +331,6 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   };
   async function driveEmail(links: string[]): Promise<void> {
     note('email_links', { count: links.length });
-    shotBase = artifacts.length;
     for (const [i, url] of links.entries()) {
       if (finished || total.signal.aborted) break;
       const ref = refOf(url);
@@ -356,14 +354,15 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
 
   /** Each link's stretch as a visit of its own, judged like any other: by the rules, and by the model with its image. */
   async function judgeEmail(links: string[]): Promise<{ results: EmailLinkResult[]; worst: { assessment: Assessment; events: unknown[]; shot: string | null; url: string; final: string } | null }> {
-    const pngs = artifacts.slice(shotBase).filter((a) => a.mime === 'image/png').map((a) => a.name);
-    let k = 0;
+    // a link's image is the one the collector saved within that link's own stretch, by its file name
+    const saved = new Set(artifacts.filter((a) => a.mime === 'image/png').map((a) => a.name));
     const visits = stretches.map((st) => {
       const own = events.slice(st.start, st.end).filter((e) => !(isObj(e) && (e.kind === 'cmd_result' || e.kind === 'snapshot')));
       const pages = own.filter((e): e is Ev => isObj(e) && e.kind === 'page');
       const final = typeof pages.at(-1)?.url === 'string' ? String(pages.at(-1)!.url) : st.url;
       const evs: unknown[] = [{ kind: 'nav', via: 'requested', from: '', to: st.url }, ...own, { kind: 'summary', final_url: final, nav_error: st.error === null ? null : 'not_opened' }];
-      const shot = st.shot ? (pngs[k++] ?? null) : null;
+      const file = own.filter((e): e is Ev => isObj(e) && e.kind === 'artifact' && e.saved === true && e.mime === 'image/png').map((e) => String(e.file)).at(-1);
+      const shot = st.shot && file && saved.has(file) ? file : null;
       return { st, evs, final, shot };
     });
     const RANK: Record<Verdict, number> = { benign: 0, unknown: 1, suspicious: 2, malicious: 3 };
@@ -383,7 +382,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
         verdict,
         by: a?.mode ?? 'rules_only',
         signals: a ? a.rules.signals.map((x) => x.id) : [],
-        password: own.some((e) => e.kind === 'forms' && Array.isArray(e.forms) && e.forms.some((f) => isObj(f) && f.has_password === true)),
+        password: own.some((e) => e.kind === 'forms' && ((Array.isArray(e.forms) && e.forms.some((f) => isObj(f) && f.has_password === true)) || (typeof e.loose_password_fields === 'number' && e.loose_password_fields > 0))),
         downloads: own.filter((e) => e.kind === 'download').length,
         redirects: own.filter((e) => e.kind === 'nav' && e.via === 'http').length,
         error: v.st.error,
