@@ -191,6 +191,8 @@ export function extractJson(text: string): unknown {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Reads the answer. `valid` is the set of evidence references that were really shown to the model. */
+const EVIDENCE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*|\[\d{1,3}\])*$/;
+
 export function parseAnswer(text: string, valid: ReadonlySet<string>): ParsedAnswer {
   if (text.length > 20_000) return { ok: false, error: 'too long' };
   const raw = extractJson(text);
@@ -209,8 +211,9 @@ export function parseAnswer(text: string, valid: ReadonlySet<string>): ParsedAns
       dropped++;
       continue;
     }
-    // "forms.cross_origin" or "links[2]" point into the field "forms" or "links": the part before the first dot or bracket is what must exist
-    const evidence = r.evidence.filter((e): e is string => typeof e === 'string' && e.length <= 80 && valid.has(e.split(/[.[]/, 1)[0]!)).slice(0, MAX_EVIDENCE);
+    // "forms.cross_origin" or "links[2]" point into the field "forms" or "links": the part before the first dot or bracket
+    // must exist, and the rest may only be more field names and indexes, never words of the model's own
+    const evidence = r.evidence.filter((e): e is string => typeof e === 'string' && e.length <= 80 && EVIDENCE_PATH.test(e) && valid.has(e.split(/[.[]/, 1)[0]!)).slice(0, MAX_EVIDENCE);
     dropped += r.evidence.length - evidence.length;
     if (evidence.length === 0) {
       dropped++; // a claim that cites nothing that exists is not a reason

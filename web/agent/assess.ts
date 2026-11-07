@@ -10,7 +10,7 @@ import type { AgentConfig } from './config.ts';
 import { buildDossier } from './dossier.ts';
 import { parseAnswer, type Answer, type Message, type ModelClient } from './model.ts';
 import { analyze, raise, type Signal, type Verdict } from './signals.ts';
-import { scanText, type HookState } from '../hooks/index.ts';
+import type { TaskHooks } from './task-hooks.ts';
 import { RULESET_SHA256 } from '../hooks/rules.ts';
 
 export type Mode = 'rules_only' | 'text' | 'vision';
@@ -65,7 +65,8 @@ export interface AssessDeps {
 export interface AssessInput {
   /** the evidence, already inspected by the hooks */
   events: readonly unknown[];
-  hooks: Pick<HookState, 'triggered'>;
+  /** the task's hooks: read for what fired so far, and every scan made here is remembered for the rest of the task */
+  hooks: TaskHooks;
   /** the screenshot as a PNG, if there is one and the model should see it */
   screenshot?: Uint8Array | null;
   /** days since the final site's domain was registered, if known */
@@ -119,7 +120,7 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
     const text = JSON.stringify(dossier.json);
 
     // the last look before the model: the dossier is built by us, but it is made of what the page said
-    if (scanText('dossier', text).triggered) return degrade('hooks_fired', 'the dossier itself tripped the hooks');
+    if (input.hooks.scan('dossier', text)) return degrade('hooks_fired', 'the dossier itself tripped the hooks');
 
     const nonce = (deps.nonce ?? (() => createHash('sha256').update(`${Math.random()}${nowMs}`).digest('hex').slice(0, 16)))();
     const body = `Review this dossier.\n<untrusted_data id="${nonce}">\n${text}\n</untrusted_data id="${nonce}">`;
@@ -148,8 +149,8 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
     const answer = parsed.answer;
 
     // the model may have repeated what the page told it: its words go through the hooks like any other
-    const outputs = [answer.summary, ...answer.reasons.map((x) => x.claim)];
-    if (outputs.some((t) => scanText('model', t).triggered)) return degrade('model_output_flagged', 'the model\'s own words tripped the hooks; its opinion is ignored');
+    const outputs = [answer.summary, ...answer.reasons.flatMap((x) => [x.claim, ...x.evidence])];
+    if (outputs.map((t) => input.hooks.scan('model', t)).some(Boolean)) return degrade('model_output_flagged', 'the model\'s own words tripped the hooks; its opinion is ignored');
 
     result.mode = mode;
     result.mode_reason = null;

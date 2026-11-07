@@ -2,6 +2,7 @@
 // hooks, ask for the verdict, let the model's proposals through the gatekeeper into the live session, and give a result
 // that says what happened. The supervisor is the one that opens the page; nothing here touches a page.
 
+import { taskHooks } from './task-hooks.ts';
 import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
 import type { Budget } from './budget.ts';
@@ -102,6 +103,8 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   const sub = await deps.sup.submit(input.url, input.session);
   const runId = sub.run_id;
   const hooks = (deps.hooks ?? createGuardedHooks)();
+  // one latch for the whole task: the page's events and every scan the agent makes (docs/containment.md, rule 9)
+  const task = taskHooks(() => hooks.state());
   const gate = createGatekeeper({ maxSteps: deps.cfg.maxSteps });
 
   const progress = (p: Progress): void => {
@@ -169,13 +172,18 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   };
 
   const assessNow = async (): Promise<Assessment> =>
-    assess({ events: [...events], hooks: hooks.state(), screenshot: await screenshot(), domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+    assess({ events: [...events], hooks: task, screenshot: await screenshot(), domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
 
   // ---- the agent's part of a session: look, decide, act, look again ----
   async function drive(): Promise<void> {
     for (let i = 0; i < deps.cfg.maxSteps && !finished; i++) {
       const a = await assessNow();
       if (a.mode === 'rules_only' || !a.next) break;
+      // the page kept streaming while the model was thinking: a proposal made before the hooks fired is not carried out
+      if (task.triggered) {
+        notes.push('the hooks fired while the model was deciding; its proposal was not carried out');
+        break;
+      }
       const d = gate.decide(a.next);
       if (!d.ok) {
         refused.push({ proposal: a.next, reason: d.reason });
@@ -302,7 +310,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     for (const id of [...waiters.keys()]) wake(id);
     if (driving) await driving.catch(() => notes.push('the session driver failed'));
     const assessment = await assessNow();
-    const hs = hooks.state();
+    const hs = { triggered: task.triggered, findings: task.findings(), ruleset: hooks.state().ruleset };
     return {
       schema: 1,
       run_id: runId,

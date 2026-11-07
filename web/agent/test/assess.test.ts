@@ -1,3 +1,4 @@
+import { taskHooks } from '../task-hooks.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
@@ -35,7 +36,7 @@ function fixture(name: string): unknown[] {
 function pipeline(name: string) {
   const hooks = createHooks();
   const events = fixture(name).map((e) => hooks.inspect(e).event);
-  return { events, hooks: hooks.state() };
+  return { events, hooks: taskHooks(() => hooks.state()) };
 }
 
 async function run(name: string, h: (s: Seen, n: number) => Reply, env: Record<string, string> = {}, extra: { screenshot?: Uint8Array | null; budget?: ReturnType<typeof createBudget> } = {}) {
@@ -83,7 +84,7 @@ test('the dossier is checked too: evidence that skipped the hooks does not reach
   // the raw events of the injection page, handed over as if the hooks had not fired
   const s = await serve(() => chat(answer()));
   const cfg = cfgFor(s.url);
-  const a = await assess({ events: fixture('inject'), hooks: { triggered: false } }, { cfg, prompt, client: createModelClient(cfg) });
+  const a = await assess({ events: fixture('inject'), hooks: taskHooks() }, { cfg, prompt, client: createModelClient(cfg) });
   assert.equal(s.seen.length, 0);
   assert.equal(a.mode_reason, 'hooks_fired');
   assert.ok(a.notes.some((n) => /dossier/.test(n)));
@@ -129,7 +130,7 @@ test('a huge page is cut down to the limit before it is shown', async () => {
   const events = fixture('plain').map((e) => (e as { kind: string }).kind === 'page' ? { ...(e as object), text: 'word '.repeat(100_000) } : e);
   const s = await serve(() => chat(answer()));
   const cfg = cfgFor(s.url);
-  await assess({ events, hooks: { triggered: false } }, { cfg, prompt, client: createModelClient(cfg) });
+  await assess({ events, hooks: taskHooks() }, { cfg, prompt, client: createModelClient(cfg) });
   const user = s.seen[0]!.body.messages[1].content as string;
   assert.ok(user.length < 41_000, String(user.length));
   assert.ok(user.includes('word word'), 'the beginning of the text is there');
@@ -257,7 +258,7 @@ test('nothing escapes: a client that throws, events that are junk', async () => 
   const a = await assess({ events: p.events, hooks: p.hooks }, { cfg, prompt, client: boom });
   assert.equal(a.mode_reason, 'model_unavailable');
   assert.equal(a.verdict, 'benign');
-  const junk = await assess({ events: [null, 5, 'x', {}, [], { kind: 'page', text: {} }], hooks: { triggered: false } }, { cfg, prompt, client: boom });
+  const junk = await assess({ events: [null, 5, 'x', {}, [], { kind: 'page', text: {} }], hooks: taskHooks() }, { cfg, prompt, client: boom });
   assert.ok(['unknown', 'benign'].includes(junk.verdict));
 });
 
