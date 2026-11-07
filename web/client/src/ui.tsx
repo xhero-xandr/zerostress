@@ -43,7 +43,7 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
 export function SiteFooter() {
   return (
     <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 px-4 py-6 text-[13px] text-faint sm:px-6">
-      <span>{T.footerLeft} · <a href={releasePage()} className="text-faint" title={T.versionTitle}>ZeroStress {BUILD}</a></span>
+      <span>{T.footerLeft} · <a href={releasePage()} className="text-faint" title={T.versionTitle}>ZeroStress {BUILD}</a> · <a href="/privacy" className="text-faint">{T.privacy}</a> · <a href="/terms" className="text-faint">{T.terms}</a></span>
       <span>{T.footerRight}</span>
     </footer>
   );

@@ -875,3 +875,21 @@ test('the demo page offers a harmless file, runs no script, and is not indexed',
   assert.match(await file.text(), /^ZeroStress demo file\./);
   assert.equal((await r.app.request('/demo/files/other.txt')).status, 404);
 });
+
+test('the privacy policy and the terms are pages from docs/, with no script', async () => {
+  const r = rig();
+  for (const [path, title] of [['/privacy', 'Privacy policy'], ['/terms', 'Terms of use']] as const) {
+    const res = await r.app.request(path);
+    assert.equal(res.status, 200, path);
+    const html = await res.text();
+    assert.match(html, new RegExp(`<title>${title} · ZeroStress</title>`));
+    assert.match(html, new RegExp(`<h1>${title}</h1>`));
+    assert.match(html, /<a href="mailto:devp\.xandr@gmail\.com">devp\.xandr@gmail\.com<\/a>/);
+    assert.doesNotMatch(html, /<script|\son[a-z]+=/i);
+    assert.match(res.headers.get('content-security-policy') ?? '', /^default-src 'none';/);
+    assert.doesNotMatch(res.headers.get('content-security-policy') ?? '', /script-src/);
+  }
+  const privacy = await (await r.app.request('/privacy')).text();
+  assert.match(privacy, /<li><strong>storage<\/strong>: keeps the link/);
+  assert.match(privacy, /deleted 24 hours after the check/);
+});

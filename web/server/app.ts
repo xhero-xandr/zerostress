@@ -3,6 +3,7 @@
 
 import { cleanEntry, MAX_LOG } from '../agent/agent-log.ts';
 import { DEMO_CSP, DEMO_FILE, DEMO_FILE_NAME, DEMO_PAGE } from './demo.ts';
+import { LEGAL_CSP, loadLegal } from './legal.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanText } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -169,6 +170,9 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/api/demos', (c) => json(c, 200, { demos: deps.demos }));
 
   // a safe page that offers a harmless file: the risky step a deep check can ask the owner about (server/demo.ts)
+  const legal = loadLegal(fileURLToPath(new URL('../../docs', import.meta.url)));
+  app.get('/privacy', (c) => c.html(legal.privacy, 200, { 'content-security-policy': LEGAL_CSP, 'cache-control': 'no-cache' }));
+  app.get('/terms', (c) => c.html(legal.terms, 200, { 'content-security-policy': LEGAL_CSP, 'cache-control': 'no-cache' }));
   app.get('/demo/shared-file', (c) => c.html(DEMO_PAGE, 200, { 'content-security-policy': DEMO_CSP, 'x-robots-tag': 'noindex', 'cache-control': 'no-store' }));
   app.get(`/demo/files/${DEMO_FILE_NAME}`, (c) => c.body(DEMO_FILE, 200, {
     'content-type': 'text/plain; charset=utf-8',

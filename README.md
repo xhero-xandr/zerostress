@@ -98,7 +98,7 @@ The directory a piece of code sits in tells you its privilege level and where it
 | `guest/` | `agent/` (the Go job receiver, over vsock), `collector/` (Node.js + Playwright over a raw CDP session), `image/` (builds the guest disk image) | `agent/` and `collector/` run **inside the guest micro-VM** as an unprivileged user; `image/` runs on the host only to build the image |
 | `config/` | `web.env` (holds the model key) and `supervisor.env`, git-ignored; their `*.example` templates are in git | Read by systemd for the services |
 | `deploy/` | `steps/` (what `./zs install` runs), `versions.env` (every pinned version and checksum), `files/` (the few system files: units, sudoers, sysctl, udev, logrotate), `helpers/` (`zsvm`, `zsnet`), `test/` (tests on real micro-VMs) | **Host**, at install time |
-| `docs/` | [Install and operate](docs/install.md), [configuration](docs/configuration.md), [containment rules](docs/containment.md) | Documentation only |
+| `docs/` | [Install and operate](docs/install.md), [configuration](docs/configuration.md), [containment rules](docs/containment.md), [privacy policy](docs/privacy.md), [terms of use](docs/terms.md) | Documentation only |
 | `build/` | Everything generated (binaries, the built client, check screenshots); git-ignored | — |
 
 On a server the checkout lives at `/zerostress` and everything else lives next to it, git-ignored: `bin/` (Firecracker, the root helpers, Caddy, the supervisor), `runtime/` (Node, Go), `images/` (the guest image), `data/`, `logs/`, `run/`. One command, `./zs`, installs, updates, starts, shows logs, edits settings and verifies.

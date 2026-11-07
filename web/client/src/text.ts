@@ -57,10 +57,12 @@ export const T = {
     ['One VM per check', 'Destroyed afterwards, also after an error or a timeout.'],
     ['No secrets inside', 'Keys stay on the host; the guest image carries none.'],
     ['Closed network', 'Only the public internet; never the host or internal ranges.'],
-    ['You approve risky steps', 'A download or a form submit waits for your explicit yes.'],
+    ['You approve risky steps', 'A download waits for your explicit yes, and a form is never sent.'],
   ] as const,
   footerLeft: 'MIT licensed · Built for Vultr: Agent Rush',
   versionTitle: 'The version of this site; its release notes',
+  privacy: 'Privacy',
+  terms: 'Terms',
   footerRight: 'Links are opened only inside disposable sandboxes. Reports are kept for 24 hours.',
   github: 'GitHub',
 
