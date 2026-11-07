@@ -23,6 +23,7 @@ The first tagged release: everything built for the Vultr: Agent Rush hackathon u
 - A second opinion from Cloudflare's URL Scanner when a bot check keeps the sandbox out: a recent public scan of exactly that link first, a new public scan only with consent.
 - Links from an email, found in the browser (the email is never sent), with a warning when a link's text shows another site, and Safe Links / Google / Facebook redirects unwrapped.
 - A browser extension: right-click a link and the agent opens in the side panel; the agent itself is the page `/panel` of the site, so it updates with the site.
+- The home page says how to get the browser agent: the latest release's zip and three steps to install it.
 - An "Explain" chat over the finished report.
 - One command, `./zs`, to install, update, configure and verify a host; all versions and checksums pinned in `deploy/versions.env`.
 

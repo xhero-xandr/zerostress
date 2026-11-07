@@ -43,3 +43,12 @@ test('"/?u=" fills the field and starts nothing by itself', async () => {
   await new Promise((r) => setTimeout(r, 20));
   expect(sent.filter((x) => x.url === '/api/tasks')).toEqual([]);
 });
+
+test('the home page says how to get the browser agent, with the latest release', () => {
+  show();
+  const link = screen.getByRole('link', { name: /Download the extension/ });
+  expect(link.getAttribute('href')).toBe('https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip');
+  expect(document.body.textContent).toMatch(/Load unpacked/);
+  expect(document.body.textContent).toContain('chrome://extensions');
+  expect(screen.getByRole('link', { name: 'Extension' }).getAttribute('href')).toBe('#extension');
+});

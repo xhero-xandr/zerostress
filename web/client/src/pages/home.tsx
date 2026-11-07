@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Monitor, ScanSearch, ShieldHalf } from 'lucide-react';
+import { Copy, Download, Monitor, PanelRight, ScanSearch, ShieldHalf } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startTask } from '../api.ts';
@@ -41,6 +41,7 @@ export function Home() {
         <nav aria-label="Main" className="hidden gap-6 text-[15px] sm:flex">
           <a href="#how" className="text-muted no-underline hover:text-fg">How it works</a>
           <a href="#sandbox" className="text-muted no-underline hover:text-fg">The sandbox</a>
+          <a href="#extension" className="text-muted no-underline hover:text-fg">{T.ext.nav}</a>
           <a href="https://github.com/xhero-xandr/zerostress" className="text-muted no-underline hover:text-fg">{T.github}</a>
         </nav>
       </SiteHeader>
@@ -141,6 +142,8 @@ export function Home() {
           </ol>
         </section>
 
+        <ExtensionSection />
+
         <section id="sandbox" aria-labelledby="sandbox-title" className="bg-band text-band-fg">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6">
             <h2 id="sandbox-title" className="flex items-center gap-2.5 text-2xl font-bold">
@@ -159,5 +162,49 @@ export function Home() {
       </main>
       <SiteFooter />
     </div>
+  );
+}
+
+export const EXTENSION_ZIP = 'https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip';
+
+/** Where to get the browser agent and how to install it (an unpacked extension until the Chrome Web Store has it). */
+function ExtensionSection() {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(T.ext.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {});
+  };
+  return (
+    <section id="extension" aria-labelledby="extension-title" className="mx-auto max-w-6xl px-4 pb-14 sm:px-6">
+      <div className="grid gap-6 rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:grid-cols-2">
+        <div className="flex flex-col gap-3">
+          <h2 id="extension-title" className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+            <PanelRight className="size-6 text-accent" aria-hidden /> {T.ext.title}
+          </h2>
+          <p className="text-[15px] leading-relaxed text-muted">{T.ext.text}</p>
+          <a href={EXTENSION_ZIP} className={`${btnPrimary} self-start no-underline`}>
+            <Download className="size-5" aria-hidden /> {T.ext.download}
+          </a>
+          <p className="text-sm text-faint">{T.ext.browsers}</p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <h3 className="text-[17px] font-semibold">{T.ext.stepsTitle}</h3>
+          <ol className="flex flex-col gap-2.5">
+            {T.ext.steps.map((s, i) => (
+              <li key={s} className="flex gap-3 text-[15px]">
+                <span className="flex size-7 flex-none items-center justify-center rounded-lg bg-accent-soft text-sm font-bold text-accent-ink" aria-hidden>{i + 1}</span>
+                <span className="pt-0.5">{s}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="flex items-center gap-2 self-start rounded-xl border border-line-strong bg-canvas px-3 py-2">
+            <code className="font-mono text-[15px]">{T.ext.address}</code>
+            <button type="button" onClick={copy} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-muted hover:text-fg">
+              <Copy className="size-4" aria-hidden /> {copied ? T.ext.copied : T.ext.copy}
+            </button>
+          </div>
+          <p className="text-sm text-faint">{T.ext.later}</p>
+        </div>
+      </div>
+    </section>
   );
 }
