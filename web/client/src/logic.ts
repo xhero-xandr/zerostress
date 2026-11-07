@@ -155,7 +155,8 @@ const MAX_LINKS = 30;
 /** Known redirectors and the parameter that carries the real address. */
 const WRAPPERS: Array<{ host: RegExp; param: string[]; name: string }> = [
   { host: /(^|\.)safelinks\.protection\.outlook\.com$/, param: ['url'], name: 'Microsoft Safe Links' },
-  { host: /^(www\.)?google\.[a-z.]+$/, param: ['q', 'url'], name: 'Google' },
+  // Google's own country domains only (google.com, google.de, google.co.uk, google.com.br): never google.<anything>.com
+  { host: /^(www\.)?google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/, param: ['q', 'url'], name: 'Google' },
   { host: /^l\.facebook\.com$/, param: ['u'], name: 'Facebook' },
 ];
 

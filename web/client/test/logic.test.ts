@@ -138,6 +138,15 @@ describe('links in an email', () => {
     const links = linksFromEmail(`${safe}\n${g}\nhttps://www.google.com/search?q=https://not-a-redirect.test/`);
     expect(links.map((l) => [l.url, l.wrapper])).toEqual([['https://login-update.test/a?b=1', 'Microsoft Safe Links'], ['https://target.test/', 'Google'], ['https://www.google.com/search?q=https://not-a-redirect.test/', null]]);
   });
+  test('a host that only starts with google is not taken for Google\'s redirector', () => {
+    const inner = encodeURIComponent('https://www.mybank.example/login');
+    for (const h of ['google.attacker.com', 'www.google.evil.test', 'google.com.attacker.net', 'google.co.uk.evil.test', 'google.c0m']) {
+      expect(linksFromEmail(`https://${h}/url?q=${inner}`).map((l) => [l.host, l.wrapper])).toEqual([[h, null]]);
+    }
+    for (const h of ['google.com', 'www.google.de', 'google.co.uk', 'www.google.com.br']) {
+      expect(linksFromEmail(`https://${h}/url?q=${inner}`).map((l) => [l.host, l.wrapper])).toEqual([['www.mybank.example', 'Google']]);
+    }
+  });
   test('only web addresses: no script, mail or data links, and no more than thirty', () => {
     expect(linksFromEmail('<a href="javascript:alert(1)">x</a><a href="mailto:a@b.c">m</a><a href="data:text/html,x">d</a>')).toEqual([]);
     const many = Array.from({ length: 50 }, (_, i) => `https://s${i}.example/`).join(' ');

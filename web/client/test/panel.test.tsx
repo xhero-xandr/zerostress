@@ -46,6 +46,13 @@ test('a link is taken only from our extension that frames the page', async () =>
   await waitFor(() => expect(sent.filter((x) => x.url === '/api/tasks').map((x) => JSON.parse(x.body).url)).toEqual(['https://paypa1-secure.test/login']));
 });
 
+test('a link from the extension is checked deeply when "let the agent act" was ticked after the panel opened', async () => {
+  render(<Panel />);
+  fireEvent.click(screen.getByRole('checkbox'));
+  fromParent(EXTENSION_ORIGIN, { type: 'zs-check', link: 'https://shop.test/form' });
+  await waitFor(() => expect(sent.filter((x) => x.url === '/api/tasks').map((x) => JSON.parse(x.body))).toEqual([{ url: 'https://shop.test/form', deep: true }]));
+});
+
 test('the agent tells its steps, asks before a risky action, then gives and explains the verdict', async () => {
   render(<Panel />);
   fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://paypa1-secure.test/login' } });

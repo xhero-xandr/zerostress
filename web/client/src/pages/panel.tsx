@@ -27,6 +27,9 @@ export function Panel() {
   const [items, setItems] = useState<Item[]>([{ kind: 'agent', text: P.hello }]);
   const [text, setText] = useState(linkFromQuery(location.search));
   const [deep, setDeep] = useState(false);
+  // read when a check starts: the extension's link arrives through a listener set up once, which would see only the first value
+  const deepNow = useRef(false);
+  deepNow.current = deep;
   const task = useRef<{ id: string; key: string; report: boolean; es: EventSource | null } | null>(null);
   const busy = useRef(false);
   const end = useRef<HTMLDivElement>(null);
@@ -97,7 +100,7 @@ export function Panel() {
     task.current?.es?.close();
     busy.current = true;
     try {
-      const { id, key } = await startTask(link, deep);
+      const { id, key } = await startTask(link, deepNow.current);
       if (!isTaskId(id) || !/^[A-Za-z0-9_-]{20,100}$/.test(key)) throw new ApiError(500, 'server', T.serverError);
       task.current = { id, key, report: false, es: null };
       asked.current = new Set();

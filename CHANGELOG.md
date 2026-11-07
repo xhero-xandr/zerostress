@@ -32,3 +32,8 @@ The first tagged release: everything built for the Vultr: Agent Rush hackathon u
 - A guest process that leaves its process group no longer outlives its job or stretches its timeout.
 - Request bodies are cut off while they are read; a start the supervisor refused costs no allowance.
 - Isolation tested from inside a real guest: 19 of 19 walls hold (`deploy/test/containment-e2e.sh`).
+- In an email, only Google's own domains count as its redirector: a link on `google.attacker.example/url?q=…` is no longer unwrapped to the address it carries.
+
+### Fixed
+- A report blamed the page for text addressed to AI assistants when only the model's own answer had tripped the detectors; the verdict still comes from the rules alone then, but the notice says what happened.
+- A link right-clicked into the panel with "let the agent act" ticked ran a quick check instead of a deep one.
