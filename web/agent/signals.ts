@@ -55,6 +55,9 @@ const CHALLENGE_INFRA = /\/cdn-cgi\/challenge-platform\/|[?&]__cf_chl_|challenge
 const CHALLENGE_TITLE = /^\s*(just a moment|attention required!? ?\|? ?cloudflare|checking your browser|verifying you are human|verify you are human|ddos protection by|one more step|please wait while|security check|are you a robot|pardon our interruption|access denied)\b/i;
 
 /** The warning page Cloudflare puts in front of a site it has itself flagged: its own verdict, not the site's content. */
+/** The same walls in other languages: Cloudflare's own "Just a moment" as it is translated, and "you are not a robot". */
+const CHALLENGE_TITLE_INTL = /^\s*(один момент|einen moment|nur einen moment|un instant|un momento|um momento|solo un momento|chwileczkę|bir dakika|しばらくお待ちください|请稍候|잠시만 기다리십시오)|не робот|что вы человек|kein roboter|pas un robot|no eres un robot|não é um robô|non sei un robot|nie jesteś robotem|robot değil/i;
+
 const PROVIDER_WARNING_TITLE = /^\s*suspected (phishing|malware)\s*\|\s*cloudflare\b/i;
 
 export function analyze(events: readonly unknown[], opts: Options = {}): Analysis {
@@ -147,8 +150,16 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   if (off.length) add('device_cloaking', 'high', `The page asks for a password only when opened as ${who(off)}; as a computer it shows no such form. Pages that hide from computers usually have a reason.`, off.map((v) => v.at));
   else if (pw.length && !known) add('device_cloaking', 'medium', `The page asks for a password only when opened as ${who(pw)}; as a computer it shows no such form. The age of the domain is not known.`, pw.map((v) => v.at));
   else if (pw.length) add('mobile_sign_in', 'info', `Opened as ${who(pw)}, the page shows a sign-in form that a computer does not see. Many large sites do this; here the form stays on the site itself, and the domain is not new.`, pw.map((v) => v.at));
-  const elsewhere = names('other_site');
-  if (elsewhere.length) add('device_redirect', 'medium', `Opened as ${elsewhere.join(' and ')}, the link ends up on a different site than it does on a computer.`, views.filter((v) => v.differs.includes('other_site')).map((v) => v.at));
+  // vk.com on a computer and vk.ru on a phone: the same name under another top-level domain, one of them the domain that
+  // was asked for, is one owner's sites, not a phone sent elsewhere
+  const askedSite = registrable(hostOf(first?.[0].to ?? ''));
+  const sameOwner = (v: (typeof views)[number]) => {
+    const desk = parseUrl(summary?.[0].final_url)?.hostname ?? '';
+    return sld(v.final_host) !== '' && sld(v.final_host) === sld(desk) && [registrable(v.final_host), registrable(desk)].includes(askedSite);
+  };
+  const elsewhereViews = views.filter((v) => v.differs.includes('other_site') && !sameOwner(v));
+  const elsewhere = elsewhereViews.map((v) => (v.device === 'mobile' ? 'a phone' : 'a tablet'));
+  if (elsewhere.length) add('device_redirect', 'medium', `Opened as ${elsewhere.join(' and ')}, the link ends up on a different site than it does on a computer.`, elsewhereViews.map((v) => v.at));
 
   // ---- the domain ----
   if (typeof age === 'number' && Number.isFinite(age) && age >= 0 && age < 90) {
@@ -237,7 +248,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const challengeInfra = reqs.some(([e]) => CHALLENGE_INFRA.test(str(e.url)));
   const warned = PROVIDER_WARNING_TITLE.test(title);
   if (warned) add('provider_warning', 'medium', 'Cloudflare shows a warning that this site is suspected of phishing or malware, and does not let a visitor reach the page. The real page was not seen.', page ? [page[1]] : []);
-  const challenged = !warned && (CHALLENGE_TITLE.test(title) || (challengeInfra && (refusedStatus || thin)));
+  const challenged = !warned && (CHALLENGE_TITLE.test(title) || CHALLENGE_TITLE_INTL.test(title) || (challengeInfra && (refusedStatus || thin)));
   if (challenged) add('bot_challenge', 'info', 'The site showed a bot-check page instead of its own content, so the real page was not seen.', page ? [page[1]] : []);
   const httpError = !challenged && !warned && refusedStatus && page !== undefined;
   if (httpError) add('http_error', 'info', `The site answered with an error (HTTP ${asked}) instead of its page, so the real page was not seen.`, page ? [page[1]] : []);

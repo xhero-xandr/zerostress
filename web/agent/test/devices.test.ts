@@ -52,6 +52,21 @@ test('a sign-in form only phones see, on the site itself and an old domain, is t
   assert.equal(analyze(evs).signals.find((s) => s.id === 'device_cloaking')?.level, 'medium');
 });
 
+test('one owner\'s sites under two top-level domains (vk.com, vk.ru) are not a phone sent elsewhere; a lookalike name is', () => {
+  const asked = (to: string, land: string) => [
+    ev('nav', { via: 'requested', from: '', to }), ev('nav', { via: 'commit', from: '', to: land }),
+    ev('page', { url: land, title: 'VK', text: 'x', hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+    ev('forms', { forms: [], total: 0, loose_password_fields: 0 }), ev('summary', { final_url: land, nav_error: null }),
+  ];
+  const vk = [...asked('https://vk.com/', 'https://vk.ru/'), dev('mobile', { final_url: 'https://m.vk.com/' })];
+  assert.ok(!analyze(vk).signals.some((s) => s.id === 'device_redirect'));
+  const look = [...asked('https://vk.com/', 'https://vk.ru/'), dev('mobile', { final_url: 'https://vk.evil.example/' })];
+  assert.equal(analyze(look).signals.find((s) => s.id === 'device_redirect')?.level, 'medium');
+  // the same name, but neither is the domain that was asked for: still elsewhere
+  const both = [...asked('https://shop.example/', 'https://vk.ru/'), dev('mobile', { final_url: 'https://vk.org/' })];
+  assert.equal(analyze(both).signals.find((s) => s.id === 'device_redirect')?.level, 'medium');
+});
+
 test('a password form that the computer also shows is not cloaking', () => {
   const evs = [...desktop('https://shop.example/', true), dev('mobile', { has_password: true })];
   assert.deepEqual(deviceViews(evs)[0]?.differs, []);

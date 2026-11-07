@@ -370,8 +370,8 @@ test('Cloudflare\'s wait page: no verdict, and the report says the real page was
   assert.equal(a.confidence, 0);
 });
 
-test('other bot walls are recognised by their title too', () => {
-  for (const title of ['Just a moment...', 'Attention Required! | Cloudflare', 'Checking your browser before accessing example.com', 'Verifying you are human. This may take a few seconds.', 'DDoS protection by Example', 'Access denied', 'Pardon Our Interruption']) {
+test('other bot walls are recognised by their title too, in other languages as well', () => {
+  for (const title of ['Just a moment...', 'Attention Required! | Cloudflare', 'Checking your browser before accessing example.com', 'Verifying you are human. This may take a few seconds.', 'DDoS protection by Example', 'Access denied', 'Pardon Our Interruption', 'Проверяем, что вы не робот', 'Один момент…', 'Einen Moment…', 'Un instant…', 'Bestätigen Sie, dass Sie kein Roboter sind', 'しばらくお待ちください']) {
     const events = [nav('https://x.example/', 'requested'), nav('https://x.example/'), page('https://x.example/', title, 'wait'), summary('https://x.example/')];
     assert.equal(has(events, 'bot_challenge') !== undefined, true, title);
     assert.equal(analyze(events).verdict, 'unknown', title);

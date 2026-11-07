@@ -60,12 +60,15 @@ export function Panel() {
     return talking.current;
   }
 
-  async function finish(id: string, key: string) {
+  async function finish(id: string, key: string, told = false) {
     let r: PublicReport;
     try { r = await getReport(id); } catch (e) { say(errText(e)); busy.current = false; return; }
     if (task.current?.id === id) task.current.report = true;
     const shots = await getStatus(id).then((st) => st.shots, () => null);
     push({ kind: 'verdict', r, id, key, shots });
+    // Cloudflare may have answered about a wall before this report was read (a recent scan is found at once)
+    const so = r.second_opinion;
+    if (so && !told) say(T.log.second(so.source, so.status, so.malicious, so.final_host));
     busy.current = false;
     const later = queued.current.splice(0);
     const explained = answer(id, { kind: 'explain' });
@@ -176,7 +179,7 @@ export function Panel() {
     try {
       const { second_opinion: so } = await askSecondOpinion(id, key);
       update(at, () => ({ kind: 'agent', text: T.log.second(so.source, so.status, so.malicious, so.final_host) }));
-      await finish(id, key);
+      await finish(id, key, true);
     } catch (e) {
       update(at, () => ({ kind: 'agent', text: errText(e) }));
     }

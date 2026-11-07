@@ -128,6 +128,24 @@ test('a wall: the panel waits for Cloudflare on its own, nobody presses anything
   expect(screen.queryByRole('button', { name: /Ask Cloudflare/ })).toBeNull();
 });
 
+test('a wall that Cloudflare had already answered about when the report was read: its answer is told at once, nothing is asked', async () => {
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    urls.push(url);
+    if (url === '/api/tasks') return new Response(JSON.stringify({ id: ID, key: KEY }), { status: 202 });
+    if (url.endsWith('/report.json')) return new Response(JSON.stringify({ ...unread('bot_challenge', 'A bot check'), second_opinion: { source: 'found', scan_id: '11111111-2222-4333-8444-555555555555', scanned_at: '2026-11-07T12:00:00.000Z', final_host: 'shop.test', status: 200, title: '', title_withheld: false, malicious: false, screenshot: false }, second_opinion_state: null }));
+    if (url.endsWith('/chat')) return new Response(JSON.stringify({ text: 'Explained', source: 'rules', note: null }));
+    return new Response('{}', { status: 404 });
+  }));
+  render(<Panel />);
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'shop.test' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+  await waitFor(() => expect(FakeSource.last?.url).toBe(`/api/tasks/${ID}/events`));
+  act(() => FakeSource.last!.fire('final', {}));
+  await waitFor(() => expect(document.body.textContent).toContain('Cloudflare’s scanner had scanned it recently: shop.test answered HTTP 200, not flagged'));
+  expect(urls.some((u) => u.endsWith('/second-opinion'))).toBe(false);
+});
+
 async function checked() {
   render(<Panel />);
   fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://paypa1-secure.test/login' } });
