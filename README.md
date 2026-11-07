@@ -38,6 +38,13 @@ A risky action a human asks the agent to take — submit a form, download a file
 5. With a deep check, the agent may go one step further inside the same microVM, for example by trying the form with dummy data. A risky step like that pauses until *you* approve it, using the private link only the task's owner holds; a shared report link can read but never approve.
 6. Whatever happened, the microVM is destroyed. Nothing from the page touched your device or the host.
 
+## Browser extension and email
+
+- **Extension** ([web/extension/](web/extension/), Manifest V3, Chrome, Edge, Brave): right-click a suspicious link, *Check this link with ZeroStress*, or use the toolbar button for the current tab's address. It opens `https://zerostress.space/?u=<link>`, where you press *Check*. It asks only for `contextMenus` and `activeTab`: it never reads the pages you visit. To try it: `chrome://extensions` → *Developer mode* → *Load unpacked* → pick `web/extension`.
+- **Email**: on the home page choose *An email* and paste the email's text or its source. The links are found in your browser (the email is never sent anywhere); a link whose text shows another site is marked, and Safe Links / Google / Facebook redirects are unwrapped to where a click really goes. Pick one link to check it.
+- **Second opinion**: when a bot check keeps our sandbox out, the report offers Cloudflare's URL Scanner. A recent public scan of exactly that link is looked up first; a new one, which is public at Cloudflare, is sent only after you say yes. Its "malicious" may raise our verdict, never lower it.
+- **Behind the scenes**: every report has the agent's log, live during the check: the microVM booting (vCPUs, memory, guest image), the browser's steps, the injection detectors, each model call (vision, time, tokens), the gatekeeper's decisions, your approvals, the microVM's destruction.
+
 ## How it works
 
 1. A gatekeeper checks the submitted address (scheme, size, no internal or cloud-metadata addresses) before anything runs.
@@ -86,6 +93,7 @@ The directory a piece of code sits in tells you its privilege level and where it
 | `supervisor/` | Go, standard library only: microVM lifecycle, the queue, sessions, artifacts | **Host, privileged** — the only thing allowed to touch Firecracker, cgroups and the guest network |
 | `web/` | `hooks/` (injection detectors, rules as data), `agent/` (rules, model client, verdict, report), `server/` (the Hono API: tasks, progress stream, report, chat, approvals; serves the built client) | **Host, unprivileged** — no access to Firecracker or the supervisor's socket beyond its own API |
 | `web/client/` | The interface: React, React Router, TanStack Query, Tailwind; light and dark themes, or the system's | **In the visitor's browser**; only the build reaches the host |
+| `web/extension/` | The browser extension (Manifest V3): hands a link to the site, reads no page | **In the visitor's browser** |
 | `web/tools/` | Dev tooling: mutation testing, the corpus check, model benchmarking, the DB-IP fetch script | Run by hand or in CI, never by the running service |
 | `guest/` | `agent/` (the Go job receiver, over vsock), `collector/` (Node.js + Playwright over a raw CDP session), `image/` (builds the guest disk image) | `agent/` and `collector/` run **inside the guest micro-VM** as an unprivileged user; `image/` runs on the host only to build the image |
 | `config/` | `web.env` (holds the model key) and `supervisor.env`, git-ignored; their `*.example` templates are in git | Read by systemd for the services |
