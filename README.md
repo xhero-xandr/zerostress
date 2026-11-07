@@ -22,6 +22,22 @@ Paste a link, and the report shows:
 
 A risky action a human asks the agent to take — submit a form, download a file — always waits for that human's explicit approval first; the agent never approves itself.
 
+## Vultr services used
+
+| Service | What it does here |
+|---|---|
+| **Vultr Cloud Compute** (one VM with nested virtualisation) | The whole backend: the Go supervisor that boots a fresh Firecracker microVM for every check, the unprivileged web layer and agent, and Caddy for TLS. `/dev/kvm` from nested virtualisation is what makes a microVM per task possible on a cloud VM. |
+| **Vultr Serverless Inference** (OpenAI-compatible API) | Every model call the agent makes: reading the collected evidence, proposing the next safe step of a deep check, possibly raising the verdict, and the "Explain" chat. The model (`qwen3.8-27b`) was chosen by a benchmark on the live service. The key stays in the host's service environment and never enters a microVM. |
+
+## A walk-through
+
+1. You get an email with a link that "confirms your delivery". Instead of clicking it, you paste it into [zerostress.space](https://zerostress.space).
+2. A gatekeeper checks the address, and a fresh microVM boots. Progress streams to the page stage by stage.
+3. About 15 seconds later (the average on live phishing links) the report is ready. In this example it says *Dangerous*, because the link went through three redirects to a two-day-old domain hosting a password and card-number form that posts to a third host. The screenshot shows what the browser saw; the phone view shows the same form.
+4. "Explain" opens a chat that answers in plain words from that evidence only, and points at the signals it relies on.
+5. With a deep check, the agent may go one step further inside the same microVM, for example by trying the form with dummy data. A risky step like that pauses until *you* approve it, using the private link only the task's owner holds; a shared report link can read but never approve.
+6. Whatever happened, the microVM is destroyed. Nothing from the page touched your device or the host.
+
 ## How it works
 
 1. A gatekeeper checks the submitted address (scheme, size, no internal or cloud-metadata addresses) before anything runs.
@@ -72,20 +88,20 @@ The directory a piece of code sits in tells you its privilege level and where it
 | `guest/` | `agent/` (the Go job receiver, over vsock), `collector/` (Node.js + Playwright over a raw CDP session), `image/` (builds the guest disk image) | `agent/` and `collector/` run **inside the guest micro-VM** as an unprivileged user; `image/` runs on the host only to build the image |
 | `config/` | `web.env` (holds the model key) and `supervisor.env`, git-ignored; their `*.example` templates are in git | Read by systemd for the services |
 | `deploy/` | `steps/` (what `./zs install` runs), `versions.env` (every pinned version and checksum), `files/` (the few system files: units, sudoers, sysctl, udev, logrotate), `helpers/` (`zsvm`, `zsnet`), `test/` (tests on real micro-VMs) | **Host**, at install time |
-| `docs/` | Specs (one per decision), the live status, deployment and configuration guides | Documentation only |
+| `docs/` | [Install and operate](docs/install.md), [configuration](docs/configuration.md) | Documentation only |
 | `build/` | Everything generated (binaries, the built client, check screenshots); git-ignored | — |
 
 On a server the checkout lives at `/zerostress` and everything else lives next to it, git-ignored: `bin/` (Firecracker, the root helpers, Caddy, the supervisor), `runtime/` (Node, Go), `images/` (the guest image), `data/`, `logs/`, `run/`. One command, `./zs`, installs, updates, starts, shows logs, edits settings and verifies.
 
 ## Status
 
-Core (isolation, supervisor, collector, injection-detection hooks, agent, web layer) is implemented and tested: see [docs/status.md](docs/status.md) for what's verified, what's measured, and what's still open — it's kept current, not a snapshot.
+Isolation, the supervisor, the collector, the injection-detection hooks, the agent and the web layer are implemented, tested in CI and on real microVMs, and running at [zerostress.space](https://zerostress.space).
 
-Design documents, one per decision, are in [docs/specs/](docs/specs/README.md). The overall architecture and the reasoning behind the stack choices are in [docs/project.md](docs/project.md). Planned work beyond the core chain is tracked in [docs/backlog.md](docs/backlog.md).
+Not done yet: when a page sits behind a "verify you are human" wall, the report says it could not check the page but does not yet show what was collected before the wall; an install on a clean machine has not been verified end to end.
 
 ## Running it yourself
 
-You need a Rocky Linux 10 host with `/dev/kvm` (on a cloud VM: nested virtualisation) and a Vultr Serverless Inference key. `git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress`, then `sudo ./zs install host`, put the key in with `./zs config web`, then `sudo ./zs install` and `./zs verify --live`. Every step is idempotent; every download is checked against a pinned checksum in `deploy/versions.env`. To try the interface locally without KVM: `./zs dev`. Details: [docs/deploy.md](docs/deploy.md); every setting: [docs/config.md](docs/config.md). A clean-machine install has not been verified yet.
+You need a Rocky Linux 10 host with `/dev/kvm` (on a cloud VM: nested virtualisation) and a Vultr Serverless Inference key. `git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress`, then `sudo ./zs install host`, put the key in with `./zs config web`, then `sudo ./zs install` and `./zs verify --live`. Every step is idempotent; every download is checked against a pinned checksum in `deploy/versions.env`. To try the interface locally without KVM: `./zs dev`. Details: [docs/install.md](docs/install.md); every setting: [docs/configuration.md](docs/configuration.md). A clean-machine install has not been verified yet.
 
 ## License
 

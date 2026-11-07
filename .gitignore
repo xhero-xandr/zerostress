@@ -32,3 +32,6 @@ runs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# internal notes in Russian (specs, status, backlog): kept on the server, not published
+/notes/

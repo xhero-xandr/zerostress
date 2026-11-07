@@ -1,6 +1,6 @@
 // Every environment variable the web service reads is in the example the host's web.env is made from, and the example
 // names nothing that nobody reads (spec 010, 4.3). A variable added in code but not here fails this test, so the
-// example, the installer's checks and docs/config.md cannot fall behind the code.
+// example, the installer's checks and docs/configuration.md cannot fall behind the code.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import { test } from 'node:test';
 
 const web = join(import.meta.dirname, '..', '..');
 const example = readFileSync(join(web, '..', 'config', 'web.env.example'), 'utf8');
-const config = readFileSync(join(web, '..', 'docs', 'config.md'), 'utf8');
+const config = readFileSync(join(web, '..', 'docs', 'configuration.md'), 'utf8');
 
 const source = ['server', 'agent', 'hooks']
   .flatMap((d) => readdirSync(join(web, d)).filter((f) => f.endsWith('.ts')).map((f) => readFileSync(join(web, d, f), 'utf8')))
@@ -33,7 +33,7 @@ test('web.env.example names only variables the code reads', () => {
   assert.deepEqual([...named].filter((v) => !read.has(v)).sort(), []);
 });
 
-test('every variable is described in docs/config.md', () => {
+test('every variable is described in docs/configuration.md', () => {
   assert.deepEqual([...read].filter((v) => !config.includes(`\`${v}\``)).sort(), []);
 });
 

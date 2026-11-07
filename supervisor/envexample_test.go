@@ -9,7 +9,7 @@ import (
 )
 
 // Every SUP_* variable the supervisor reads is in the example the host's supervisor.env is made from, the example names
-// nothing else, and docs/config.md describes each one (spec 010, 4.3).
+// nothing else, and docs/configuration.md describes each one (spec 010, 4.3).
 func TestEnvExampleMatchesConfig(t *testing.T) {
 	src, err := os.ReadFile("config.go")
 	if err != nil {
@@ -19,7 +19,7 @@ func TestEnvExampleMatchesConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := os.ReadFile("../docs/config.md")
+	doc, err := os.ReadFile("../docs/configuration.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestEnvExampleMatchesConfig(t *testing.T) {
 			t.Errorf("%s is read by config.go but missing from supervisor.env.example", v)
 		}
 		if !strings.Contains(string(doc), "`"+v+"`") {
-			t.Errorf("%s is not described in docs/config.md", v)
+			t.Errorf("%s is not described in docs/configuration.md", v)
 		}
 	}
 	for _, v := range named {

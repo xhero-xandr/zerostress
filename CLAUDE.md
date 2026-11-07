@@ -3,18 +3,18 @@
 ## Проект
 ZeroStress — веб-агент, который открывает подозрительные ссылки и вложения в одноразовой микро-ВМ, собирает улики и выдаёт вердикт. Человек подтверждает рискованные финальные действия. Проект для хакатона Vultr: Agent Rush, трек 1 (Blast Radius Zero), паттерн B.
 
-Подробности:
-- [docs/project.md](docs/project.md) — суть, стек, измерения, схема улик, архитектура, containment, план, открытые вопросы.
-- [docs/hackathon.md](docs/hackathon.md) — условия, правила, критерии, открытые вопросы.
+Подробности (внутренние документы на русском лежат в `notes/`: на сервере, не в git):
+- [notes/project.md](notes/project.md) — суть, стек, измерения, схема улик, архитектура, containment, план, открытые вопросы.
+- [notes/hackathon.md](notes/hackathon.md) — условия, правила, критерии, открытые вопросы.
 
 ## Стек
 - Node.js 24 LTS, TypeScript через удаление типов (`tsc --noEmit` для проверки типов), только «стираемый» синтаксис (без `enum` и runtime `namespace`, импорты с явным `.ts`, `import type`).
 - Изоляция: Firecracker v1.17.0, микро-ВМ на каждую задачу. Хост Rocky Linux 10, гость Ubuntu 24.04 с Node, Playwright 1.65.0 и Chrome Headless Shell.
-- Супервизор хоста: Go, только стандартная библиотека, управление Firecracker по REST через Unix-сокет (`supervisor/`, статический бинарник, рантайма на хосте нет). Выбор Go сделан 4 ноября 2026 после сравнения с реализацией на TypeScript на одних и тех же сквозных тестах (docs/specs/006-supervisor-api.md, раздел 8).
+- Супервизор хоста: Go, только стандартная библиотека, управление Firecracker по REST через Unix-сокет (`supervisor/`, статический бинарник, рантайма на хосте нет). Выбор Go сделан 4 ноября 2026 после сравнения с реализацией на TypeScript на одних и тех же сквозных тестах (notes/specs/006-supervisor-api.md, раздел 8).
 - Сборщик улик (в госте, `guest/collector/`, написан): Playwright плюс CDP-сессия (`context.newCDPSession`). Одного API Playwright недостаточно для причин клиентских редиректов. Страницу читаем из изолированного мира CDP, снимок только в режиме `ai`. Тесты: `npm test` в `guest/collector/` (нужен локальный Chromium: `npx playwright install --only-shell chromium`).
 - LLM: тонкий клиент на `fetch` к OpenAI-совместимому API Vultr Serverless Inference (`web/agent/model.ts`), без пакета `openai`: нужен один адрес, ответ всё равно читается строго по полям, а у службы, держащей ключ, должно быть как можно меньше зависимостей (решение 5 ноября 2026, спека 008).
 - Канал с гостем: vsock; приёмник задач в госте — маленький агент на Go (контракт сборщика: задача JSON в stdin, события NDJSON в stdout).
-- Прокси и TLS: Caddy (решение 4 ноября 2026, работает из коробки; HAProxy и nginx остаются запасными, замена несложна). Лимиты по IP живут в привратнике веб-слоя, не в прокси. Подробности: docs/tools.md, раздел 8.
+- Прокси и TLS: Caddy (решение 4 ноября 2026, работает из коробки; HAProxy и nginx остаются запасными, замена несложна). Лимиты по IP живут в привратнике веб-слоя, не в прокси. Подробности: notes/tools.md, раздел 8.
 - Слой хоста без привилегий (`web/`): хуки-детекторы инъекций (`web/hooks/`, правила в данных `web/hooks/rules/*.json`, спека 009) и агент (`web/agent/`: сигналы и вердикт по правилам, привратник команд, клиент модели, исполнитель задачи, отчёт; спека 008). Сделаны и проверены. Веб-слой (`web/server/`: привратник адреса, лимиты, страницы и отчёт в духе Cloudflare Radar, SSE, ключ задачи, подтверждения; спека 007) написан и работает на `zerostress.space`. Фреймворк: Hono на Node (5 ноября 2026), версии закреплены в лок-файле. Проект не привязан к одному стеку: готовые решения допустимы, где они экономят время и не нарушают containment; «только stdlib» обязательно лишь для привилегированного супервизора.
 
 ## Где что лежит
@@ -29,7 +29,8 @@ ZeroStress — веб-агент, который открывает подозр
 | `guest/` | `agent/` (Go-агент, vsock), `collector/` (Node + Playwright через сырую CDP-сессию), `image/` (сборка и установка образа) | `agent/` и `collector/` **внутри микро-ВМ**, от непривилегированного пользователя |
 | `config/` | `web.env` (ключ модели), `supervisor.env` — не в git; образцы `*.env.example` — в git | читает systemd для служб |
 | `deploy/` | `steps/` (этапы `./zs install`), `lib.sh`, `versions.env` (все версии и хеши), `files/` (системные файлы по их пути: юниты, sudoers, sysctl, udev, logrotate), `helpers/` (`zsvm`, `zsnet`), `templates/` (Caddyfile), `test/` (все тесты на настоящих ВМ), `migrate-from-opt.sh` (разовый переезд) | **хост** |
-| `docs/` | `project.md`, `hackathon.md`, `status.md`, `backlog.md`, `tools.md`, `deploy.md` (установка, команды, тесты), `config.md` (каждая настройка), `specs/` | — |
+| `docs/` | публичные документы на английском: `install.md` (установка, команды, тесты), `configuration.md` (каждая настройка; по нему сверяют тесты образцов `config/*.env`) | — |
+| `notes/` | внутренние документы на русском, **не в git** (`.gitignore`): `project.md`, `hackathon.md`, `status.md`, `backlog.md`, `tools.md`, `deploy.md`, `config.md`, `specs/` | — |
 
 ## Правила
 
@@ -67,10 +68,10 @@ ZeroStress — веб-агент, который открывает подозр
 - Перед изменением containment-логики добавлять или обновлять тесты.
 
 ## Документы
-Спецификации: [docs/specs/](docs/specs/README.md); структура проекта, настройки и развёртывание: спека 010. Актуальный статус и дальнейшие шаги: docs/status.md, раздел 0.
+Спецификации: [notes/specs/](notes/specs/README.md); структура проекта, настройки и развёртывание: спека 010. Актуальный статус и дальнейшие шаги: notes/status.md, раздел 0.
 
 ## Команды
-Рабочая копия на сервере: `/zerostress` (с 7 ноября 2026; раньше `/opt/zerostress-src`), `ssh vultr`; подробности в [docs/deploy.md](docs/deploy.md), настройки в [docs/config.md](docs/config.md). Коротко (из корня проекта):
+Рабочая копия на сервере: `/zerostress` (с 7 ноября 2026; раньше `/opt/zerostress-src`), `ssh vultr`; подробности в [notes/deploy.md](notes/deploy.md) (публично: [docs/install.md](docs/install.md)), настройки в [docs/configuration.md](docs/configuration.md). Коротко (из корня проекта):
 - `./zs install [этап…]`, `./zs update`, `./zs status`, `./zs logs`, `./zs config web`, `./zs verify [--live]`, `./zs dev`. В бой (`install`, `update`, `restart`, `config`) только с явного разрешения владельца.
 - `web/`: `npm ci --ignore-scripts`, `npm test`, `npm run typecheck`, `npm run mutate` (около 40 минут), `npm run corpus`, `npm run bench` (ключ из `config/web.env`).
 - Сборка: `supervisor/build.sh`, `guest/agent/build.sh` (выход в `build/`), образ `guest/image/build.sh` и `install.sh`.
