@@ -7,6 +7,7 @@ import { pageViews, sessionStart } from './evidence.ts';
 import { hidesText } from './hiding.ts';
 import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } from './lists.ts';
 import { domainToUnicode } from 'node:url';
+import type { Reputation } from './reputation.ts';
 import { isIpHost, mixedScripts, parseUrl, registrable, sld, skeleton } from './domain.ts';
 
 export type Level = 'info' | 'low' | 'medium' | 'high';
@@ -40,6 +41,8 @@ export interface Options {
   now?: number;
   /** days since the final site's domain was registered, if the registry could be asked */
   domainAgeDays?: number | null;
+  /** what Google, Spamhaus and VirusTotal already know about the address and its domain (reputation.ts) */
+  reputation?: Reputation | null;
 }
 
 type Ev = Record<string, unknown>;
@@ -160,6 +163,22 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const elsewhereViews = views.filter((v) => v.differs.includes('other_site') && !sameOwner(v));
   const elsewhere = elsewhereViews.map((v) => (v.device === 'mobile' ? 'a phone' : 'a tablet'));
   if (elsewhere.length) add('device_redirect', 'medium', `Opened as ${elsewhere.join(' and ')}, the link ends up on a different site than it does on a computer.`, elsewhereViews.map((v) => v.at));
+
+  // ---- what others already know: each listing can only add to what we saw ----
+  const rep = opts.reputation;
+  if (rep?.google?.length) add('listed_by_google', 'high', `Google Safe Browsing lists this address as ${rep.google.map((t) => t.toLowerCase().replace(/_/g, ' ')).join(' and ')}.`);
+  if (rep?.spamhaus && rep.spamhaus !== 'clean') {
+    const why = rep.spamhaus.replace(/^abused_/, '');
+    const abused = rep.spamhaus.startsWith('abused_');
+    add('listed_by_spamhaus', why === 'spam' || why === 'redirector' ? 'medium' : 'high', `Spamhaus lists this domain for ${why === 'phish' ? 'phishing' : why}${abused ? ' (a legitimate site that has been abused)' : ''}.`);
+  }
+  const vt = rep?.virustotal;
+  if (vt && vt.malicious + vt.suspicious > 0) {
+    const n = vt.malicious + vt.suspicious;
+    add('flagged_by_virustotal', vt.malicious >= 3 ? 'high' : n >= 2 ? 'medium' : 'low', `${n} of ${vt.total} antivirus engines on VirusTotal flag this domain.`);
+  }
+
+  if (rep?.urlscan?.malicious === true) add('flagged_by_urlscan', 'medium', 'urlscan.io marked its latest scan of this domain as malicious.');
 
   // ---- the domain ----
   if (typeof age === 'number' && Number.isFinite(age) && age >= 0 && age < 90) {

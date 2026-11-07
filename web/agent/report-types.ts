@@ -43,6 +43,8 @@ import type { LogEntry } from './agent-log.ts';
 export interface PublicReport {
   /** what happened, step by step (agent-log.ts): our codes, numbers, tokens, the model's id, hosts */
   log: LogEntry[];
+  /** what Google Safe Browsing, Spamhaus and VirusTotal knew about the address and its domain; null when nobody was asked */
+  reputation: null | { google: string[] | null; spamhaus: string | null; virustotal: { malicious: number; suspicious: number; total: number } | null; urlscan: boolean | null };
   /** an email's links, each opened in the same microVM; the rest of the report is the worst of them */
   email: null | {
     links: Array<{ url: string; final_host: string; verdict: PublicVerdict; by: string; signals: string[]; password: boolean; downloads: number; redirects: number; error: string | null; shot: boolean }>;

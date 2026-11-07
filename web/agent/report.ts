@@ -176,6 +176,18 @@ function secondOpinion(x: unknown): PublicReport['second_opinion'] {
 
 const VERDICTS = new Set(['benign', 'suspicious', 'malicious', 'unknown']);
 const TOKEN = /^[a-z][a-z0-9_]{0,39}$/;
+function reputationOf(x: unknown): PublicReport['reputation'] {
+  if (typeof x !== 'object' || x === null) return null;
+  const r = o(x);
+  const g = Array.isArray(r.google) ? r.google.filter((t): t is string => typeof t === 'string' && /^[A-Z_]{1,40}$/.test(t)).slice(0, 4) : null;
+  const sp = typeof r.spamhaus === 'string' && TOKEN.test(r.spamhaus) ? r.spamhaus : null;
+  const vt = o(r.virustotal);
+  const num = (v: unknown) => Math.max(0, Math.min(1000, Math.floor(n(v))));
+  const v = typeof r.virustotal === 'object' && r.virustotal !== null ? { malicious: num(vt.malicious), suspicious: num(vt.suspicious), total: num(vt.total) } : null;
+  const u = typeof o(r.urlscan).malicious === 'boolean' ? (o(r.urlscan).malicious as boolean) : null;
+  return g === null && sp === null && v === null && u === null ? null : { google: g, spamhaus: sp, virustotal: v, urlscan: u };
+}
+
 function emailLinks(x: unknown): PublicReport['email'] {
   const links = list<Record<string, unknown>>(o(x).links, 30);
   if (links.length === 0) return null;
@@ -216,6 +228,7 @@ export function publicReport(r: TaskResult): PublicReport {
     log: cleanLog(r.log),
     second_opinion: secondOpinion(r.second_opinion),
     email: emailLinks(r.email),
+    reputation: reputationOf(r.reputation),
     second_opinion_state: secondOpinion(r.second_opinion) !== null || a.verdict !== 'unknown' || r.state !== 'done' ? null : r.second_opinion_error ? 'failed' : 'asking',
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,

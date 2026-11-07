@@ -6,6 +6,7 @@ import { resolveMx, resolveTxt } from 'node:dns/promises';
 import { BRANDS } from '../agent/lists.ts';
 import { registrable, skeleton, sld } from '../agent/domain.ts';
 import type { DomainInfo } from '../agent/rdap.ts';
+import type { ReputationClient } from '../agent/reputation.ts';
 
 export interface SenderInfo {
   domain: string;
@@ -21,6 +22,10 @@ export interface SenderInfo {
   lookalike: string | null;
   /** a free mailbox service: anyone can have an address there */
   freemail: boolean;
+  /** why Spamhaus lists the domain, "clean", or null when not asked */
+  spamhaus: string | null;
+  /** how many antivirus engines on VirusTotal flag the domain, of how many; null when not asked */
+  virustotal: { malicious: number; suspicious: number; total: number } | null;
 }
 
 const FREEMAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'ymail.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'gmx.com', 'gmx.net', 'gmx.de', 'web.de', 'mail.com', 'zoho.com', 'yandex.ru', 'yandex.com', 'ya.ru', 'mail.ru', 'bk.ru', 'inbox.ru', 'list.ru', 'rambler.ru', 'qq.com', '163.com', 'tutanota.com', 'tuta.io']);
@@ -50,6 +55,7 @@ export interface SenderDeps {
   rdap?: (host: string) => Promise<DomainInfo | null>;
   txt?: (name: string) => Promise<string[][]>;
   mx?: (name: string) => Promise<unknown[]>;
+  reputation?: Pick<ReputationClient, 'check' | 'enabled'>;
   timeoutMs?: number;
 }
 
@@ -63,11 +69,12 @@ export function createSenderCheck(deps: SenderDeps = {}) {
 
   async function look(domain: string): Promise<SenderInfo> {
     const reg = registrable(domain);
-    const [whois, own, dmarcTxt, mxs] = await Promise.all([
+    const [whois, own, dmarcTxt, mxs, rep] = await Promise.all([
       deps.rdap ? within(deps.rdap(reg), null) : Promise.resolve(null),
       within(txt(domain), [] as string[][]),
       within(txt(`_dmarc.${domain}`).then((r) => (r.length ? r : txt(`_dmarc.${reg}`))), [] as string[][]),
       within(mx(domain), [] as unknown[]),
+      deps.reputation?.enabled ? within(deps.reputation.check([], reg), null) : Promise.resolve(null),
     ]);
     const flat = (r: string[][]) => r.map((x) => x.join('')).map((x) => x.trim());
     const dm = flat(dmarcTxt).find((x) => /^v=DMARC1\b/i.test(x));
@@ -81,6 +88,9 @@ export function createSenderCheck(deps: SenderDeps = {}) {
       mx: mxs.length > 0,
       ...brandOf(reg),
       freemail: FREEMAIL.has(reg),
+      // a free mailbox's domain says nothing about the one person writing from it
+      spamhaus: FREEMAIL.has(reg) ? null : rep?.spamhaus ?? null,
+      virustotal: FREEMAIL.has(reg) ? null : rep?.virustotal ?? null,
     };
   }
 

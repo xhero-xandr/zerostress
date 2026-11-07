@@ -46,6 +46,10 @@ A second opinion on pages the sandbox could not read because of a bot wall. Clou
 |---|---|---|
 | `CF_URLSCANNER_ACCOUNT_ID` | empty | the Cloudflare account id (32 hex characters) |
 | `CF_URLSCANNER_TOKEN` | empty | an account-scoped API token with *Account > URL Scanner > Edit* (*Radar Read* only reads); a secret like the model key |
+| `SAFE_BROWSING_API_KEY` | empty | Google Safe Browsing (v4 Lookup API, non-commercial): is the address or where it led on Google's lists; a secret |
+| `VIRUSTOTAL_API_KEY` | empty | VirusTotal (free public API, at most 4 lookups a minute): how many engines flag the site's domain; a secret |
+| `SPAMHAUS_DQS_KEY` | empty | Spamhaus Data Query Service: is the domain on the DBL (phishing, malware, spam); a secret |
+| `URLSCAN_API_KEY` | empty | urlscan.io: its verdict on the latest scan of the site's domain that anyone made there (two lookups, nothing new is scanned); a secret |
 
 Both empty turns it off. One without the other, or a value of the wrong shape, stops the service at start; the error never repeats the value.
 

@@ -23,6 +23,7 @@ import { loadChatPrompt, reply as chatReply } from '../agent/chat.ts';
 import { loadGeo } from '../agent/geo.ts';
 import { createModelClient } from '../agent/model.ts';
 import { createRdap } from '../agent/rdap.ts';
+import { createReputation } from '../agent/reputation.ts';
 import { runTask } from '../agent/runner.ts';
 import { createSupervisorClient } from '../agent/supervisor.ts';
 import { createApp } from './app.ts';
@@ -57,6 +58,7 @@ const demos: Demo[] = parseDemos(env.WEB_DEMOS ?? DEFAULT_DEMOS);
 const geo = loadGeo(env.GEO_DIR ?? `${ROOT}data/geo`);
 console.log(geo ? 'geo: DB-IP tables loaded' : 'geo: no tables, the report names no countries');
 const rdap = env.WEB_RDAP === 'off' ? undefined : createRdap();
+const reputation = createReputation({ safeBrowsing: env.SAFE_BROWSING_API_KEY || undefined, virustotal: env.VIRUSTOTAL_API_KEY || undefined, spamhausDqs: env.SPAMHAUS_DQS_KEY || undefined, urlscan: env.URLSCAN_API_KEY || undefined });
 
 const store = createStore(env.WEB_DATA_DIR ?? `${ROOT}data/web/tasks`);
 const limiter = createLimiter({
@@ -73,7 +75,7 @@ const limiter = createLimiter({
 const app = createApp({
   ...(urlscan ? { urlscan } : {}),
   clientDir: (env.WEB_CLIENT_DIR ?? `${ROOT}build/client`).replace(/\/?$/, '/'),
-  run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, limits: { totalMs: 240_000 } }),
+  run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, reputation, limits: { totalMs: 240_000 } }),
   fetchShot: (runId, name) => sup.artifact(runId, name, 4 * 1024 * 1024),
   approve: (runId, commandId, sha) => sup.approve(runId, commandId, sha),
   reject: (runId, commandId) => sup.reject(runId, commandId),
@@ -83,7 +85,7 @@ const app = createApp({
   demos,
   session: { idle_s: 90, max_s: 240 },
   publicUrl: env.WEB_PUBLIC_URL ?? 'https://zerostress.space',
-  sender: createSenderCheck({ rdap }),
+  sender: createSenderCheck({ rdap, reputation }),
 });
 
 setInterval(() => { store.sweep(); }, 10 * 60_000).unref();

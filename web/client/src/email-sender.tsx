@@ -25,6 +25,8 @@ export function senderWarnings(s: SenderInfo, name: string | null): EmailWarning
   const claim = claimedBrand(name);
   if (claim && s.brand !== claim && !s.lookalike) out.push({ id: s.freemail ? 'sender_freemail_brand' : 'sender_claims_brand', level: 'high', text: s.freemail ? W.freemailBrand(cap(claim), s.domain) : W.claimsBrand(cap(claim), s.domain) });
   if (s.age_days !== null && s.age_days < 180) out.push({ id: 'sender_young', level: s.age_days < 30 ? 'high' : 'medium', text: W.youngSender(s.domain, Math.floor(s.age_days)) });
+  if (s.spamhaus && s.spamhaus !== 'clean') out.push({ id: 'sender_listed', level: /spam|redirector/.test(s.spamhaus) ? 'medium' : 'high', text: W.listedSender(s.domain, s.spamhaus) });
+  if (s.virustotal && s.virustotal.malicious + s.virustotal.suspicious >= 2) out.push({ id: 'sender_flagged', level: s.virustotal.malicious >= 3 ? 'high' : 'medium', text: W.flaggedSender(s.domain, s.virustotal.malicious + s.virustotal.suspicious, s.virustotal.total) });
   if (!s.freemail && !s.spf && s.dmarc === null) out.push({ id: 'sender_no_policy', level: 'medium', text: W.noPolicy(s.domain) });
   return out;
 }

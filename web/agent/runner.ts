@@ -11,6 +11,7 @@ import { taskHooks } from './task-hooks.ts';
 import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
 import { validateCommand } from './commands.ts';
+import type { Reputation, ReputationClient } from './reputation.ts';
 import type { Verdict } from './signals.ts';
 import type { Budget } from './budget.ts';
 import type { AgentConfig } from './config.ts';
@@ -98,6 +99,8 @@ export interface TaskResult {
   second_opinion_error?: 'not_found' | 'refused' | 'unavailable' | 'quota' | 'pending';
   /** an email's links, each looked at in the same microVM (TaskInput.links); the report above is the worst of them */
   email?: { links: EmailLinkResult[] };
+  /** what Google, Spamhaus and VirusTotal knew about the address and its domain */
+  reputation?: Reputation;
   notes: string[];
 }
 
@@ -126,6 +129,8 @@ export interface RunnerDeps {
   geo?: GeoLookup | null;
   /** when a domain was registered (rdap.ts); without it the age is simply not known */
   rdap?: (domain: string) => Promise<DomainInfo | null>;
+  /** what others already know about an address (reputation.ts); without it nobody is asked */
+  reputation?: ReputationClient;
   limits?: { totalMs?: number; commandWaitMs?: number; approvalWaitMs?: number; maxReconnects?: number; reconnectDelayMs?: number };
 }
 
@@ -204,6 +209,16 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     return p;
   };
   const inputHost = parseUrl(input.url)?.hostname ?? '';
+  // what others know about the address and where it led: asked once per pair, never more than a few seconds of waiting
+  const reps = new Map<string, Promise<Reputation | null>>();
+  let lastReputation: Reputation | null = null;
+  const reputationFor = (urls: string[], host: string): Promise<Reputation | null> => {
+    if (!deps.reputation?.enabled || host === '' || isIpHost(host)) return Promise.resolve(null);
+    const k = `${urls.join(' ')}|${host}`;
+    let p = reps.get(k);
+    if (!p) { p = deps.reputation.check(urls, host).catch(() => null); reps.set(k, p); }
+    return p;
+  };
   void domainFor(inputHost);
   // the site the link led to, never a page the agent opened later in a deep check (evidence.ts)
   const finalHost = (): string => {
@@ -226,7 +241,10 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     const willAsk = deps.cfg.enabled && deps.model !== undefined && !task.triggered;
     if (willAsk) note('model_asked', { model: deps.cfg.model, mode: shot ? 'vision' : 'text', step });
     const t0 = Date.now();
-    const a = await assess({ events: [...events], hooks: task, screenshot: shot, domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+    const finalUrl = String(events.filter(isObj).filter((e) => e.kind === 'summary').at(-1)?.final_url ?? landingView(events)?.url ?? input.url);
+    const reputation = await reputationFor([input.url, finalUrl], finalHost());
+    if (reputation) lastReputation = reputation;
+    const a = await assess({ events: [...events], hooks: task, screenshot: shot, domainAgeDays: (await domainNow())?.age_days ?? null, reputation }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
     if (a.mode === 'rules_only') note('rules_only', { reason: a.mode_reason ?? 'no_model_configured', verdict: a.rules.verdict, step });
     else note('model_answered', { ms: Date.now() - t0, tokens: a.usage?.total ?? 0, verdict: a.model?.verdict ?? a.verdict, next: (live && a.next?.action) || 'none', mode: a.mode, step });
     return a;
@@ -371,7 +389,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (v.shot && deps.cfg.vision) { try { png = await deps.sup.artifact(runId, v.shot, SHOT_MAX); } catch { png = null; } }
       const age = (await Promise.race([domainFor(parseUrl(v.final)?.hostname ?? ''), new Promise<null>((r) => setTimeout(() => r(null), 6000).unref())]))?.age_days ?? null;
       const a = v.st.error === null
-        ? await assess({ events: v.evs, hooks: task, screenshot: png, domainAgeDays: age }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget })
+        ? await assess({ events: v.evs, hooks: task, screenshot: png, domainAgeDays: age, reputation: await reputationFor([v.st.url, v.final], parseUrl(v.final)?.hostname ?? '') }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget })
         : null;
       const verdict: Verdict = a ? a.verdict : 'unknown';
       note('email_link_verdict', { n: i + 1, verdict, by: a?.mode ?? 'rules_only', host: hostOf(v.final) });
@@ -529,6 +547,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       artifacts,
       shots: email ? { desktop: email.worst?.shot ?? null, mobile: null, tablet: null } : pickShots(events, artifacts),
       ...(email ? { email: { links: email.results } } : {}),
+      ...(lastReputation && !email ? { reputation: lastReputation } : {}),
       timeline,
       log: log.entries,
       notes: [...notes, ...(ready ? [] : input.session ? ['the session never became ready'] : [])],

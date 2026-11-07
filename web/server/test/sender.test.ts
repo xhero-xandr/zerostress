@@ -12,7 +12,7 @@ test('a brand\'s own domain, and domains that imitate one', () => {
 test('the sender\'s mail policies come from DNS: DMARC and its strength, SPF, MX; the age from the registry', async () => {
   const txt = async (name: string) => (name === '_dmarc.shop.example' ? [['v=DMARC1; p=reject; rua=mailto:x@shop.example']] : name === 'shop.example' ? [['v=spf1 include:_spf.google.com ~all'], ['google-site-verification=x']] : []);
   const check = createSenderCheck({ txt, mx: async () => [{ exchange: 'mx.shop.example', priority: 10 }], rdap: async () => ({ domain: 'shop.example', created: '2001-01-01T00:00:00.000Z', age_days: 9000, registrar: 'R' }) });
-  assert.deepEqual(await check('shop.example'), { domain: 'shop.example', age_days: 9000, created: '2001-01-01T00:00:00.000Z', dmarc: 'reject', spf: true, mx: true, brand: null, lookalike: null, freemail: false });
+  assert.deepEqual(await check('shop.example'), { domain: 'shop.example', age_days: 9000, created: '2001-01-01T00:00:00.000Z', dmarc: 'reject', spf: true, mx: true, brand: null, lookalike: null, freemail: false, spamhaus: null, virustotal: null });
 });
 
 test('a subdomain without its own DMARC takes the organisation\'s; nothing published is told as nothing', async () => {

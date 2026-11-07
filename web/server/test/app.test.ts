@@ -979,7 +979,7 @@ test('an email check: each link\'s own screenshot is served by its number, and o
 
 test('the sender of an email: only a domain is taken, cleaned; a few asks a minute per address', async () => {
   const seen: string[] = [];
-  const r = rig({ sender: async (d) => { seen.push(d); return { domain: d, age_days: 3, created: null, dmarc: null, spf: false, mx: false, brand: null, lookalike: 'paypal', freemail: false }; } });
+  const r = rig({ sender: async (d) => { seen.push(d); return { domain: d, age_days: 3, created: null, dmarc: null, spf: false, mx: false, brand: null, lookalike: 'paypal', freemail: false, spamhaus: null, virustotal: null }; } });
   const ask = (body: unknown, ip = '1.1.1.1') => r.app.request('/api/sender', { method: 'POST', headers: { ...JSONH, 'x-test-ip': ip }, body: JSON.stringify(body) });
   const ok = await ask({ domain: ' Secure-PayPal.COM. ' });
   assert.equal(ok.status, 200);

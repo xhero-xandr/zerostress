@@ -10,6 +10,7 @@ import type { AgentConfig } from './config.ts';
 import { buildDossier } from './dossier.ts';
 import { parseAnswer, type Answer, type Message, type ModelClient } from './model.ts';
 import { analyze, raise, type Signal, type Verdict } from './signals.ts';
+import type { Reputation } from './reputation.ts';
 import type { TaskHooks } from './task-hooks.ts';
 import { RULESET_SHA256 } from '../hooks/rules.ts';
 
@@ -71,6 +72,8 @@ export interface AssessInput {
   screenshot?: Uint8Array | null;
   /** days since the final site's domain was registered, if known */
   domainAgeDays?: number | null;
+  /** what Google, Spamhaus and VirusTotal know about the address and its domain (reputation.ts) */
+  reputation?: Reputation | null;
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -83,7 +86,7 @@ function isPng(b: Uint8Array): boolean {
 
 export async function assess(input: AssessInput, deps: AssessDeps): Promise<Assessment> {
   const nowMs = (deps.now ?? Date.now)();
-  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs, domainAgeDays: input.domainAgeDays });
+  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null });
   const notes: string[] = [];
   const result: Assessment = {
     verdict: rules.verdict,

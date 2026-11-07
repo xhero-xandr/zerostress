@@ -222,6 +222,8 @@ const SAFE: Record<string, RegExp> = {
   'email.links[].by': /^[a-z_]{1,40}$/,
   'email.links[].signals[]': /^[a-z_]{1,40}$/,
   'email.links[].error': /^[a-z_]{1,40}$/,
+  'reputation.google[]': /^[A-Z_]{1,40}$/,
+  'reputation.spamhaus': /^[a-z][a-z0-9_]{0,39}$/,
   'signals[].id': /^[a-z_]{1,40}$/,
   'signals[].level': /^(info|low|medium|high)$/,
   'facts.forms[].asks[]': /^(password|card_number|card_security|card_expiry|one_time_code|id_number|birth_date|email|phone|address|name)$/,
@@ -274,7 +276,8 @@ test('every text in the public report is either listed as untrusted or has a str
     { url: 'https://x.example/"><script>', final_url: 'https://evil.example/a', verdict: 'malicious', by: 'vision', signals: ['password_form_cross_origin', '<b>'], password: true, downloads: 1, redirects: 2, error: null, shot: 's.png' },
     { url: 'https://y.example/', final_url: 'javascript:alert(1)', verdict: '<x>', by: 'Evil By', signals: [], password: 'yes', downloads: 'many', redirects: -4, error: '<oops>', shot: '' },
   ] } } as never);
-  for (const make of [withEmail, withOpinion, injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
+  const withRep = async (): Promise<TaskResult> => ({ ...(await login()), reputation: { google: ['SOCIAL_ENGINEERING', '<b>'], spamhaus: 'phish', virustotal: { malicious: 3, suspicious: 1, total: 90 } } } as never);
+  for (const make of [withRep, withEmail, withOpinion, injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
     const pub: PublicReport = publicReport(await make());
     for (const [path, value] of leaves(pub)) {
       if (UNTRUSTED.includes(path)) continue;

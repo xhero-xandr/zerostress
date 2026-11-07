@@ -32,6 +32,7 @@ Do not check a link that carries something private, such as a one-time sign-in l
 - **Vultr** hosts the service, and runs the language model (Vultr Serverless Inference). The model receives the report of a check and your questions about it. It does not receive your IP address.
 - **Cloudflare** sits in front of the site as a network proxy and sees the traffic to it, as any such provider does.
 - **Cloudflare URL Scanner** is asked on its own when our sandbox meets a bot check and cannot read the page. We first look for an existing public scan of the same address; otherwise we send a new scan as unlisted: it stays in our Cloudflare account and is not shown in Cloudflare's public search. Cloudflare's scanner then visits the address you checked.
+- **Google Safe Browsing, Spamhaus, VirusTotal and urlscan.io** are asked what they already know: Google receives the address you checked and where it led, the others only the site's domain (and, for an email, the sender's domain). None of them receives your IP address or anything else about you.
 - **The website you check** sees a visit from our sandbox, and whatever the page itself loads.
 
 We do not send your data anywhere else.

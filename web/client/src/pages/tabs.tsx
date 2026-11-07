@@ -26,7 +26,32 @@ function VerdictCard({ r }: R) {
         </div>
       </div>
       <p className="text-[17px] leading-relaxed">{verdictLine(r)}</p>
+      {cleanElsewhere(r) && <p className="text-[15px] leading-relaxed text-muted">{T.rep.reassure}</p>}
     </section>
+  );
+}
+
+/** a page we could not see, about which nothing known is bad: Google, Spamhaus, VirusTotal and Cloudflare's scan */
+function cleanElsewhere(r: PublicReport): boolean {
+  const p = r.reputation;
+  return r.verdict === 'unknown' && !!p && p.google !== null && p.google.length === 0 && p.spamhaus === 'clean' && !!p.virustotal && p.virustotal.malicious + p.virustotal.suspicious === 0
+    && r.second_opinion?.malicious === false && r.second_opinion.status === 200;
+}
+
+function ReputationCard({ r }: R) {
+  const p = r.reputation;
+  if (!p) return null;
+  const R = T.rep;
+  return (
+    <Card title={R.title} titleId="reputation">
+      <p className="mb-3 text-muted">{R.intro}</p>
+      <Facts>
+        <Fact term={R.google}>{p.google === null ? R.notAsked : p.google.length ? <LevelPill level="high">{R.googleListed(p.google)}</LevelPill> : R.googleClean}</Fact>
+        <Fact term={R.spamhaus}>{p.spamhaus === null ? R.notAsked : p.spamhaus === 'clean' ? R.spamhausClean : <LevelPill level="high">{R.spamhausListed(p.spamhaus)}</LevelPill>}</Fact>
+        <Fact term={R.virustotal}>{p.virustotal === null ? R.notAsked : R.vt(p.virustotal.malicious + p.virustotal.suspicious, p.virustotal.total)}</Fact>
+        <Fact term={R.urlscan}>{p.urlscan === null ? R.notAsked : p.urlscan ? <LevelPill level="medium">{R.urlscanBad}</LevelPill> : R.urlscanClean}</Fact>
+      </Facts>
+    </Card>
   );
 }
 
@@ -138,6 +163,7 @@ export function Summary({ r, status }: R & { status: TaskStatus }) {
         <VerdictCard r={r} />
         <EmailLinks r={r} id={status.id} />
         <SecondOpinion r={r} id={status.id} />
+        <ReputationCard r={r} />
         <FindingsCard r={r} />
         <ExplanationCard r={r} />
         <Card title={T.glanceTitle} titleId="glance">

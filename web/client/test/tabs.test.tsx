@@ -135,3 +135,25 @@ test('the screenshot can be switched by device only when there is more than one 
   expect(screen.queryByRole('img', { name: /taken in the sandbox/ })).toBeNull();
   expect(document.body.textContent).toMatch(/No screenshot was taken/);
 });
+
+test('what others know: each source in words, a listing marked; a wall nobody knows anything bad about is said so', () => {
+  const clean = { google: [], spamhaus: 'clean', virustotal: { malicious: 0, suspicious: 0, total: 90 }, urlscan: false };
+  const walled = { ...unread('bot_challenge', 'A wall.'), reputation: clean, second_opinion: { ...hostile().second_opinion!, malicious: false, status: 200 } } as PublicReport;
+  render(<Summary r={walled} status={status()} />);
+  const card = screen.getByRole('region', { name: 'What others already know' });
+  expect(card.textContent).toMatch(/not on Google’s lists/);
+  expect(card.textContent).toMatch(/no engine flags the domain \(90 checked\)/);
+  expect(document.body.textContent).toMatch(/nothing known speaks against it/);
+  cleanup();
+  // Cloudflare could not see it either (403): nothing is said that was not seen
+  render(<Summary r={{ ...walled, second_opinion: { ...walled.second_opinion!, status: 403 } }} status={status()} />);
+  expect(document.body.textContent).not.toMatch(/nothing known speaks against it/);
+  cleanup();
+  render(<Summary r={{ ...hostile(), reputation: { google: ['SOCIAL_ENGINEERING'], spamhaus: 'phish', virustotal: { malicious: 4, suspicious: 0, total: 90 }, urlscan: true } }} status={status()} />);
+  const bad = screen.getByRole('region', { name: 'What others already know' });
+  expect(bad.textContent).toMatch(/listed as social engineering/);
+  expect(bad.textContent).toMatch(/listed for phishing/);
+  expect(bad.textContent).toMatch(/4 of 90 engines flag the domain/);
+  expect(bad.textContent).toMatch(/marked malicious/);
+  expect(document.body.textContent).not.toMatch(/nothing known speaks against it/);
+});
