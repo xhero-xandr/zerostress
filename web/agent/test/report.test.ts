@@ -229,6 +229,10 @@ const SAFE: Record<string, RegExp> = {
   'log[].d.by': /^(rules_only|text|vision)$/,
   'log[].d.image': /^[0-9a-f]{8,64}$/,
   'log[].d.model': /^[A-Za-z0-9._:/-]{1,100}$/,
+  'log[].d.source': /^(found|submitted)$/,
+  'second_opinion.source': /^(found|submitted)$/,
+  'second_opinion.scan_id': /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  'second_opinion.scanned_at': /^\d{4}-\d{2}-\d{2}T[\d:.]{8,12}Z$/,
 };
 
 function leaves(v: unknown, path = ''): Array<[string, string]> {
@@ -245,7 +249,8 @@ const withNetwork = async (): Promise<TaskResult> => {
 };
 
 test('every text in the public report is either listed as untrusted or has a strict shape of our own', async () => {
-  for (const make of [injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
+  const withOpinion = async (): Promise<TaskResult> => ({ ...(await login()), second_opinion: { uuid: '11111111-2222-4333-8444-555555555555', source: 'found', scanned_at: '2026-11-04T12:08:00.000Z', final_url: 'https://evil.example/x', status: 200, title: '"><script>alert(1)</script>', malicious: true, title_withheld: false, screenshot: true } } as TaskResult);
+  for (const make of [withOpinion, injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
     const pub: PublicReport = publicReport(await make());
     for (const [path, value] of leaves(pub)) {
       if (UNTRUSTED.includes(path)) continue;

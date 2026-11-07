@@ -28,6 +28,8 @@ export const LOG_CODES = [
   'stopped_by_hooks', // the agent took no action because the hooks fired while the model was thinking
   'verdict', // the final verdict (verdict, by)
   'hooks_summary', // how many inspections and findings
+  'second_opinion_asked', // the owner asked Cloudflare's URL Scanner (publish: whether a new public scan was allowed)
+  'second_opinion', // its answer (source: found or submitted; status; malicious; host)
 ] as const;
 export type LogCode = (typeof LOG_CODES)[number];
 
@@ -36,9 +38,9 @@ const KEYS: Readonly<Record<string, Shape>> = {
   host: 'host', from: 'host', to: 'host',
   position: 'int', slot: 'int', vcpu: 'int', mem_mib: 'int', delay_s: 'int', status: 'int', count: 'int', requests: 'int',
   hosts: 'int', blocked: 'int', ms: 'int', tokens: 'int', step: 'int', inspected: 'int', findings: 'int',
-  password: 'bool', saved: 'bool', by_session: 'bool',
+  password: 'bool', saved: 'bool', by_session: 'bool', malicious: 'bool', publish: 'bool',
   state: 'token', reason: 'token', mode: 'token', verdict: 'token', next: 'token', action: 'token', risk: 'token',
-  device: 'token', result: 'token', by: 'token',
+  device: 'token', result: 'token', by: 'token', source: 'token',
   // the guest image's hash: proof of the image that ran; our rule set's and prompt's hashes are never shown
   image: 'hex',
   model: 'model',

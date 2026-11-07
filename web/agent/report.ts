@@ -12,6 +12,7 @@
 // markup, script or an instruction (spec 007).
 
 import { cleanLog } from './agent-log.ts';
+import { raise, type Verdict } from './signals.ts';
 import { ASK_CODES } from './fields.ts';
 import type { PublicFacts, PublicReport, PublicVerdict } from './report-types.ts';
 import type { TaskResult } from './runner.ts';
@@ -32,6 +33,9 @@ export const UNTRUSTED: readonly string[] = [
   'owner.steps[].error',
   'owner.hook_findings[].place',
   'owner.notes[]',
+  // Cloudflare's scanner read these off the page
+  'second_opinion.final_host',
+  'second_opinion.title',
   // the log names hosts the page led to
   'log[].d.host',
   'log[].d.from',
@@ -138,6 +142,27 @@ function publicFacts(v: unknown): PublicFacts {
   };
 }
 
+const SCAN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function secondOpinion(x: unknown): PublicReport['second_opinion'] {
+  const so = o(x);
+  if (typeof so.uuid !== 'string' || !SCAN_ID.test(so.uuid)) return null;
+  const at = typeof so.scanned_at === 'string' && !Number.isNaN(Date.parse(so.scanned_at)) ? new Date(so.scanned_at).toISOString() : '';
+  let host = '';
+  try { host = typeof so.final_url === 'string' && so.final_url ? new URL(so.final_url).host : ''; } catch { /* none */ }
+  return {
+    source: so.source === 'submitted' ? 'submitted' : 'found',
+    scan_id: so.uuid,
+    scanned_at: at,
+    final_host: s(host, 253),
+    status: typeof so.status === 'number' && Number.isInteger(so.status) && so.status >= 100 && so.status < 600 ? so.status : null,
+    title: so.title_withheld === true ? '' : s(so.title, 200),
+    title_withheld: so.title_withheld === true,
+    malicious: typeof so.malicious === 'boolean' ? so.malicious : null,
+    screenshot: so.screenshot === true,
+  };
+}
+
 export function publicReport(r: TaskResult): PublicReport {
   const a = o(r.assessment);
   const reason = typeof a.mode_reason === 'string' && Object.hasOwn(MODE_TEXT, a.mode_reason) ? a.mode_reason : null;
@@ -146,12 +171,14 @@ export function publicReport(r: TaskResult): PublicReport {
     schema: REPORT_SCHEMA,
     run_id: s(r.run_id, 40),
     url: s(r.url, 2048),
-    verdict: (['benign', 'suspicious', 'malicious', 'unknown'].includes(a.verdict as string) ? a.verdict : 'unknown') as PublicVerdict,
+    // Cloudflare's own "malicious" may raise the verdict, never lower it (docs/containment.md, rule 8)
+    verdict: raise((['benign', 'suspicious', 'malicious', 'unknown'].includes(a.verdict as string) ? a.verdict : 'unknown') as Verdict, o(r.second_opinion).malicious === true ? 'malicious' : 'unknown') as PublicVerdict,
     confidence: Math.min(1, Math.max(0, n(a.confidence))),
     status: { state: s(r.state, 20), failure: r.failure === null ? null : s(r.failure, 40) },
     mode,
     mode_reason: reason,
     log: cleanLog(r.log),
+    second_opinion: secondOpinion(r.second_opinion),
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,
     signals: list<Record<string, unknown>>(o(a.rules).signals, 40).map((x) => ({ id: s(x.id, 40), level: s(x.level, 10), text: s(x.text, 300) })),

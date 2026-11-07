@@ -1,5 +1,8 @@
 // How the sections read, carried over from web/server/test/app.test.ts (the pages were server-rendered before spec 012).
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, test } from 'vitest';
 import { EVIL, hostile, ID, status, unread } from './fixtures.ts';
 import { Behavior, Links, Network, Security, Summary } from '../src/pages/tabs.tsx';
@@ -9,6 +12,10 @@ import type { PublicReport } from '../../agent/report-types.ts';
 const Agent = ({ r }: { r: PublicReport }) => <AgentLog entries={r.log} />;
 
 afterEach(cleanup);
+
+// the sections live inside the router and the query cache of the app (the second opinion asks for both)
+const Providers = ({ children }: { children: ReactNode }) => <QueryClientProvider client={new QueryClient()}><MemoryRouter>{children}</MemoryRouter></QueryClientProvider>;
+const render = (ui: ReactNode) => rtlRender(ui, { wrapper: Providers });
 
 const ALL = { summary: Summary, security: Security, network: Network, links: Links, behavior: Behavior, agent: Agent };
 
@@ -24,7 +31,7 @@ describe('every text that comes from outside stays text, on every section', () =
       for (const el of container.querySelectorAll('[href], [src], [srcset], [action]')) {
         for (const a of ['href', 'src', 'srcset', 'action']) {
           const v = el.getAttribute(a);
-          if (v !== null) expect(v.startsWith(`/r/${ID}/screenshot.png?device=`), `${el.tagName} ${a}=${v}`).toBe(true);
+          if (v !== null) expect(v.startsWith(`/r/${ID}/screenshot.png?device=`) || v === `/r/${ID}/second-opinion.png`, `${el.tagName} ${a}=${v}`).toBe(true);
         }
       }
       expect(container.querySelectorAll('img:not([src^="/r/"])').length).toBe(0);
@@ -117,14 +124,14 @@ test('the network section lists the servers with their country and network; the 
 test('the screenshot can be switched by device only when there is more than one image', () => {
   render(<Summary r={hostile()} status={status()} />);
   expect(screen.queryByRole('group', { name: 'Screenshot for a device' })).toBeNull();
-  expect(screen.getByRole('img').getAttribute('src')).toBe(`/r/${ID}/screenshot.png?device=desktop`);
+  expect(screen.getByRole('img', { name: /taken in the sandbox/ }).getAttribute('src')).toBe(`/r/${ID}/screenshot.png?device=desktop`);
   cleanup();
   render(<Summary r={hostile()} status={status({ shots: { desktop: true, tablet: true, mobile: true } })} />);
   fireEvent.click(screen.getByRole('button', { name: 'Phone' }));
-  expect(screen.getByRole('img').getAttribute('src')).toBe(`/r/${ID}/screenshot.png?device=mobile`);
+  expect(screen.getByRole('img', { name: /taken in the sandbox/ }).getAttribute('src')).toBe(`/r/${ID}/screenshot.png?device=mobile`);
   expect(screen.getByRole('button', { name: 'Phone' }).getAttribute('aria-pressed')).toBe('true');
   cleanup();
   render(<Summary r={hostile()} status={status({ shots: { desktop: false, tablet: false, mobile: false } })} />);
-  expect(screen.queryByRole('img')).toBeNull();
+  expect(screen.queryByRole('img', { name: /taken in the sandbox/ })).toBeNull();
   expect(document.body.textContent).toMatch(/No screenshot was taken/);
 });

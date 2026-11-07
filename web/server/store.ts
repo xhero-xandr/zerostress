@@ -42,6 +42,9 @@ export interface Store {
   keyOk(task: Task, key: unknown): boolean;
   emit(task: Task, type: TaskEvent['type'], data: unknown): void;
   save(task: Task): void;
+  /** an image kept with a task (the second opinion's screenshot); it goes when the task goes */
+  saveImage(task: Task, name: 'second-opinion', png: Uint8Array): void;
+  readImage(task: Task, name: 'second-opinion'): Buffer | null;
   sweep(): number;
 }
 
@@ -50,6 +53,7 @@ const hashKey = (k: string) => createHash('sha256').update(k).digest('hex');
 
 export function createStore(dir: string | null, ttlMs = 24 * 3_600_000, now: () => number = Date.now): Store {
   const tasks = new Map<string, Task>();
+  const images = new Map<string, Buffer>(); // without a directory (tests), in memory
   if (dir) mkdirSync(dir, { recursive: true, mode: 0o700 });
 
   const fresh = (id: string, keyHash: string, url: string, deep: boolean): Task => ({
@@ -102,13 +106,27 @@ export function createStore(dir: string | null, ttlMs = 24 * 3_600_000, now: () 
       writeFileSync(tmp, JSON.stringify({ id, keyHash, createdAt, url, stage, runId, deep, result }), { mode: 0o600 });
       renameSync(tmp, join(dir, `${id}.json`));
     },
+    saveImage(task, name, png) {
+      if (!dir) { images.set(`${task.id}.${name}`, Buffer.from(png)); return; }
+      const tmp = join(dir, `${task.id}.${name}.tmp`);
+      writeFileSync(tmp, png, { mode: 0o600 });
+      renameSync(tmp, join(dir, `${task.id}.${name}.png`));
+    },
+    readImage(task, name) {
+      if (!dir) return images.get(`${task.id}.${name}`) ?? null;
+      try { return readFileSync(join(dir, `${task.id}.${name}.png`)); } catch { return null; }
+    },
     sweep() {
       let n = 0;
       for (const [id, t] of tasks) {
         if (now() - t.createdAt <= ttlMs) continue;
         tasks.delete(id);
         n++;
-        if (dir) rmSync(join(dir, `${id}.json`), { force: true });
+        images.delete(`${id}.second-opinion`);
+        if (dir) {
+          rmSync(join(dir, `${id}.json`), { force: true });
+          rmSync(join(dir, `${id}.second-opinion.png`), { force: true });
+        }
       }
       if (dir) {
         for (const name of readdirSync(dir)) {

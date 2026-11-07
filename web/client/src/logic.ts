@@ -120,6 +120,8 @@ export function logLine(e: LogEntry): string {
     case 'stopped_by_hooks': return L.stoppedByHooks(str('action'));
     case 'verdict': return L.verdict(str('verdict'), str('by'));
     case 'hooks_summary': return L.hooksSummary(num('inspected') ?? 0, num('findings') ?? 0);
+    case 'second_opinion_asked': return L.secondAsked(d.publish === true);
+    case 'second_opinion': return L.second(str('source'), num('status'), typeof d.malicious === 'boolean' ? d.malicious : null, str('host'));
   }
 }
 

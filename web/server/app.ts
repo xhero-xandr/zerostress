@@ -2,6 +2,8 @@
 // limiter are passed in), so a test can drive it without a supervisor.
 
 import { cleanEntry } from '../agent/agent-log.ts';
+import type { UrlScanClient } from '../agent/urlscan.ts';
+import { scanText } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,6 +36,8 @@ export interface AppDeps {
   clientIp?: (c: Context) => string;
   /** the built client (spec 012): index.html and assets/; the default is build/client at the project root (spec 010) */
   clientDir?: string;
+  /** Cloudflare's URL Scanner for a second opinion on a page we could not read; without it the endpoint is absent */
+  urlscan?: Pick<UrlScanClient, 'opinion'>;
 }
 
 // The client sends everything with fetch, it has no forms, so form-action can be 'none' (spec 007, 3.5).
@@ -70,7 +74,7 @@ function defaultClientIp(c: Context): string {
   return peer;
 }
 
-const json = (c: Context, status: 200 | 202 | 400 | 403 | 404 | 413 | 415 | 429 | 500 | 503, body: unknown, headers: Record<string, string> = {}): Response =>
+const json = (c: Context, status: 200 | 202 | 400 | 403 | 404 | 409 | 413 | 415 | 429 | 500 | 503, body: unknown, headers: Record<string, string> = {}): Response =>
   c.json(body as object, status, { 'cache-control': 'no-store', ...headers });
 
 const fail = (c: Context, status: 400 | 403 | 404 | 413 | 415 | 429 | 500 | 503, code: string, headers: Record<string, string> = {}): Response =>
@@ -279,6 +283,13 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   // the section pages come after the fixed names (screenshot.png, report.json) so a name is never taken for a section
+  app.get('/r/:id/second-opinion.png', (c) => {
+    const task = deps.store.get(c.req.param('id'));
+    const png = task?.result?.second_opinion?.screenshot ? deps.store.readImage(task, 'second-opinion') : null;
+    if (!png || png.length > SHOT_MAX || png.length < 16 || !png.subarray(0, 8).equals(PNG)) return c.text('not found', 404);
+    return new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png', 'cache-control': 'private, max-age=3600', 'content-security-policy': 'sandbox', 'content-disposition': 'inline' } });
+  });
+
   app.get('/r/:id/:tab', (c) => taskPage(c, c.req.param('tab')));
 
   // ---- Explain and questions about a finished report ----
@@ -366,6 +377,46 @@ export function createApp(deps: AppDeps): Hono {
     }
     return task;
   };
+
+  // ---- a second opinion from Cloudflare's URL Scanner, on a page the sandbox could not read ----
+  const asking = new Set<string>();
+  app.post('/api/tasks/:id/second-opinion', async (c) => {
+    if (!deps.urlscan) return fail(c, 404, 'not_found');
+    const t = owned(c);
+    if (t instanceof Response) return t;
+    const read = await readJsonBody(c);
+    if (!read.ok) return read.res;
+    if (Object.keys(read.body).some((k) => k !== 'publish') || (read.body.publish !== undefined && typeof read.body.publish !== 'boolean')) return fail(c, 400, 'bad_request');
+    if (!t.result || t.stage !== 'done') return fail(c, 404, 'not_found');
+    if (t.result.second_opinion) return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
+    // only for a page we could not read: a verdict of our own needs no one else's
+    if (publicReport(t.result).verdict !== 'unknown') return fail(c, 400, 'bad_request');
+    if (asking.has(t.id)) return fail(c, 429, 'chat_busy');
+    asking.add(t.id);
+    try {
+      const publish = read.body.publish === true;
+      const at = () => Math.min(86_400_000, Math.max(0, Date.now() - t.createdAt));
+      const out = await deps.urlscan.opinion(t.result.url, publish);
+      if (!out.ok) {
+        if (out.reason === 'needs_consent') return json(c, 409, { code: 'needs_consent', message: errorText('needs_consent') });
+        if (out.reason === 'pending') return json(c, 503, { code: 'scan_pending', message: errorText('scan_pending') }, { 'retry-after': '30' });
+        return fail(c, 503, 'supervisor_unavailable');
+      }
+      // the title was written by the page: it goes through the hooks like any text of a page
+      const withheld = out.opinion.title !== '' && scanText('second_opinion', out.opinion.title).triggered;
+      if (out.screenshot) deps.store.saveImage(t, 'second-opinion', out.screenshot);
+      t.result.second_opinion = { ...out.opinion, title: withheld ? '' : out.opinion.title, title_withheld: withheld, screenshot: out.screenshot !== null };
+      t.result.log ??= []; // a report kept from before the log existed
+      for (const entry of [
+        cleanEntry({ t: at(), code: 'second_opinion_asked', d: { publish } }),
+        cleanEntry({ t: at(), code: 'second_opinion', d: { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() } }),
+      ]) if (entry && t.result.log.length < 220) t.result.log.push(entry);
+      deps.store.save(t);
+      return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
+    } finally {
+      asking.delete(t.id);
+    }
+  });
 
   app.get('/api/tasks/:id/pending', (c) => {
     const t = owned(c);

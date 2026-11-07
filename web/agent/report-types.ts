@@ -43,6 +43,18 @@ import type { LogEntry } from './agent-log.ts';
 export interface PublicReport {
   /** what happened, step by step (agent-log.ts): our codes, numbers, tokens, the model's id, hosts */
   log: LogEntry[];
+  /** Cloudflare's URL Scanner, asked afterwards about a page we could not read; its verdict may only raise ours */
+  second_opinion: null | {
+    source: 'found' | 'submitted';
+    scan_id: string;
+    scanned_at: string;
+    final_host: string;
+    status: number | null;
+    title: string;
+    title_withheld: boolean;
+    malicious: boolean | null;
+    screenshot: boolean;
+  };
   schema: 1;
   run_id: string;
   url: string;

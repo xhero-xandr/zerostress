@@ -30,6 +30,8 @@ export const T = {
     chat_busy: 'Your previous question is still being answered.',
     chat_cap: 'This report has had as many questions as it can take. The explanation above is still available.',
     forbidden: 'This is not allowed from here.',
+    needs_consent: 'Nobody has scanned this exact link at Cloudflare recently. A new scan there is public: anyone can find it. Say yes to publish it.',
+    scan_pending: 'Cloudflare is still scanning the page. Ask again in a minute.',
     server: 'Something went wrong on our side. Please try again.',
   } as Readonly<Record<string, string>>,
 };

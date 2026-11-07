@@ -5,6 +5,7 @@ import type { PublicReport } from '../../../agent/report-types.ts';
 import { shotUrl, type TaskStatus } from '../api.ts';
 import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
 import { T } from '../text.ts';
+import { SecondOpinion } from './second-opinion.tsx';
 import { Card, Fact, Facts, LevelPill, Notice, TableWrap, Td, Th, VERDICT_STYLE } from '../ui.tsx';
 
 type R = { r: PublicReport };
@@ -133,6 +134,7 @@ export function Summary({ r, status }: R & { status: TaskStatus }) {
     <div className="flex flex-wrap items-start gap-5">
       <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
         <VerdictCard r={r} />
+        <SecondOpinion r={r} id={status.id} />
         <FindingsCard r={r} />
         <ExplanationCard r={r} />
         <Card title={T.glanceTitle} titleId="glance">

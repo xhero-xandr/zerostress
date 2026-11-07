@@ -69,5 +69,11 @@ export const decide = (id: string, key: string, p: Pending, allow: boolean): Pro
     body: JSON.stringify({ command_id: p.command_id, command_sha256: p.command_sha256, allow }),
   }).then((r) => read<{ message: string }>(r));
 
+export type SecondOpinion = NonNullable<PublicReport['second_opinion']>;
+export const askSecondOpinion = (id: string, key: string, publish: boolean): Promise<{ second_opinion: SecondOpinion }> =>
+  fetch(`/api/tasks/${id}/second-opinion`, { method: 'POST', headers: { ...JSON_HEADERS, 'x-task-key': key }, body: JSON.stringify(publish ? { publish: true } : {}) })
+    .then((r) => read<{ second_opinion: SecondOpinion }>(r));
+export const secondOpinionShotUrl = (id: string): string => `/r/${id}/second-opinion.png`;
+
 export const shotUrl = (id: string, device: 'desktop' | 'tablet' | 'mobile'): string => `/r/${id}/screenshot.png?device=${device}`;
 export const reportJsonUrl = (id: string): string => `/r/${id}/report.json`;

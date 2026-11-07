@@ -3,6 +3,10 @@
 // that says what happened. The supervisor is the one that opens the page; nothing here touches a page.
 
 import { createLog, type LogCode, type LogEntry } from './agent-log.ts';
+import type { ScanOpinion } from './urlscan.ts';
+
+/** A second opinion as kept with the task: the title is withheld when it tripped the hooks. */
+export type SecondOpinion = ScanOpinion & { title_withheld: boolean; screenshot: boolean };
 import { taskHooks } from './task-hooks.ts';
 import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
@@ -66,6 +70,8 @@ export interface TaskResult {
   timeline: string[];
   /** what happened, step by step, with times: our codes and values of fixed shapes only (agent-log.ts) */
   log: LogEntry[];
+  /** Cloudflare's URL Scanner on a page the sandbox could not read, asked by the owner afterwards (urlscan.ts) */
+  second_opinion?: SecondOpinion;
   notes: string[];
 }
 

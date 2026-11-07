@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { loadPrompt } from '../agent/assess.ts';
 import { createBudget } from '../agent/budget.ts';
 import { describeConfig, loadAgentConfig, loadScannerConfig } from '../agent/config.ts';
+import { createUrlScanClient } from '../agent/urlscan.ts';
 import { loadChatPrompt, reply as chatReply } from '../agent/chat.ts';
 import { loadGeo } from '../agent/geo.ts';
 import { createModelClient } from '../agent/model.ts';
@@ -42,6 +43,7 @@ const num = (name: string, def: number): number => {
 const cfg = loadAgentConfig(env);
 // checked at start even before anything uses it, so a broken value shows up now and not in the middle of a check
 const scanner = loadScannerConfig(env);
+const urlscan = scanner.enabled ? createUrlScanClient(scanner) : undefined;
 const prompt = loadPrompt();
 const chatPrompt = loadChatPrompt();
 const budget = createBudget({ dailyRequests: cfg.dailyRequests, dailyTokens: cfg.dailyTokens });
@@ -68,6 +70,7 @@ const limiter = createLimiter({
 });
 
 const app = createApp({
+  ...(urlscan ? { urlscan } : {}),
   clientDir: (env.WEB_CLIENT_DIR ?? `${ROOT}build/client`).replace(/\/?$/, '/'),
   run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, limits: { totalMs: 240_000 } }),
   fetchShot: (runId, name) => sup.artifact(runId, name, 4 * 1024 * 1024),
