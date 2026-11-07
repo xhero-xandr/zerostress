@@ -260,6 +260,8 @@ export const T = {
     send: 'Send',
     checkThis: (link: string) => `Check ${link}`,
     asksFor: 'Asks for',
+    oneAtATime: 'One check at a time: I am still on the last one. Send this link again once its verdict is in.',
+    afterVerdict: 'I am still checking. I will answer this as soon as the verdict is in.',
     servers: 'Servers',
     shotsTitle: 'What the sandboxed browser saw (tap to enlarge)',
     downloadJson: 'Download the report (JSON)',

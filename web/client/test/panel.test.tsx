@@ -171,3 +171,28 @@ test('a link into one\'s own mailbox is explained, not checked', async () => {
   await waitFor(() => expect(document.body.textContent).toMatch(/your own Gmail inbox/));
   expect(sent.filter((x) => x.url === '/api/tasks')).toEqual([]);
 });
+
+test('a question typed while the check is still running is kept and answered after the explanation', async () => {
+  render(<Panel />);
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://paypa1-secure.test/login' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+  await waitFor(() => expect(FakeSource.last?.url).toBe(`/api/tasks/${ID}/events`));
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'Who made this page?' } });
+  fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
+  expect(document.body.textContent).toContain('Who made this page?');
+  expect(document.body.textContent).toMatch(/I will answer this as soon as the verdict is in/);
+  expect(sent.filter((x) => x.url.endsWith('/chat'))).toEqual([]);
+  act(() => FakeSource.last!.fire('final', {}));
+  await waitFor(() => expect(sent.filter((x) => x.url.endsWith('/chat')).map((x) => JSON.parse(x.body))).toEqual([{ kind: 'explain' }, { kind: 'ask', message: 'Who made this page?' }]));
+});
+
+test('a second link while a check is running is told to wait, not silently dropped', async () => {
+  render(<Panel />);
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://paypa1-secure.test/login' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+  await waitFor(() => expect(FakeSource.last?.url).toBe(`/api/tasks/${ID}/events`));
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://other.test/' } });
+  fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
+  expect(document.body.textContent).toMatch(/One check at a time/);
+  expect(sent.filter((x) => x.url === '/api/tasks')).toHaveLength(1);
+});

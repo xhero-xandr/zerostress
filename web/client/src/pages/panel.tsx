@@ -36,6 +36,8 @@ export function Panel() {
   const busy = useRef(false);
   const end = useRef<HTMLDivElement>(null);
   const asked = useRef(new Set<string>());
+  // questions typed while the check was still running: answered after its explanation, in order
+  const queued = useRef<string[]>([]);
 
   // the place of each new message is known when it is added (a counter), not when React gets to the update
   const count = useRef(1);
@@ -64,7 +66,10 @@ export function Panel() {
     const shots = await getStatus(id).then((st) => st.shots, () => null);
     push({ kind: 'verdict', r, id, key, shots });
     busy.current = false;
-    await answer(id, { kind: 'explain' });
+    const later = queued.current.splice(0);
+    const explained = answer(id, { kind: 'explain' });
+    for (const q of later) void answer(id, { kind: 'ask', message: q });
+    await explained;
   }
 
   async function askOwner(id: string, key: string) {
@@ -96,7 +101,8 @@ export function Panel() {
   }
 
   async function check(raw: string) {
-    if (busy.current) return;
+    if (busy.current) { push({ kind: 'you', text: P.checkThis(raw.trim()) }); say(P.oneAtATime); return; }
+    queued.current = [];
     push({ kind: 'you', text: P.checkThis(raw.trim()) });
     const link = webLink(raw);
     if (!link) { say(P.notALink); return; }
@@ -142,7 +148,14 @@ export function Panel() {
       if (links.length) push({ kind: 'email', links }); else say(P.emailNone);
       return;
     }
-    if (webLink(t) || !task.current?.report) { void check(t); return; }
+    if (webLink(t)) { void check(t); return; }
+    if (busy.current) {
+      push({ kind: 'you', text: t });
+      queued.current.push(t.slice(0, 300));
+      say(P.afterVerdict);
+      return;
+    }
+    if (!task.current?.report) { void check(t); return; }
     push({ kind: 'you', text: t });
     void answer(task.current.id, { kind: 'ask', message: t.slice(0, 300) });
   };
