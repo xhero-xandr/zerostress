@@ -3,8 +3,8 @@
 # copy of the sources and require that the Go tests fail. Run on the dev server, in the working copy to test. The sources
 # are restored after every mutation and at exit. A mutation whose text is not found makes the run fail.
 set -uo pipefail
-export PATH=/opt/go/bin:$PATH
-S=${SRC:-/opt/zerostress-src}
+S=${SRC:-$(cd "$(dirname "$0")/../.." && pwd)}
+export PATH=$S/runtime/go/bin:$PATH
 fails=0 total=0
 backup=$(mktemp)
 current=""

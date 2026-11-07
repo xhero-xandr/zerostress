@@ -10,9 +10,9 @@ set -euo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
 
-RUNS=/var/lib/zerostress/runs
-ZSNET=/opt/zerostress/bin/zsnet
-FC=/opt/zerostress/bin/firecracker
+RUNS=/zerostress/data/supervisor/runs
+ZSNET=/zerostress/bin/zsnet
+FC=/zerostress/bin/firecracker
 SUPUSER=zerostress-sup
 
 die() { echo "zsvm: $*" >&2; exit 2; }

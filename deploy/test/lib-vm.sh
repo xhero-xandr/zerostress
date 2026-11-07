@@ -3,11 +3,11 @@
 # collector (or COLLECTOR_ENTRY=...), talk to its agent through the vsock socket, clean up on exit. Source it, do not run it. Run as root.
 # The caller sets `set -uo pipefail`.
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-NODE=/opt/node/bin/node
+NODE=/zerostress/runtime/node/bin/node
 SUP=zerostress-sup
 fail=0
 
-q() { sudo -u $SUP sudo -n /opt/zerostress/bin/zsnet "$@"; }
+q() { sudo -u $SUP sudo -n /zerostress/bin/zsnet "$@"; }
 
 vm_cleanup() {
   systemctl stop "$UNIT" 2>/dev/null
@@ -18,10 +18,10 @@ vm_cleanup() {
 # vm_boot NAME [BASE_IMAGE] [AGENT_BIN] [VM_MEM_MIB]
 vm_boot() {
   local name=$1
-  local base=${2:-/opt/zerostress/images/guest-rootfs.ext4}
+  local base=${2:-/zerostress/images/guest-rootfs.ext4}
   local agent=${3:-$HERE/../../build/guest-agent/zerostress-agent}
   local mem=${4:-1024}
-  D=/var/lib/zerostress/runs/$name
+  D=/zerostress/data/supervisor/runs/$name
   UNIT=fc-$name
   UDS=$D/v.sock
   trap vm_cleanup EXIT
@@ -37,7 +37,7 @@ vm_boot() {
   chown $SUP:$SUP "$D/rootfs.ext4"; chmod 0600 "$D/rootfs.ext4"
 
   cat >"$D/vm.json" <<J
-{"boot-source":{"kernel_image_path":"/opt/zerostress/images/vmlinux-6.18.56",
+{"boot-source":{"kernel_image_path":"/zerostress/images/vmlinux-6.18.56",
   "boot_args":"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.0.2::172.16.0.1:255.255.255.252::eth0:off:1.1.1.1"},
  "drives":[{"drive_id":"rootfs","path_on_host":"$D/rootfs.ext4","is_root_device":true,"is_read_only":false}],
  "network-interfaces":[{"iface_id":"net1","guest_mac":"06:00:AC:10:00:02","host_dev_name":"zstap0"}],
@@ -52,7 +52,7 @@ J
   t0=$(date +%s.%N)
   systemd-run -q --collect --unit=$UNIT -p User=$SUP -p RuntimeMaxSec=300 \
     -p StandardOutput=file:$D/serial.log -p StandardError=file:$D/err.log \
-    /opt/zerostress/bin/firecracker --no-api --config-file "$D/vm.json"
+    /zerostress/bin/firecracker --no-api --config-file "$D/vm.json"
 
   for i in $(seq 1 60); do
     if sudo -u $SUP $NODE "$HERE/vsock-client.mjs" --probe "$UDS" 5000 '{}' 2>/dev/null; then ready=1; break; fi

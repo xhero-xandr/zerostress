@@ -1,12 +1,12 @@
 // Concurrency measurement with real Chromium in real microVMs, through the installed supervisor.
 // For each concurrency level N: submit N jobs at once, sample the host every 250 ms, report memory, CPU, timings, failures.
-// Run as root on the host: /opt/node/bin/node bench-concurrency.mjs   (LEVELS=1,2,3,4 REPEATS=2 MEM_MIB=1024)
+// Run as root on the host: /zerostress/runtime/node/bin/node bench-concurrency.mjs   (LEVELS=1,2,3,4 REPEATS=2 MEM_MIB=1024)
 // It sets SUP_CONCURRENCY (and SUP_MEM_MIB) through a temporary systemd drop-in and always removes it again.
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
-const SOCK = '/run/zerostress/supervisor.sock';
+const SOCK = '/zerostress/run/supervisor.sock';
 const DROPIN_DIR = '/etc/systemd/system/zerostress-supervisor.service.d';
 const DROPIN = `${DROPIN_DIR}/bench.conf`;
 const PAGES = [

@@ -18,18 +18,18 @@ ZeroStress — веб-агент, который открывает подозр
 - Слой хоста без привилегий (`web/`): хуки-детекторы инъекций (`web/hooks/`, правила в данных `web/hooks/rules/*.json`, спека 009) и агент (`web/agent/`: сигналы и вердикт по правилам, привратник команд, клиент модели, исполнитель задачи, отчёт; спека 008). Сделаны и проверены. Веб-слой (`web/server/`: привратник адреса, лимиты, страницы и отчёт в духе Cloudflare Radar, SSE, ключ задачи, подтверждения; спека 007) написан и работает на `zerostress.space`. Фреймворк: Hono на Node (5 ноября 2026), версии закреплены в лок-файле. Проект не привязан к одному стеку: готовые решения допустимы, где они экономят время и не нарушают containment; «только stdlib» обязательно лишь для привилегированного супервизора.
 
 ## Где что лежит
-Корень репозитория говорит, где исполняется код и с какими правами (спека 010). Правила: код меняется в исходниках, настройки окружения только в `deploy/files/` (образцы) и `/etc/zerostress/` (на хосте), всё сгенерированное только в `build/`; имена в нижнем регистре через дефис (исключения по требованию инструмента: `README.md`, `LICENSE`, `CLAUDE.md`, `*_test.go`, `*_linux.go`).
+Всё в одном каталоге проекта — рабочей копии git; на сервере это `/zerostress` (спека 010, 4.0). Одна команда `./zs` (установка, обновление, логи, настройки, проверка, `dev`). Код меняется в git, настройки в `config/*.env` (`./zs config`), всё сгенерированное в `build/`; `bin/`, `runtime/`, `images/`, `data/`, `logs/`, `run/` заполняют установщик и службы (в `.gitignore`). Имена в нижнем регистре через дефис (исключения по требованию инструмента: `README.md`, `LICENSE`, `CLAUDE.md`, `*_test.go`, `*_linux.go`).
 
 | Каталог | Что внутри | Где исполняется |
 |---|---|---|
-| `supervisor/` | Go, только stdlib: жизненный цикл микро-ВМ, очередь, сессии, артефакты; тесты рядом (`*_test.go`) | **хост, привилегированно** — единственное, что трогает Firecracker, cgroups и сеть гостя |
-| `web/` | `hooks/` (детекторы инъекций, правила-данные в `rules/`), `agent/` (правила, клиент модели, вердикт, отчёт, промпт в `prompts/`), `server/` (API на Hono; отдаёт собранный клиент); тесты в `test/` каждого модуля | **хост, без привилегий** |
-| `web/client/` | Интерфейс: React, React Router, TanStack Query, Tailwind (спека 012); `src/` (тексты `text.ts`, логика показа `logic.ts`, страницы `pages/`), тесты в `test/`; `npm test`, `npm run build`, `npm run e2e` | **в браузере посетителя**; на хост попадает только сборка `build/client/` |
-| `web/tools/` | Инструменты: мутации, корпус, замер модели, `fetch-geo.mjs` | руками или в проверках, не самим сервисом |
-| `guest/` | `agent/` (Go-агент, vsock), `collector/` (Node + Playwright через сырую CDP-сессию), `image/` (сборка и установка образа) | `agent/` и `collector/` **внутри микро-ВМ**, от непривилегированного пользователя; `image/` на хосте, только чтобы собрать образ |
-| `deploy/` | `install.sh` (единственный способ установки, этапы в `steps/`), `versions.env` (все версии и хеши), `files/` (каждый файл хоста по его пути: юниты, sudoers, `zsvm`/`zsnet`, шаблон Caddyfile, образцы `*.env`), `test/` (все тесты на настоящих ВМ) | **хост**, руками при установке |
-| `docs/` | `project.md`, `hackathon.md`, `status.md`, `backlog.md`, `tools.md`, `deploy.md` (установка, переезд, тесты), `config.md` (каждая настройка), `specs/` | — |
-| `build/` | всё сгенерированное (в `.gitignore`): бинарники, собранный клиент, снимки браузерной проверки | — |
+| `supervisor/` | Go, только stdlib: жизненный цикл микро-ВМ, очередь, сессии, артефакты; тесты рядом (`*_test.go`) | **хост, привилегированно** (из `bin/`) — единственное, что трогает Firecracker, cgroups и сеть гостя |
+| `web/` | `hooks/` (детекторы инъекций, правила-данные в `rules/`), `agent/` (правила, клиент модели, вердикт, отчёт, промпт в `prompts/`), `server/` (API на Hono; отдаёт `build/client`); тесты в `test/` каждого модуля | **хост, без привилегий**, прямо из рабочей копии |
+| `web/client/` | Интерфейс: React, React Router, TanStack Query, Tailwind (спека 012); `src/` (тексты `text.ts`, логика показа `logic.ts`, страницы `pages/`), тесты в `test/` | **в браузере посетителя** (сборка в `build/client`) |
+| `web/tools/` | Инструменты: мутации, корпус, замер модели, `fetch-geo.mjs` | руками или в проверках |
+| `guest/` | `agent/` (Go-агент, vsock), `collector/` (Node + Playwright через сырую CDP-сессию), `image/` (сборка и установка образа) | `agent/` и `collector/` **внутри микро-ВМ**, от непривилегированного пользователя |
+| `config/` | `web.env` (ключ модели), `supervisor.env` — не в git; образцы `*.env.example` — в git | читает systemd для служб |
+| `deploy/` | `steps/` (этапы `./zs install`), `lib.sh`, `versions.env` (все версии и хеши), `files/` (системные файлы по их пути: юниты, sudoers, sysctl, udev, logrotate), `helpers/` (`zsvm`, `zsnet`), `templates/` (Caddyfile), `test/` (все тесты на настоящих ВМ), `migrate-from-opt.sh` (разовый переезд) | **хост** |
+| `docs/` | `project.md`, `hackathon.md`, `status.md`, `backlog.md`, `tools.md`, `deploy.md` (установка, команды, тесты), `config.md` (каждая настройка), `specs/` | — |
 
 ## Правила
 
@@ -70,9 +70,9 @@ ZeroStress — веб-агент, который открывает подозр
 Спецификации: [docs/specs/](docs/specs/README.md); структура проекта, настройки и развёртывание: спека 010. Актуальный статус и дальнейшие шаги: docs/status.md, раздел 0.
 
 ## Команды
-Основная рабочая копия лежит **на сервере**: `/opt/zerostress-src` (git, `ssh vultr`), подробности в [docs/deploy.md](docs/deploy.md), настройки в [docs/config.md](docs/config.md). Коротко (из корня репозитория; Node: `export PATH=/opt/node/bin:$PATH`, Go: `/opt/go/bin`):
-- Установка и обновление хоста: `sudo deploy/install.sh <host|network|runtime|image|supervisor|web|all>`; сверка хоста с репозиторием без изменений: `sudo deploy/install.sh verify`. В бой (`supervisor`, `web`, `image`, `runtime`) только с явного разрешения владельца.
-- `web/`: `npm ci --ignore-scripts`, `npm test`, `npm run typecheck`, `npm run dev` (локально, `web/.env`), `npm run mutate` (около 40 минут), `npm run corpus`, `npm run bench` (ключ из `/etc/zerostress/web.env`).
+Рабочая копия на сервере: `/zerostress` после переезда (до него `/opt/zerostress-src`), `ssh vultr`; подробности в [docs/deploy.md](docs/deploy.md), настройки в [docs/config.md](docs/config.md). Коротко (из корня проекта):
+- `./zs install [этап…]`, `./zs update`, `./zs status`, `./zs logs`, `./zs config web`, `./zs verify [--live]`, `./zs dev`. В бой (`install`, `update`, `restart`, `config`) только с явного разрешения владельца.
+- `web/`: `npm ci --ignore-scripts`, `npm test`, `npm run typecheck`, `npm run mutate` (около 40 минут), `npm run corpus`, `npm run bench` (ключ из `config/web.env`).
 - Сборка: `supervisor/build.sh`, `guest/agent/build.sh` (выход в `build/`), образ `guest/image/build.sh` и `install.sh`.
 - Сборщик: `npm test` в `guest/collector/` (нужен Chromium: `npx playwright install --only-shell chromium`); улики ловушек для тестов хуков и агента: `node guest/collector/test/capture-fixtures.mjs`.
 - Тесты на настоящих ВМ: `deploy/test/` (`image-*.sh`, `supervisor-e2e.sh`, `supervisor-sessions-e2e.sh`, `collector-e2e.sh`, `agent-e2e.sh`, `containment-e2e.sh`, ...).

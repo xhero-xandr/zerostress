@@ -10,21 +10,20 @@ Group=zerostress-web
 # the supervisor's socket belongs to this group
 SupplementaryGroups=zerostress-ipc
 UMask=0077
-EnvironmentFile=/etc/zerostress/web.env
-Environment=WEB_PORT=8080
-Environment=WEB_DATA_DIR=/var/lib/zerostress-web/tasks
-# systemd makes /var/lib/zerostress-web for the service's user; the supervisor's own state directory stays closed to it
-StateDirectory=zerostress-web
-StateDirectoryMode=0700
+# Everything lives under /zerostress (spec 010): the code runs straight from the checkout, read-only for the service;
+# it writes only its own data directory, and its output goes to /zerostress/logs/web.log.
+EnvironmentFile=/zerostress/config/web.env
 Environment=NODE_ENV=production
-WorkingDirectory=/opt/zerostress/web
-ExecStart=/opt/node/bin/node --disable-warning=ExperimentalWarning server/main.ts
+WorkingDirectory=/zerostress/web
+ExecStart=/zerostress/runtime/node/bin/node --disable-warning=ExperimentalWarning server/main.ts
+StandardOutput=append:/zerostress/logs/web.log
+StandardError=inherit
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=15
 
 # The service holds the key to the model, so it gets as little as it needs: the supervisor's socket, the internet
-# for the model, and one directory to write.
+# for the model, and one directory to write (the supervisor's data stays closed to it).
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -43,6 +42,7 @@ RestrictSUIDSGID=yes
 SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
+ReadWritePaths=/zerostress/data/web
 MemoryMax=768M
 TasksMax=200
 

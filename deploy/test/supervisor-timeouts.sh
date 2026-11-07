@@ -2,7 +2,7 @@
 # Time limits on real microVMs: the agent's 60 s collector limit and the supervisor's hard cap.
 # Temporarily lowers SUP_HARD_TIMEOUT_S through a systemd drop-in and always restores it. Run as root.
 set -uo pipefail
-SOCK=/run/zerostress/supervisor.sock
+SOCK=/zerostress/run/supervisor.sock
 DROPIN=/etc/systemd/system/zerostress-supervisor.service.d/timeouts-test.conf
 fail=0
 
@@ -16,7 +16,7 @@ bad() { echo "FAIL  $1${2:+: $2}"; fail=1; }
 check() { [[ $2 =~ $3 ]] && ok "$1" || bad "$1" "got '$2', wanted /$3/"; }
 wait_terminal() { local end=$((SECONDS + $2)) s; while ((SECONDS < end)); do s=$(field "$(view "$1")" state); [[ $s =~ ^(done|failed)$ ]] && return 0; sleep 0.3; done; return 1; }
 wait_health() { for _ in $(seq 1 40); do api -m 2 http://localhost/v1/health >/dev/null 2>&1 && return 0; sleep 0.5; done; return 1; }
-clean_host() { sleep 1; [[ $(pgrep -c firecracker) == 0 && $(ip -br link | grep -c zstap) == 0 && $(ls -A /var/lib/zerostress/runs | wc -l) == 0 ]]; }
+clean_host() { sleep 1; [[ $(pgrep -c firecracker) == 0 && $(ip -br link | grep -c zstap) == 0 && $(ls -A /zerostress/data/supervisor/runs | wc -l) == 0 ]]; }
 
 restore() {
   rm -f "$DROPIN"; rmdir "$(dirname "$DROPIN")" 2>/dev/null

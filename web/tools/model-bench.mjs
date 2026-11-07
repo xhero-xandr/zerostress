@@ -2,7 +2,7 @@
 // Picks the model (spec 008, step 4): runs the real assessment (agent/assess.ts, the real client, the real prompt) on a
 // fixed set of cases against the real Vultr Serverless Inference, once per model, and prints one row per model.
 // Run on the server, where the key is:
-//   set -a; . /etc/zerostress/web.env; set +a; node tools/model-bench.mjs [--models=a,b,c] [--repeat=2] [--json=out.json]
+//   set -a; . /zerostress/config/web.env; set +a; node tools/model-bench.mjs [--models=a,b,c] [--repeat=2] [--json=out.json]
 // The key is read from the environment and never printed. Each case is a page the rules already judge, so what is
 // measured is the model's reading of the dossier and its discipline (valid JSON, cites real evidence, does not lower).
 
@@ -19,7 +19,7 @@ const { loadAgentConfig } = await imp('../agent/config.ts');
 const { createHooks } = await imp('../hooks/index.ts');
 
 if (!process.env.INFERENCE_BASE_URL || !process.env.INFERENCE_API_KEY) {
-  console.error('INFERENCE_BASE_URL and INFERENCE_API_KEY must be set (see /etc/zerostress/web.env)');
+  console.error('INFERENCE_BASE_URL and INFERENCE_API_KEY must be set (see /zerostress/config/web.env)');
   process.exit(2);
 }
 const KEY = process.env.INFERENCE_API_KEY;

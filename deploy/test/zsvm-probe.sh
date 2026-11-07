@@ -2,11 +2,11 @@
 # Feasibility of "one systemd unit per microVM": cgroup limits, guaranteed network teardown, signal behaviour.
 # Real Firecracker, real guest, SELinux Enforcing. Run as root on the host.
 set -uo pipefail
-D=/var/lib/zerostress/runs/zsvm-probe
-IMG=/opt/zerostress/images/guest-rootfs.ext4
-KERNEL=/opt/zerostress/images/vmlinux-6.18.56
-CLIENT=/opt/zerostress-src/deploy/test/vsock-client.mjs
-NODE=/opt/node/bin/node
+D=/zerostress/data/supervisor/runs/zsvm-probe
+IMG=/zerostress/images/guest-rootfs.ext4
+KERNEL=/zerostress/images/vmlinux-6.18.56
+CLIENT=/zerostress/deploy/test/vsock-client.mjs
+NODE=/zerostress/runtime/node/bin/node
 UNIT=zsvm-probe
 SUP=zerostress-sup
 CG=/sys/fs/cgroup/system.slice/$UNIT.service
@@ -22,7 +22,7 @@ unit_gone() { ! systemctl is-active -q $UNIT; }
 
 cleanup() {
   systemctl stop $UNIT 2>/dev/null; systemctl reset-failed $UNIT 2>/dev/null
-  /opt/zerostress/bin/zsnet down 0 2>/dev/null
+  /zerostress/bin/zsnet down 0 2>/dev/null
   rm -rf "$D"
 }
 trap cleanup EXIT
@@ -33,12 +33,12 @@ install -d -m 0700 -o $SUP -g $SUP "$D"
 start_vm() {
   asup rm -f "$D/rootfs.ext4" "$D/fc.sock" "$D/v.sock"
   asup cp --sparse=always "$IMG" "$D/rootfs.ext4"
-  /opt/zerostress/bin/zsnet up 0 || return 1
+  /zerostress/bin/zsnet up 0 || return 1
   systemctl reset-failed $UNIT 2>/dev/null
   systemd-run --quiet --unit=$UNIT -p User=$SUP -p SupplementaryGroups=kvm -p WorkingDirectory="$D" \
     -p MemoryMax=1700M -p MemorySwapMax=0 -p CPUQuota=200% -p TasksMax=256 -p "IOWriteBandwidthMax=/dev/vda 200M" \
-    -p TimeoutStopSec=10 -p "ExecStopPost=+/opt/zerostress/bin/zsnet down 0" \
-    /opt/zerostress/bin/firecracker --api-sock "$D/fc.sock" --id probe || return 1
+    -p TimeoutStopSec=10 -p "ExecStopPost=+/zerostress/bin/zsnet down 0" \
+    /zerostress/bin/firecracker --api-sock "$D/fc.sock" --id probe || return 1
   for _ in $(seq 1 50); do [[ -S $D/fc.sock ]] && break; sleep 0.1; done
   [[ -S $D/fc.sock ]] || return 1
 }

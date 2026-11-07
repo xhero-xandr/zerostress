@@ -1,0 +1,12 @@
+# The services append to /zerostress/logs/*.log (StandardOutput=append:); copytruncate keeps the open file working.
+/zerostress/logs/*.log {
+    daily
+    rotate 14
+    maxsize 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su root root
+}

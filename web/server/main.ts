@@ -1,17 +1,20 @@
 // The web service: wires the agent, the supervisor client, the store and the limiter into the app and listens on this
 // machine only. Everything it needs comes from the environment (spec 007, 4); the key to the model never leaves it.
 //
+// Every path defaults to a place under the project root, the directory two levels above this file (/zerostress on the
+// server, the checkout on a developer's machine), so the same code runs in both without settings (spec 010):
 //   WEB_PORT          port on 127.0.0.1 (default 8080)
-//   WEB_DATA_DIR      where finished reports are kept (default /var/lib/zerostress-web/tasks)
-//   WEB_CLIENT_DIR    the built client (default ../client/dist next to server/, as installed; build/client in a checkout)
-//   SUP_SOCKET        the supervisor's socket (default /run/zerostress/supervisor.sock)
+//   WEB_DATA_DIR      finished reports (default <root>/data/web/tasks)
+//   WEB_CLIENT_DIR    the built client (default <root>/build/client)
+//   SUP_SOCKET        the supervisor's socket (default <root>/run/supervisor.sock)
 //   WEB_DEMOS         "label|url;label|url" for the buttons under the input
-//   GEO_DIR           DB-IP Lite files (default /var/lib/zerostress-web/geo); without them no place is named
+//   GEO_DIR           DB-IP Lite files (default <root>/data/geo); without them no place is named
 //   WEB_RDAP          off: the age of a domain is not looked up
-//   WEB_LIMIT_*       PER_HOUR, PER_DAY, ACTIVE, STREAMS, DAILY_CAP
+//   WEB_LIMIT_*       PER_HOUR, PER_DAY, ACTIVE, STREAMS, DAILY_CAP, CHAT_PER_HOUR, CHAT_PER_REPORT
 //   INFERENCE_*, AGENT_*   see agent/config.ts
 
 import { serve } from '@hono/node-server';
+import { fileURLToPath } from 'node:url';
 import { loadPrompt } from '../agent/assess.ts';
 import { createBudget } from '../agent/budget.ts';
 import { describeConfig, loadAgentConfig } from '../agent/config.ts';
@@ -27,6 +30,7 @@ import { createStore } from './store.ts';
 import type { Demo } from './text.ts';
 
 const env = process.env;
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const num = (name: string, def: number): number => {
   const raw = env[name];
   if (raw === undefined || raw === '') return def;
@@ -40,16 +44,16 @@ const prompt = loadPrompt();
 const chatPrompt = loadChatPrompt();
 const budget = createBudget({ dailyRequests: cfg.dailyRequests, dailyTokens: cfg.dailyTokens });
 const model = cfg.enabled ? createModelClient(cfg) : undefined;
-const sup = createSupervisorClient({ socketPath: env.SUP_SOCKET ?? '/run/zerostress/supervisor.sock' }, { requestTimeoutMs: 20_000 });
+const sup = createSupervisorClient({ socketPath: env.SUP_SOCKET ?? `${ROOT}run/supervisor.sock` }, { requestTimeoutMs: 20_000 });
 
 const demos: Demo[] = (env.WEB_DEMOS ?? 'A harmless page|https://example.com/')
   .split(';').map((x) => x.split('|')).filter((x) => x.length === 2 && x[0]!.trim() && x[1]!.trim()).map(([label, url]) => ({ label: label!.trim(), url: url!.trim() }));
 
-const geo = loadGeo(env.GEO_DIR ?? '/var/lib/zerostress-web/geo');
+const geo = loadGeo(env.GEO_DIR ?? `${ROOT}data/geo`);
 console.log(geo ? 'geo: DB-IP tables loaded' : 'geo: no tables, the report names no countries');
 const rdap = env.WEB_RDAP === 'off' ? undefined : createRdap();
 
-const store = createStore(env.WEB_DATA_DIR ?? '/var/lib/zerostress-web/tasks');
+const store = createStore(env.WEB_DATA_DIR ?? `${ROOT}data/web/tasks`);
 const limiter = createLimiter({
   perHour: num('WEB_LIMIT_PER_HOUR', DEFAULT_LIMITS.perHour),
   perDay: num('WEB_LIMIT_PER_DAY', DEFAULT_LIMITS.perDay),
@@ -62,7 +66,7 @@ const limiter = createLimiter({
 });
 
 const app = createApp({
-  ...(env.WEB_CLIENT_DIR ? { clientDir: env.WEB_CLIENT_DIR.replace(/\/?$/, '/') } : {}),
+  clientDir: (env.WEB_CLIENT_DIR ?? `${ROOT}build/client`).replace(/\/?$/, '/'),
   run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, limits: { totalMs: 240_000 } }),
   fetchShot: (runId, name) => sup.artifact(runId, name, 4 * 1024 * 1024),
   approve: (runId, commandId, sha) => sup.approve(runId, commandId, sha),

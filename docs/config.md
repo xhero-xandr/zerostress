@@ -3,17 +3,19 @@
 Где что настраивается и что значит каждая переменная. Решения и причины: [specs/010-layout-and-deploy.md](specs/010-layout-and-deploy.md). Тесты `web/server/test/env-example.test.ts` и `supervisor/envexample_test.go` падают, если код читает переменную, которой нет в образце или здесь.
 
 ## Где лежат
-| Что | На сервере | Образец в репозитории | Кто читает | Секрет |
+Всё под одним каталогом проекта: `/zerostress` на сервере, рабочая копия у разработчика (спека 010).
+
+| Что | Файл | Образец (в git) | Кто читает | Секрет |
 |---|---|---|---|---|
-| Настройки сайта и агента | `/etc/zerostress/web.env` | [deploy/files/etc/zerostress/web.env.example](../deploy/files/etc/zerostress/web.env.example) | служба `zerostress-web` (через `EnvironmentFile=`) | **да**: `INFERENCE_API_KEY` |
-| Настройки ВМ и очереди | `/etc/zerostress/supervisor.env` | [deploy/files/etc/zerostress/supervisor.env.example](../deploy/files/etc/zerostress/supervisor.env.example) | служба `zerostress-supervisor` | нет |
-| Прокси | `/etc/caddy/Caddyfile` | [deploy/files/etc/caddy/Caddyfile.tmpl](../deploy/files/etc/caddy/Caddyfile.tmpl) | `caddy` | нет; делается из шаблона, руками не правится |
-| Остальные файлы хоста (юниты, sudoers, sysctl, tmpfiles, udev, помощники) | по путям в `deploy/files/` | [deploy/files/](../deploy/files/) | systemd, sudo, ядро | нет; руками не правятся |
+| Настройки сайта и агента | `config/web.env` | [config/web.env.example](../config/web.env.example) | служба `zerostress-web` | **да**: `INFERENCE_API_KEY` |
+| Настройки ВМ и очереди | `config/supervisor.env` | [config/supervisor.env.example](../config/supervisor.env.example) | служба `zerostress-supervisor` | нет |
+| Прокси | `config/Caddyfile` | [deploy/templates/Caddyfile.tmpl](../deploy/templates/Caddyfile.tmpl) | `caddy` | нет; делает `./zs install`, руками не правится |
 | Версии и хеши | — | [deploy/versions.env](../deploy/versions.env) | установщик, сборка образа | нет |
+| Системные файлы вне каталога (юниты, sudoers, sysctl, udev, logrotate) | `/etc/…` | [deploy/files/](../deploy/files/) | systemd, sudo, ядро | нет; ставит `./zs install`, руками не правятся |
 
-Правила: файл `*.env` создаёт `deploy/install.sh host` из образца один раз и больше не перезаписывает; правится через `sudoedit`, после правки `sudo systemctl restart <служба>`. `sudo deploy/install.sh verify` сверяет имена (значения не печатает): называет переменные из образца, которых нет в файле, и переменные, которые никто не читает. Строки без `#` в образце заданы намеренно, закомментированные показывают значение по умолчанию.
+Работа: `./zs config web` (или `supervisor`) открывает файл в редакторе и перезапускает службу; `./zs verify` сверяет имена переменных с образцом (значения не печатает). `config/*.env` в `.gitignore`. Строки без `#` в образце заданы намеренно, закомментированные показывают значение по умолчанию. Ключ модели должна читать только служба сайта, поэтому файлов два, а не один: `config/web.env` принадлежит `root:zerostress-web` с правами `0640`.
 
-Локально (без сервера): `cp deploy/files/etc/zerostress/web.env.example web/.env`, вписать `WEB_CLIENT_DIR=../build/client` и, если нужен, ключ; `web/.env` в `.gitignore`.
+У разработчика то же самое: `cp config/web.env.example config/web.env`, вписать ключ (если нужна модель), `./zs dev`.
 
 ## web.env
 ### Модель (Vultr Serverless Inference)
@@ -34,14 +36,16 @@
 | `AGENT_MAX_STEPS` | 5 (0–20) | действий агента в одной глубокой проверке |
 
 ### Служба
+`<корень>` — каталог на два уровня выше `web/server/`: `/zerostress` на сервере, рабочая копия у разработчика.
+
 | Переменная | По умолчанию | Что делает |
 |---|---|---|
 | `WEB_PORT` | 8080 | порт на `127.0.0.1` (снаружи только через Caddy) |
-| `WEB_DATA_DIR` | `/var/lib/zerostress-web/tasks` | готовые отчёты (24 часа) |
-| `WEB_CLIENT_DIR` | `../client/dist` рядом с `server/` (как установлено) | собранный клиент; в рабочей копии `build/client` |
-| `SUP_SOCKET` | `/run/zerostress/supervisor.sock` | сокет супервизора |
+| `WEB_DATA_DIR` | `<корень>/data/web/tasks` | готовые отчёты (24 часа) |
+| `WEB_CLIENT_DIR` | `<корень>/build/client` | собранный клиент |
+| `SUP_SOCKET` | `<корень>/run/supervisor.sock` | сокет супервизора (его же читает супервизор, см. ниже) |
 | `WEB_DEMOS` | `A harmless page\|https://example.com/` | кнопки-примеры под полем ввода, `подпись\|адрес;подпись\|адрес` |
-| `GEO_DIR` | `/var/lib/zerostress-web/geo` | таблицы DB-IP Lite; без них страны не называются |
+| `GEO_DIR` | `<корень>/data/geo` | таблицы DB-IP Lite; без них страны не называются |
 | `WEB_RDAP` | пусто | `off` = возраст домена не запрашивается |
 
 ### Лимиты (спека 007, 5)
@@ -76,3 +80,10 @@
 | `SUP_APPROVAL_TTL_S` | 300 | сколько рискованная команда ждёт решения человека |
 | `SUP_COMMAND_MAX` | 190 | команд в одном запуске |
 | `SUP_COMMAND_TIMEOUT_S` | 30 | срок одной команды |
+| `SUP_STATE_DIR` | `/zerostress/data/supervisor` | состояние: каталоги запусков, итоги, база (помощник `zsvm` держит свой путь `…/runs` зашитым) |
+| `SUP_IMAGE_DIR` | `/zerostress/images` | образ гостя |
+| `SUP_KERNEL` | `<SUP_IMAGE_DIR>/vmlinux-6.18.56` | ядро гостя |
+| `SUP_ZSNET` | `/zerostress/bin/zsnet` | помощник сети (через sudo) |
+| `SUP_ZSVM` | `/zerostress/bin/zsvm` | помощник запуска ВМ (через sudo) |
+
+`SUP_SOCKET` (по умолчанию `/zerostress/run/supervisor.sock`) читают обе службы: супервизор создаёт сокет, сайт к нему подключается.

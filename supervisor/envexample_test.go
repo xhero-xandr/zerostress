@@ -15,7 +15,7 @@ func TestEnvExampleMatchesConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	example, err := os.ReadFile("../deploy/files/etc/zerostress/supervisor.env.example")
+	example, err := os.ReadFile("../config/supervisor.env.example")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestEnvExampleMatchesConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	var read, named []string
-	for _, m := range regexp.MustCompile(`get\("(SUP_[A-Z0-9_]+)"`).FindAllStringSubmatch(string(src), -1) {
+	for _, m := range regexp.MustCompile(`(?:get|envStr)\((?:env, )?"(SUP_[A-Z0-9_]+)"`).FindAllStringSubmatch(string(src), -1) {
 		read = append(read, m[1])
 	}
 	for _, m := range regexp.MustCompile(`(?m)^#? ?(SUP_[A-Z0-9_]+)=`).FindAllStringSubmatch(string(example), -1) {

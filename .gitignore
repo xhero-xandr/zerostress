@@ -1,4 +1,6 @@
-# secrets: the real environment files live on the host only (/etc/zerostress); a local copy is web/.env
+# settings: config/*.env holds the model key; only the examples are in git
+/config/*.env
+/config/Caddyfile
 .env
 .env.*
 !*.env.example
@@ -8,6 +10,13 @@
 
 # everything generated: binaries, the built client, screenshots of checks (spec 010, 4.2)
 /build/
+# the places the installer and the services fill (spec 010)
+/bin/
+/runtime/
+/images/
+/data/
+/logs/
+/run/
 node_modules/
 *.tsbuildinfo
 

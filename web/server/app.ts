@@ -4,6 +4,7 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { publicReport, type PublicReport } from '../agent/report.ts';
@@ -30,7 +31,7 @@ export interface AppDeps {
   session: { idle_s: number; max_s: number };
   /** the address of the person asking; the default reads the connection and, behind our own proxy, the proxy's header */
   clientIp?: (c: Context) => string;
-  /** the built client (spec 012): index.html and assets/; the default is ../client/dist next to this file */
+  /** the built client (spec 012): index.html and assets/; the default is build/client at the project root (spec 010) */
   clientDir?: string;
 }
 
@@ -104,7 +105,7 @@ async function readJsonBody(c: Context): Promise<{ ok: true; body: Record<string
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
   // the client is read once at start: index.html and the files of assets/ whose names have the build's shape
-  const clientDir = deps.clientDir ?? new URL('../client/dist/', import.meta.url).pathname;
+  const clientDir = deps.clientDir ?? fileURLToPath(new URL('../../build/client/', import.meta.url));
   const indexHtml = readFileSync(join(clientDir, 'index.html'), 'utf8');
   const assets = new Map<string, Buffer>();
   for (const name of readdirSync(join(clientDir, 'assets'))) if (ASSET_NAME.test(name)) assets.set(name, readFileSync(join(clientDir, 'assets', name)));

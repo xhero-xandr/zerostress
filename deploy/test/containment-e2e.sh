@@ -14,7 +14,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
 
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-IMG=/opt/zerostress/images/guest-rootfs.ext4
+IMG=/zerostress/images/guest-rootfs.ext4
 BACKUP=/var/tmp/zs-image-backup.ext4
 MEM_MIB=${SUP_MEM_MIB:-1024}
 WORK=$(mktemp -d)

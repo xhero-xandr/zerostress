@@ -5,7 +5,7 @@
 // says: the run ends, the hooks fire where they should, the model is not asked where it must not be, only commands
 // that pass the gatekeeper reach the supervisor, nothing is approved, no key or page text leaks into the result.
 //
-//   set -a; . /etc/zerostress/web.env; set +a; node tools/e2e-agent.mjs [--socket=/run/zerostress/supervisor.sock] [--model=qwen3.8-27b]
+//   set -a; . /zerostress/config/web.env; set +a; node tools/e2e-agent.mjs [--socket=/zerostress/run/supervisor.sock] [--model=qwen3.8-27b]
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -22,7 +22,7 @@ const { createBudget } = await imp('../agent/budget.ts');
 const { validateCommand } = await imp('../agent/commands.ts');
 const { startFakeModel, chat, answer } = await imp('../agent/test/fakemodel.ts');
 
-const socketPath = arg('socket', '/run/zerostress/supervisor.sock');
+const socketPath = arg('socket', '/zerostress/run/supervisor.sock');
 const env = { ...process.env, INFERENCE_MODEL: arg('model', '') || process.env.INFERENCE_MODEL || 'qwen3.8-27b', AGENT_MODEL_TIMEOUT_S: '45' };
 const cfg = loadAgentConfig(env);
 const KEY = process.env.INFERENCE_API_KEY ?? '';

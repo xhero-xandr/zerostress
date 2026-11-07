@@ -10,9 +10,11 @@ User=zerostress-sup
 Group=zerostress-ipc
 SupplementaryGroups=kvm
 UMask=0077
-EnvironmentFile=/etc/zerostress/supervisor.env
-WorkingDirectory=/opt/zerostress/supervisor
-ExecStart=/opt/zerostress/supervisor/zerostress-supervisor
+EnvironmentFile=/zerostress/config/supervisor.env
+WorkingDirectory=/zerostress/data/supervisor
+ExecStart=/zerostress/bin/zerostress-supervisor
+StandardOutput=append:/zerostress/logs/supervisor.log
+StandardError=inherit
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=20
@@ -31,7 +33,7 @@ ProtectKernelTunables=yes
 ProtectControlGroups=yes
 LockPersonality=yes
 RestrictAddressFamilies=AF_UNIX AF_NETLINK
-ReadWritePaths=/var/lib/zerostress /run/zerostress
+ReadWritePaths=/zerostress/data/supervisor /zerostress/run
 
 [Install]
 WantedBy=multi-user.target

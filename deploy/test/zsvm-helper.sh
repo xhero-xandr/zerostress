@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The zsvm root helper must refuse everything except exact, valid requests, and only from zerostress-sup. Run as root.
 set -uo pipefail
-ZSVM=/opt/zerostress/bin/zsvm
-RUNS=/var/lib/zerostress/runs
+ZSVM=/zerostress/bin/zsvm
+RUNS=/zerostress/data/supervisor/runs
 GOOD=11111111-2222-4333-8444-555555555555
 fail=0
 ok()  { echo "PASS  $1"; }

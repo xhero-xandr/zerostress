@@ -3,9 +3,10 @@
 # Idempotent. Strict destination filtering lives in zsnet's "inet zerostress" table, ahead of firewalld.
 source "$(dirname "$0")/../lib.sh"
 need_root
+need_root_dir
 
-put 0755 root:root /opt/zerostress/bin/zsnet
-chcon -t bin_t /opt/zerostress/bin/zsnet 2>/dev/null || true
+install -m 0755 -o root -g root "$S/deploy/helpers/zsnet" "$S/bin/zsnet"
+restorecon "$S/bin/zsnet" 2>/dev/null || true
 
 put 0644 root:root /etc/sysctl.d/90-zerostress.conf
 sysctl -q -p /etc/sysctl.d/90-zerostress.conf

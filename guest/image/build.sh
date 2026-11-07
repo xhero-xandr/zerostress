@@ -7,8 +7,8 @@
 # COLLECTOR_ENTRY=deploy/test/stub-collector.mjs (the stub used to be the default, and a production image was once built
 # with it by mistake).
 #
-# Output (in $BUILD_DIR/out): guest-rootfs.ext4, vmlinux-<ver>, manifest.json. Nothing is installed into
-# /opt/zerostress/images: copy the files there explicitly after checking the manifest.
+# Output (in $BUILD_DIR/out, default build/image/out): guest-rootfs.ext4, vmlinux-<ver>, manifest.json. Nothing is
+# installed into images/: install.sh does that after checking the manifest.
 set -euo pipefail
 export LC_ALL=C DEBIAN_FRONTEND=noninteractive
 
@@ -30,7 +30,7 @@ IMG_SIZE=5G
 AGENT_BIN=${AGENT_BIN:-$REPO/build/guest-agent/zerostress-agent}
 [[ -x $AGENT_BIN ]] || { echo "no agent at $AGENT_BIN: run guest/agent/build.sh first"; exit 1; }
 COLLECTOR_ENTRY=${COLLECTOR_ENTRY:-$REPO/guest/collector/collect.mjs}
-W=${BUILD_DIR:-/var/tmp/zerostress-build}
+W=${BUILD_DIR:-$REPO/build/image}
 OUT=$W/out
 R=$W/mnt
 IMG=$OUT/guest-rootfs.ext4

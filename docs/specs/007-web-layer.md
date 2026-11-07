@@ -88,7 +88,7 @@
 ## 4. Что запускает
 | Что | Как |
 |---|---|
-| Служба | `zerostress-web.service`, пользователь `zsweb`, окружение из `/etc/zerostress/web.env` (ключ Inference), сокет супервизора доступен по группе; защита юнита (`NoNewPrivileges`, `ProtectSystem=strict`, запись только в `/var/lib/zerostress/web`) описывается в 010 |
+| Служба | `zerostress-web.service`, пользователь `zsweb`, окружение из `config/web.env` (ключ Inference), сокет супервизора доступен по группе; защита юнита (`NoNewPrivileges`, `ProtectSystem=strict`, запись только в `/var/lib/zerostress/web`) описывается в 010 |
 | Порты | публичный слушатель и админ-слушатель, оба только на `127.0.0.1` |
 | Зависимости | `hono` и `@hono/node-server`, закреплённые версии; `typescript` и `@types/node` как сейчас |
 

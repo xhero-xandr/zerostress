@@ -2,8 +2,8 @@
 # Shared by the supervisor end-to-end tests: API helpers over the Unix socket, waiting, PASS/FAIL accounting and the
 # "nothing may be left on the host" check. Source it, do not run it. Run as root on the host.
 # The caller sets `set -uo pipefail`.
-SOCK=/run/zerostress/supervisor.sock
-RUNS=/var/lib/zerostress/runs
+SOCK=/zerostress/run/supervisor.sock
+RUNS=/zerostress/data/supervisor/runs
 fail=0
 
 api() { curl -sS --max-time 30 --unix-socket "$SOCK" "$@"; }

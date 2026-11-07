@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Install the output of build.sh into /opt/zerostress/images (read-only for services). Run as root.
-# Usage: install.sh [OUT_DIR]   (default: /var/tmp/zerostress-build/out)
+# Install the output of build.sh into the project's images/ (read-only for services). Run as root.
+# Usage: install.sh [OUT_DIR]   (default: build/image/out)
 set -euo pipefail
-OUT=${1:-/var/tmp/zerostress-build/out}
-DEST=/opt/zerostress/images
+REPO=$(cd "$(dirname "$0")/../.." && pwd)
+OUT=${1:-$REPO/build/image/out}
+DEST=$REPO/images
 
 [[ -f $OUT/manifest.json ]] || { echo "no manifest.json in $OUT" >&2; exit 1; }
 want=$(grep -A1 '"image"' "$OUT/manifest.json" | grep -o '"sha256": "[0-9a-f]*"' | cut -d'"' -f4)

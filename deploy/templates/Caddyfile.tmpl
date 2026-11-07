@@ -1,4 +1,4 @@
-#tmpl /etc/caddy/Caddyfile, made by deploy/steps/60-web.sh from this template: @DOMAIN@ and @CLOUDFLARE_RANGES@ are
+#tmpl config/Caddyfile, made by deploy/steps/60-web.sh from this template: @DOMAIN@ and @CLOUDFLARE_RANGES@ are
 #tmpl filled in at install time (the ranges are read from Cloudflare itself). Only Cloudflare may say who the visitor is:
 #tmpl the proxy writes X-Real-IP from the address it has checked and drops any such header that came from outside.
 {

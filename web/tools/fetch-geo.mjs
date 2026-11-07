@@ -2,7 +2,7 @@
 // agent/geo.ts. Run on the host by the deploy script, not by the service. This month's file is tried first, then the
 // previous month's (the new one appears a few days into the month). Each file is checked before it replaces the old one.
 //
-//   node tools/fetch-geo.mjs /var/lib/zerostress-web/geo
+//   node tools/fetch-geo.mjs /zerostress/data/geo
 import { gunzipSync } from 'node:zlib';
 import { mkdirSync, renameSync, writeFileSync, existsSync, statSync } from 'node:fs';
 

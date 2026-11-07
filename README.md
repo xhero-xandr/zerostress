@@ -70,9 +70,12 @@ The directory a piece of code sits in tells you its privilege level and where it
 | `web/client/` | The interface: React, React Router, TanStack Query, Tailwind; light and dark themes, or the system's | **In the visitor's browser**; only the build reaches the host |
 | `web/tools/` | Dev tooling: mutation testing, the corpus check, model benchmarking, the DB-IP fetch script | Run by hand or in CI, never by the running service |
 | `guest/` | `agent/` (the Go job receiver, over vsock), `collector/` (Node.js + Playwright over a raw CDP session), `image/` (builds the guest disk image) | `agent/` and `collector/` run **inside the guest micro-VM** as an unprivileged user; `image/` runs on the host only to build the image |
-| `deploy/` | `install.sh` (the one way to install, in steps), `versions.env` (every pinned version and checksum), `files/` (every file that lands on the host, at its path there), `test/` (tests on real micro-VMs) | **Host**, run by hand to install or update |
+| `config/` | `web.env` (holds the model key) and `supervisor.env`, git-ignored; their `*.example` templates are in git | Read by systemd for the services |
+| `deploy/` | `steps/` (what `./zs install` runs), `versions.env` (every pinned version and checksum), `files/` (the few system files: units, sudoers, sysctl, udev, logrotate), `helpers/` (`zsvm`, `zsnet`), `test/` (tests on real micro-VMs) | **Host**, at install time |
 | `docs/` | Specs (one per decision), the live status, deployment and configuration guides | Documentation only |
 | `build/` | Everything generated (binaries, the built client, check screenshots); git-ignored | — |
+
+On a server the checkout lives at `/zerostress` and everything else lives next to it, git-ignored: `bin/` (Firecracker, the root helpers, Caddy, the supervisor), `runtime/` (Node, Go), `images/` (the guest image), `data/`, `logs/`, `run/`. One command, `./zs`, installs, updates, starts, shows logs, edits settings and verifies.
 
 ## Status
 
@@ -82,7 +85,7 @@ Design documents, one per decision, are in [docs/specs/](docs/specs/README.md). 
 
 ## Running it yourself
 
-You need a Rocky Linux 10 host with `/dev/kvm` (on a cloud VM: nested virtualisation) and a Vultr Serverless Inference key. From a checkout, as root: `deploy/install.sh host`, put the key into `/etc/zerostress/web.env`, then `deploy/install.sh all` and `deploy/install.sh verify --live`. Every step is idempotent; every download is checked against a pinned checksum in `deploy/versions.env`. Details, updating and moving to a new host: [docs/deploy.md](docs/deploy.md); every setting: [docs/config.md](docs/config.md). A clean-machine install with the new installer has not been verified yet.
+You need a Rocky Linux 10 host with `/dev/kvm` (on a cloud VM: nested virtualisation) and a Vultr Serverless Inference key. `git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress`, then `sudo ./zs install host`, put the key in with `./zs config web`, then `sudo ./zs install` and `./zs verify --live`. Every step is idempotent; every download is checked against a pinned checksum in `deploy/versions.env`. To try the interface locally without KVM: `./zs dev`. Details: [docs/deploy.md](docs/deploy.md); every setting: [docs/config.md](docs/config.md). A clean-machine install has not been verified yet.
 
 ## License
 

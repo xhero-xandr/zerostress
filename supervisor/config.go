@@ -73,8 +73,8 @@ func envStr(env map[string]string, name, def string) string {
 
 // LoadConfig reads the settings from env (usually the process environment as a map).
 func LoadConfig(env map[string]string) (Config, error) {
-	stateDir := envStr(env, "SUP_STATE_DIR", "/var/lib/zerostress")
-	imageDir := envStr(env, "SUP_IMAGE_DIR", "/opt/zerostress/images")
+	stateDir := envStr(env, "SUP_STATE_DIR", "/zerostress/data/supervisor")
+	imageDir := envStr(env, "SUP_IMAGE_DIR", "/zerostress/images")
 	var firstErr error
 	get := func(name string, def, min, max int) int {
 		v, err := envInt(env, name, def, min, max)
@@ -107,7 +107,7 @@ func LoadConfig(env map[string]string) (Config, error) {
 		ShutdownGrace:  10 * time.Second,
 		Keepalive:      15 * time.Second,
 		VsockPort:      5000,
-		SocketPath:     envStr(env, "SUP_SOCKET", "/run/zerostress/supervisor.sock"),
+		SocketPath:     envStr(env, "SUP_SOCKET", "/zerostress/run/supervisor.sock"),
 		StateDir:       stateDir,
 		RunsDir:        filepath.Join(stateDir, "runs"),
 		ResultsDir:     filepath.Join(stateDir, "results"),
@@ -120,8 +120,8 @@ func LoadConfig(env map[string]string) (Config, error) {
 		ImageDir:             imageDir,
 		ImagePath:            filepath.Join(imageDir, "guest-rootfs.ext4"),
 		KernelPath:           envStr(env, "SUP_KERNEL", filepath.Join(imageDir, "vmlinux-6.18.56")),
-		ZsnetPath:            envStr(env, "SUP_ZSNET", "/opt/zerostress/bin/zsnet"),
-		ZsvmPath:             envStr(env, "SUP_ZSVM", "/opt/zerostress/bin/zsvm"),
+		ZsnetPath:            envStr(env, "SUP_ZSNET", "/zerostress/bin/zsnet"),
+		ZsvmPath:             envStr(env, "SUP_ZSVM", "/zerostress/bin/zsvm"),
 	}
 	return c, firstErr
 }

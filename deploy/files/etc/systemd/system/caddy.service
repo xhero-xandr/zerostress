@@ -7,8 +7,10 @@ Wants=network-online.target
 Type=notify
 User=caddy
 Group=caddy
-ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
-ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+ExecStart=/zerostress/bin/caddy run --environ --config /zerostress/config/Caddyfile
+ExecReload=/zerostress/bin/caddy reload --config /zerostress/config/Caddyfile --force
+StandardOutput=append:/zerostress/logs/caddy.log
+StandardError=inherit
 TimeoutStopSec=10
 Restart=on-failure
 LimitNOFILE=1048576
@@ -18,8 +20,9 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/var/lib/caddy
-Environment=XDG_DATA_HOME=/var/lib/caddy XDG_CONFIG_HOME=/var/lib/caddy/config
+# certificates and Caddy's own state
+ReadWritePaths=/zerostress/data/caddy
+Environment=XDG_DATA_HOME=/zerostress/data/caddy XDG_CONFIG_HOME=/zerostress/data/caddy/config
 
 [Install]
 WantedBy=multi-user.target

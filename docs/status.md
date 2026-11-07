@@ -56,7 +56,7 @@
 |---|---|---|
 | Выбор стека, проверка Firecracker и Chromium в госте | ✅ | project.md |
 | Хост: пользователи, каталоги, `/dev/kvm` 0660, SELinux Enforcing, проверено после перезагрузки | ✅ | spec 001, `deploy/steps/10-host.sh` |
-| Сеть гостя: `zsnet`, nftables, зона `firewalld`, изоляция, два гостя, внутренние адреса закрыты | ✅ | spec 003, `deploy/steps/20-network.sh`, `deploy/files/opt/zerostress/bin/zsnet` |
+| Сеть гостя: `zsnet`, nftables, зона `firewalld`, изоляция, два гостя, внутренние адреса закрыты | ✅ | spec 003, `deploy/steps/20-network.sh`, `deploy/helpers/zsnet` |
 | Образ гостя: воспроизводимая сборка, Node, Playwright (headless shell), шрифты, без SSH и ключей | ✅ | spec 004, `guest/image/build.sh` |
 | Агент в госте (Go, vsock): статусы, лимиты, убийство группы процессов, тесты `-race` | ✅ | spec 004, `guest/agent/` |
 | Дымовой тест образа (Chromium с песочницей, сеть, ключи, часы, порты) и тест сети | ✅ | `deploy/test/` |
@@ -88,7 +88,7 @@
 | Видео до 5 минут, слайды PDF, обложка, описания; подача через LabLab | ⬜ |
 
 ## 4. Что нужно от вас
-1. ~~Ключ Vultr Serverless Inference~~ — сделано 4 ноября; модель выбрана измерением (`qwen3.8-27b`, спека 008, раздел 8), но `INFERENCE_MODEL` в `/etc/zerostress/web.env` **не менялся**: впишите при развёртывании.
+1. ~~Ключ Vultr Serverless Inference~~ — сделано 4 ноября; модель выбрана измерением (`qwen3.8-27b`, спека 008, раздел 8), но `INFERENCE_MODEL` в `config/web.env` **не менялся**: впишите при развёртывании.
 2. **Вопросы организаторам в Discord LabLab** (список в hackathon.md): время дедлайна, что считать «containment moment», допустима ли микро-ВМ Firecracker (в брифе названы Docker, gVisor, E2B и другие).
 3. **Решения для веб-слоя (007)**: ~~фреймворк~~ — Hono, серверный рендер, поток на SSE (5 ноября); ~~доступ судей~~ — без кода, расходы закрыты лимитами (007, раздел 5).
 4. ~~Домен и TLS~~ — сделано: `zerostress.space` за Cloudflare, Full (strict), Let's Encrypt, порты открыты. **Осталось:** запустить `DOMAIN=zerostress.space bash deploy/steps/60-web.sh` для новой версии (классификатор не даёт мне запускать боевые скрипты).

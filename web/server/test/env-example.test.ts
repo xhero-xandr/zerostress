@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 const web = join(import.meta.dirname, '..', '..');
-const example = readFileSync(join(web, '..', 'deploy', 'files', 'etc', 'zerostress', 'web.env.example'), 'utf8');
+const example = readFileSync(join(web, '..', 'config', 'web.env.example'), 'utf8');
 const config = readFileSync(join(web, '..', 'docs', 'config.md'), 'utf8');
 
 const source = ['server', 'agent', 'hooks']

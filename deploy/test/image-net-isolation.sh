@@ -3,14 +3,14 @@
 # Usage: net-isolation.sh [IMAGE] [AGENT_BIN]
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASE=${1:-/opt/zerostress/images/guest-rootfs.ext4}
+BASE=${1:-/zerostress/images/guest-rootfs.ext4}
 AGENT=${2:-$HERE/../../build/guest-agent/zerostress-agent}
-D=/var/lib/zerostress/runs/netiso
-NODE=/opt/node/bin/node
+D=/zerostress/data/supervisor/runs/netiso
+NODE=/zerostress/runtime/node/bin/node
 SUP=zerostress-sup
 fail=0
 
-q() { sudo -u $SUP sudo -n /opt/zerostress/bin/zsnet "$@"; }
+q() { sudo -u $SUP sudo -n /zerostress/bin/zsnet "$@"; }
 cleanup() { for n in 0 1; do systemctl stop fc-netiso$n 2>/dev/null; q down $n 2>/dev/null; done; rm -rf "$D"; }
 trap cleanup EXIT
 cleanup
@@ -22,7 +22,7 @@ boot() { # slot cid
   bash "$HERE/../../guest/image/apply-overlay.sh" "$D/rootfs$n.ext4" "$AGENT" "$HERE/stub-collector.mjs" >/dev/null || exit 1
   chown $SUP:$SUP "$D/rootfs$n.ext4"; chmod 0600 "$D/rootfs$n.ext4"
   cat >"$D/vm$n.json" <<J
-{"boot-source":{"kernel_image_path":"/opt/zerostress/images/vmlinux-6.18.56",
+{"boot-source":{"kernel_image_path":"/zerostress/images/vmlinux-6.18.56",
   "boot_args":"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.$n.2::172.16.$n.1:255.255.255.252::eth0:off:1.1.1.1"},
  "drives":[{"drive_id":"rootfs","path_on_host":"$D/rootfs$n.ext4","is_root_device":true,"is_read_only":false}],
  "network-interfaces":[{"iface_id":"net1","guest_mac":"06:00:AC:10:0$n:02","host_dev_name":"zstap$n"}],
@@ -33,7 +33,7 @@ J
   q up $n || exit 1
   systemd-run -q --collect --unit=fc-netiso$n -p User=$SUP -p RuntimeMaxSec=180 \
     -p StandardOutput=file:$D/serial$n.log -p StandardError=file:$D/err$n.log \
-    /opt/zerostress/bin/firecracker --no-api --config-file "$D/vm$n.json"
+    /zerostress/bin/firecracker --no-api --config-file "$D/vm$n.json"
   for i in $(seq 1 80); do
     sudo -u $SUP $NODE "$HERE/vsock-client.mjs" "$D/v$n.sock" 5000 '{}' --probe 2>/dev/null && return 0
     sleep 0.25

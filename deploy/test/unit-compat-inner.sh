@@ -2,11 +2,11 @@
 # Runs INSIDE a hardened transient unit as zerostress-sup (see unit-compat.sh). Walks the supervisor's path:
 # run dir -> disk copy -> sudo zsnet up -> Firecracker via REST (incl. vsock) -> job via agent -> teardown.
 set -u
-D=/var/lib/zerostress/runs/compat
-IMG=/opt/zerostress/images/guest-rootfs.ext4
-KERNEL=/opt/zerostress/images/vmlinux-6.18.56
-CLIENT=/opt/zerostress-src/deploy/test/vsock-client.mjs
-NODE=/opt/node/bin/node
+D=/zerostress/data/supervisor/runs/compat
+IMG=/zerostress/images/guest-rootfs.ext4
+KERNEL=/zerostress/images/vmlinux-6.18.56
+CLIENT=/zerostress/deploy/test/vsock-client.mjs
+NODE=/zerostress/runtime/node/bin/node
 RC=0
 FCPID=
 
@@ -18,7 +18,7 @@ rest() { local code; code=$(put "$1" "$2"); [[ $code == 204 ]] && pass "REST PUT
 
 teardown() {
   [[ -n $FCPID ]] && { kill -TERM "$FCPID" 2>/dev/null; sleep 1; kill -KILL "$FCPID" 2>/dev/null; }
-  sudo -n /opt/zerostress/bin/zsnet down 0 2>&1 | sed 's/^/  zsnet down: /'
+  sudo -n /zerostress/bin/zsnet down 0 2>&1 | sed 's/^/  zsnet down: /'
   rm -rf "$D"
 }
 trap teardown EXIT
@@ -26,9 +26,9 @@ trap teardown EXIT
 mkdir -p "$D" && chmod 700 "$D" && pass "create run dir" || { bad "create run dir"; exit 1; }
 cp --sparse=always "$IMG" "$D/rootfs.ext4" && pass "disk copy" || { bad "disk copy"; exit 1; }
 
-out=$(sudo -n /opt/zerostress/bin/zsnet up 0 2>&1) && pass "sudo zsnet up 0" || { bad "sudo zsnet up 0" "$(echo "$out" | head -2 | tr '\n' ' ')"; exit 1; }
+out=$(sudo -n /zerostress/bin/zsnet up 0 2>&1) && pass "sudo zsnet up 0" || { bad "sudo zsnet up 0" "$(echo "$out" | head -2 | tr '\n' ' ')"; exit 1; }
 
-/opt/zerostress/bin/firecracker --api-sock "$D/fc.sock" --id compat >"$D/fc.out" 2>&1 &
+/zerostress/bin/firecracker --api-sock "$D/fc.sock" --id compat >"$D/fc.out" 2>&1 &
 FCPID=$!
 for _ in $(seq 1 30); do [[ -S $D/fc.sock ]] && break; sleep 0.1; done
 [[ -S $D/fc.sock ]] && pass "firecracker API socket" || { bad "firecracker API socket" "$(head -c 300 "$D/fc.out")"; exit 1; }
