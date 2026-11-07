@@ -50,6 +50,11 @@ try {
     }
     console.log(await f.getByText(/^Verdict:/).textContent(), `(${s()})`);
     for (const l of await f.locator('ol li').allTextContents()) if (/gatekeeper|approv|download|inside the sandbox/i.test(l)) console.log('  ', l);
+    // a wall: the server asks Cloudflare on its own, and the panel tells its answer when it comes
+    if (/unknown/.test(await f.getByText(/^Verdict:/).first().textContent())) {
+      const so = f.getByText(/Cloudflare’s scanner (scanned it now|had scanned it recently)|could not answer|Today's new scans/).first();
+      await so.waitFor({ timeout: 150000 }).then(async () => console.log('second opinion:', await so.textContent(), `(${s()})`), () => console.log('second opinion: none in time'));
+    }
     await p.waitForTimeout(4000);
     await p.screenshot({ path: join(out, 'final.png') });
     console.log(`screenshots: ${out}; page errors: ${errors.length ? errors.join(' | ') : 'none'}`);

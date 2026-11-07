@@ -134,13 +134,23 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   // ---- the same address as a phone and as a tablet ----
   const views = deviceViews(events);
   const names = (d: string) => views.filter((v) => v.differs.includes(d as never)).map((v) => (v.device === 'mobile' ? 'a phone' : 'a tablet'));
-  const onlyHere = names('password_only_here');
-  if (onlyHere.length) add('device_cloaking', 'high', `The page asks for a password only when opened as ${onlyHere.join(' and ')}; as a computer it shows no such form. Pages that hide from computers usually have a reason.`, views.filter((v) => v.differs.includes('password_only_here')).map((v) => v.at));
+  // A sign-in form only a phone or a tablet sees is cloaking when something else about it is off: the form sends the
+  // password to another site, the phone lands on another site, or the domain is young. On an old domain, with the form
+  // on the site itself, it is what many big sites do (TikTok, Instagram ask phones to sign in): told, not counted.
+  const pw = views.filter((v) => v.differs.includes('password_only_here'));
+  const age = opts.domainAgeDays;
+  const known = typeof age === 'number' && Number.isFinite(age) && age >= 0;
+  const foreign = (v: (typeof views)[number]) => v.differs.includes('other_site') || v.action_hosts.some((h) => registrable(h.replace(/:\d+$/, '')) !== registrable(v.final_host));
+  const who = (vs: typeof views) => vs.map((v) => (v.device === 'mobile' ? 'a phone' : 'a tablet')).join(' and ');
+  const young = known && (age as number) < 90;
+  const off = pw.filter((v) => foreign(v) || young);
+  if (off.length) add('device_cloaking', 'high', `The page asks for a password only when opened as ${who(off)}; as a computer it shows no such form. Pages that hide from computers usually have a reason.`, off.map((v) => v.at));
+  else if (pw.length && !known) add('device_cloaking', 'medium', `The page asks for a password only when opened as ${who(pw)}; as a computer it shows no such form. The age of the domain is not known.`, pw.map((v) => v.at));
+  else if (pw.length) add('mobile_sign_in', 'info', `Opened as ${who(pw)}, the page shows a sign-in form that a computer does not see. Many large sites do this; here the form stays on the site itself, and the domain is not new.`, pw.map((v) => v.at));
   const elsewhere = names('other_site');
   if (elsewhere.length) add('device_redirect', 'medium', `Opened as ${elsewhere.join(' and ')}, the link ends up on a different site than it does on a computer.`, views.filter((v) => v.differs.includes('other_site')).map((v) => v.at));
 
   // ---- the domain ----
-  const age = opts.domainAgeDays;
   if (typeof age === 'number' && Number.isFinite(age) && age >= 0 && age < 90) {
     const n = Math.floor(age);
     const when = n === 0 ? 'today' : n === 1 ? '1 day ago' : `${n} days ago`;

@@ -34,6 +34,24 @@ test('a password form only on the phone is cloaking, named as the device that sa
   assert.match(both?.text ?? '', /a phone and a tablet/);
 });
 
+test('a sign-in form only phones see, on the site itself and an old domain, is told but not counted (TikTok, Instagram)', () => {
+  const evs = [...desktop(), dev('mobile', { forms: 1, has_password: true, action_origins: ['https://shop.example', 'https://login.shop.example:443'] }), dev('tablet', { has_password: true })];
+  const old = analyze(evs, { domainAgeDays: 11_000 });
+  assert.ok(!old.signals.some((s) => s.id === 'device_cloaking'));
+  const told = old.signals.find((s) => s.id === 'mobile_sign_in');
+  assert.equal(told?.level, 'info');
+  assert.match(told?.text ?? '', /a phone and a tablet/);
+  assert.equal(old.verdict, 'benign', 'nothing else is off: the verdict stays where it was');
+  // the same on a young domain, or with the password sent to another site, is cloaking
+  assert.equal(analyze(evs, { domainAgeDays: 20 }).signals.find((s) => s.id === 'device_cloaking')?.level, 'high');
+  const away = [...desktop(), dev('mobile', { forms: 1, has_password: true, action_origins: ['https://collect.evil.example'] })];
+  assert.equal(analyze(away, { domainAgeDays: 11_000 }).signals.find((s) => s.id === 'device_cloaking')?.level, 'high');
+  const moved = [...desktop(), dev('mobile', { has_password: true, final_url: 'https://other.example/login' })];
+  assert.equal(analyze(moved, { domainAgeDays: 11_000 }).signals.find((s) => s.id === 'device_cloaking')?.level, 'high');
+  // the age not known: still counted, a step lower
+  assert.equal(analyze(evs).signals.find((s) => s.id === 'device_cloaking')?.level, 'medium');
+});
+
 test('a password form that the computer also shows is not cloaking', () => {
   const evs = [...desktop('https://shop.example/', true), dev('mobile', { has_password: true })];
   assert.deepEqual(deviceViews(evs)[0]?.differs, []);
