@@ -1,7 +1,7 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
 import { LOG_CODES } from '../../agent/agent-log.ts';
-import { agentLines, asLogEntry, injectionText, looksLikeEmail, mailboxOf, panelFacts, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
+import { agentLines, asLogEntry, injectionText, noFindingsText, looksLikeEmail, mailboxOf, panelFacts, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
 import { hostile, unread } from './fixtures.ts';
 import { T } from '../src/text.ts';
 
@@ -196,4 +196,15 @@ test('the panel\'s facts: where it ended, what forms ask for, where they send it
 test('the deep-check hint says what really waits for approval: a download, never a form', () => {
   expect(T.deepHint).toMatch(/download/);
   expect(T.deepHint).not.toMatch(/such as (sending|submitting) a form/);
+});
+
+test('no rule finding next to a raised verdict says who raised it', () => {
+  const so = hostile().second_opinion!;
+  expect(noFindingsText({ verdict: 'benign', mode: 'vision', second_opinion: null })).toBe(T.noFindings);
+  expect(noFindingsText({ verdict: 'unknown', mode: 'rules_only', second_opinion: null })).toBe(T.noFindings);
+  expect(noFindingsText({ verdict: 'malicious', mode: 'vision', second_opinion: null })).toBe(T.noFindingsModel);
+  expect(noFindingsText({ verdict: 'suspicious', mode: 'text', second_opinion: null })).toBe(T.noFindingsModel);
+  expect(noFindingsText({ verdict: 'malicious', mode: 'rules_only', second_opinion: { ...so, malicious: true } })).toBe(T.noFindingsCloudflare);
+  expect(noFindingsText({ verdict: 'malicious', mode: 'vision', second_opinion: { ...so, malicious: false } })).toBe(T.noFindingsModel);
+  expect(noFindingsText({ verdict: 'suspicious', mode: 'rules_only', second_opinion: null })).toBe(T.noFindings);
 });

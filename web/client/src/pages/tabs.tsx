@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { shotUrl, type TaskStatus } from '../api.ts';
-import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, injectionText, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
+import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, injectionText, noFindingsText, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { SecondOpinion } from './second-opinion.tsx';
@@ -42,7 +42,7 @@ function FindingsCard({ r }: R) {
             </li>
           ))}
         </ul>
-      ) : <p className="text-muted">{T.noFindings}</p>}
+      ) : <p className="text-muted">{noFindingsText(r)}</p>}
     </Card>
   );
 }

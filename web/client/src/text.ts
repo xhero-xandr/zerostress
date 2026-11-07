@@ -93,6 +93,8 @@ export const T = {
 
   findingsTitle: 'What we found',
   noFindings: 'Nothing unusual was recorded.',
+  noFindingsModel: 'Our fixed rules found nothing here. The model, reading the evidence and the screenshot, raised the verdict: its reasons are under Explanation.',
+  noFindingsCloudflare: 'Our fixed rules found nothing here. Cloudflare’s URL Scanner flagged the page, and that raised the verdict.',
   level: { high: 'Serious', medium: 'Moderate', low: 'Minor', info: 'Note' } as Readonly<Record<string, string>>,
   explainTitle: 'Explanation',
   glanceTitle: 'At a glance',

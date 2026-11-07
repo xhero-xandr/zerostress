@@ -16,6 +16,14 @@ export function findings(r: PublicReport): Signal[] {
     .sort((a, b) => (LEVEL_ORDER[a.level] ?? 9) - (LEVEL_ORDER[b.level] ?? 9));
 }
 
+/** When the rules list no finding: say who raised a verdict above "nothing found", so the card never contradicts it. */
+export function noFindingsText(r: Pick<PublicReport, 'verdict' | 'mode' | 'second_opinion'>): string {
+  if (r.verdict !== 'suspicious' && r.verdict !== 'malicious') return T.noFindings;
+  if (r.second_opinion?.malicious === true) return T.noFindingsCloudflare;
+  if (r.mode === 'text' || r.mode === 'vision') return T.noFindingsModel;
+  return T.noFindings;
+}
+
 export const seriousCount = (r: PublicReport): number => r.signals.filter((s) => s.level === 'high' || s.level === 'medium').length;
 
 /** The one sentence under the verdict. A warning by the site's own provider and the kinds of "could not check" each get their own. */
