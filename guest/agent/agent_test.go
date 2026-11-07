@@ -31,6 +31,12 @@ func serve(t *testing.T, cfg Config) (*Agent, func() net.Conn) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return ag, serveAgent(t, ag)
+}
+
+// serveAgent starts an agent made beforehand (a test may set what NewAgent would look up) and returns a dial function.
+func serveAgent(t *testing.T, ag *Agent) func() net.Conn {
+	t.Helper()
 	sock := filepath.Join(t.TempDir(), "a.sock")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
@@ -46,7 +52,7 @@ func serve(t *testing.T, cfg Config) (*Agent, func() net.Conn) {
 			go ag.Handle(c)
 		}
 	}()
-	return ag, func() net.Conn {
+	return func() net.Conn {
 		c, err := net.Dial("unix", sock)
 		if err != nil {
 			t.Fatal(err)
@@ -83,8 +89,16 @@ func lastStatus(t *testing.T, lines []string) status {
 
 func runJob(t *testing.T, cfg Config, job string) ([]string, status) {
 	t.Helper()
-	_, dial := serve(t, cfg)
-	c := dial()
+	ag, err := NewAgent(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runJobOn(t, ag, job)
+}
+
+func runJobOn(t *testing.T, ag *Agent, job string) ([]string, status) {
+	t.Helper()
+	c := serveAgent(t, ag)()
 	defer c.Close()
 	if _, err := c.Write([]byte(job + "\n")); err != nil {
 		t.Fatal(err)

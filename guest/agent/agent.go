@@ -342,6 +342,24 @@ func (a *Agent) run(conn net.Conn, br *bufio.Reader, job []byte, sess session) (
 		}
 	}()
 
+	// A process that left the group (setsid) may hold the output open after the kill, and the read below would wait for
+	// it: once the job is over, the output is closed on our side after a short grace for what is already in the pipe.
+	readDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-readDone:
+			return
+		}
+		t := time.NewTimer(outputGrace)
+		defer t.Stop()
+		select {
+		case <-t.C:
+			_ = out.Close()
+		case <-readDone:
+		}
+	}()
+
 	var written int64
 	last := byte('\n')
 	buf := make([]byte, 32<<10)
@@ -374,8 +392,10 @@ func (a *Agent) run(conn net.Conn, br *bufio.Reader, job []byte, sess session) (
 		}
 	}
 
+	close(readDone)
 	werr := cmd.Wait()
 	_ = syscall.Kill(-pgid, syscall.SIGKILL) // stragglers in the same process group
+	a.killJobUser()                          // and any that left it
 	st.StderrTail = stderr.String()
 	needNL := last != '\n'
 
