@@ -13,7 +13,8 @@ export const T = {
     nav: 'Extension',
     title: 'The agent in your browser',
     text: 'Right-click any suspicious link and choose “Check this link in a sandbox”. The ZeroStress agent opens in your browser’s side panel, checks the link in a disposable microVM, tells you what it sees step by step, and asks you before it does anything risky. It never reads the pages you visit.',
-    download: 'Download the extension (.zip)',
+    download: (v: string) => `Download the extension ${v} (.zip)`,
+    notes: 'Release notes and checksum',
     browsers: 'For Chrome, Edge, Brave and other Chromium browsers.',
     stepsTitle: 'Install it in a minute',
     steps: [
@@ -59,6 +60,7 @@ export const T = {
     ['You approve risky steps', 'A download or a form submit waits for your explicit yes.'],
   ] as const,
   footerLeft: 'MIT licensed · Built for Vultr: Agent Rush',
+  versionTitle: 'The version of this site; its release notes',
   footerRight: 'Links are opened only inside disposable sandboxes. Reports are kept for 24 hours.',
   github: 'GitHub',
 

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startTask } from '../api.ts';
 import { isTaskId, linkFromQuery, linksFromEmail, mailboxOf, type EmailLink } from '../logic.ts';
 import { T } from '../text.ts';
+import { extensionZip, RELEASE, releasePage } from '../version.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
 
 export function Home() {
@@ -167,7 +168,6 @@ export function Home() {
   );
 }
 
-export const EXTENSION_ZIP = 'https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip';
 
 /** Where to get the browser agent and how to install it (an unpacked extension until the Chrome Web Store has it). */
 function ExtensionSection() {
@@ -183,10 +183,10 @@ function ExtensionSection() {
             <PanelRight className="size-6 text-accent" aria-hidden /> {T.ext.title}
           </h2>
           <p className="text-[15px] leading-relaxed text-muted">{T.ext.text}</p>
-          <a href={EXTENSION_ZIP} className={`${btnPrimary} self-start no-underline`}>
-            <Download className="size-5" aria-hidden /> {T.ext.download}
+          <a href={extensionZip()} className={`${btnPrimary} self-start no-underline`}>
+            <Download className="size-5" aria-hidden /> {T.ext.download(RELEASE)}
           </a>
-          <p className="text-sm text-faint">{T.ext.browsers}</p>
+          <p className="text-sm text-faint">{T.ext.browsers} <a href={releasePage()} className="text-faint">{T.ext.notes}</a></p>
         </div>
         <div className="flex flex-col gap-3">
           <h3 className="text-[17px] font-semibold">{T.ext.stepsTitle}</h3>

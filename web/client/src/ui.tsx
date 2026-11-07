@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { PublicVerdict } from '../../agent/report-types.ts';
 import { T } from './text.ts';
+import { BUILD, releasePage } from './version.ts';
 import { setTheme, useTheme, type Theme } from './theme.ts';
 
 export function ThemeSwitch() {
@@ -42,7 +43,7 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
 export function SiteFooter() {
   return (
     <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 px-4 py-6 text-[13px] text-faint sm:px-6">
-      <span>{T.footerLeft}</span>
+      <span>{T.footerLeft} · <a href={releasePage()} className="text-faint" title={T.versionTitle}>ZeroStress {BUILD}</a></span>
       <span>{T.footerRight}</span>
     </footer>
   );

@@ -2,11 +2,13 @@
 // sentences (src/text.ts, src/logic.ts). Load build/extension in chrome://extensions ("Load unpacked").
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+import { buildVersion } from './build-version.ts';
 
 const root = resolve(import.meta.dirname, '../extension');
 export default defineConfig({
   root,
   base: './',
+  define: { __ZS_VERSION__: JSON.stringify(buildVersion()) },
   publicDir: resolve(root, 'public'),
   build: {
     outDir: resolve(import.meta.dirname, '../../build/extension'),

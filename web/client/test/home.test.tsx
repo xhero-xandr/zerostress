@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
+import { RELEASE } from '../src/version.ts';
 import { Home } from '../src/pages/home.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -47,7 +48,10 @@ test('"/?u=" fills the field and starts nothing by itself', async () => {
 test('the home page says how to get the browser agent, with the latest release', () => {
   show();
   const link = screen.getByRole('link', { name: /Download the extension/ });
-  expect(link.getAttribute('href')).toBe('https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip');
+  // the extension of this site's own release, never "latest"
+  expect(link.getAttribute('href')).toMatch(/^https:\/\/github\.com\/xhero-xandr\/zerostress\/releases\/download\/v(\d+\.\d+\.\d+)\/zerostress-extension-\1\.zip$/);
+  expect(link.getAttribute('href')).toContain(`/v${RELEASE}/`);
+  expect(document.body.innerHTML).not.toContain('/releases/latest');
   expect(document.body.textContent).toMatch(/Load unpacked/);
   expect(document.body.textContent).toContain('chrome://extensions');
   expect(screen.getByRole('link', { name: 'Extension' }).getAttribute('href')).toBe('#extension');

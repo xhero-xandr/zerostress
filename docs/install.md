@@ -28,6 +28,8 @@ Code changes go through git, settings through `./zs config`; the rest is filled 
 ./zs logs [web|supervisor|caddy] [-f]
 ./zs config [web|supervisor]     edit settings and restart the service
 ./zs verify [--live]     compare the host with the repository without changing anything
+./zs version [set X.Y.Z] the version (see Versions and releases)
+./zs release X.Y.Z       tag a release
 ./zs dev                 the site from your checkout on port 8081, with its own data in build/dev
 ```
 `verify` checks the services, the supervisor's and the site's answers, KVM, the kernel parameter, versions, the owners of `bin/`, SELinux types, the variable names in `config/*.env` (never their values) and that the files from `deploy/files/` match byte for byte. `--live` also runs one real check of `https://example.com/` through the public address and requires it to finish with the verdict *benign* (a failed run has a report too, so a report alone proves nothing); it starts a microVM and counts against the limits.
@@ -51,22 +53,30 @@ Every step is idempotent, and every download is checked against a pinned checksu
 | a setting | `./zs config web` |
 
 ## The browser extension
-The extension (`web/extension/`) is a thin frame: a right-click menu, an icon and a side panel that frames `https://zerostress.space/panel`, where the agent itself lives (a page of the client, updated with the site). Download it from the latest release (see [Releases](#releases)) or build it: `cd web/client && npm ci --ignore-scripts && npm run build:extension` writes `build/extension`. Load it in Chrome, Edge or Brave: `chrome://extensions` → *Developer mode* → *Load unpacked*. Its id is fixed by the public key in `web/extension/public/manifest.json`; the web layer lets exactly that origin frame `/panel` (`EXTENSION_ORIGIN` in `web/server/app.ts`, `frame-ancestors`), and the panel takes links only from it. It has no host permission: it never reads a page.
+The extension (`web/extension/`) is a thin frame: a right-click menu, an icon and a side panel that frames `https://zerostress.space/panel`, where the agent itself lives (a page of the client, updated with the site). Download it from the release of the site's version (see [Versions and releases](#versions-and-releases)) or build it: `cd web/client && npm ci --ignore-scripts && npm run build:extension` writes `build/extension`. Load it in Chrome, Edge or Brave: `chrome://extensions` → *Developer mode* → *Load unpacked*. Its id is fixed by the public key in `web/extension/public/manifest.json`; the web layer lets exactly that origin frame `/panel` (`EXTENSION_ORIGIN` in `web/server/app.ts`, `frame-ancestors`), and the panel takes links only from it. It has no host permission: it never reads a page.
 
-## Releases
-One version for the whole project: the site, the supervisor, the guest image and the browser extension. Each release is
-an annotated tag `vX.Y.Z` on `main`, and its notes are its section of [CHANGELOG.md](../CHANGELOG.md).
+## Versions and releases
+One version for the whole project (the site, the supervisor, the guest's collector, the browser extension), kept in
+`VERSION`; `./zs version` shows it, this checkout's build and the running supervisor's. A build between two releases is
+`X.Y.Z+N.gHASH` (N commits after release X.Y.Z): the site shows it in its footer, the supervisor in `/v1/health`, and
+`./zs verify` checks that the running supervisor belongs to the release in `VERSION`.
 
-1. Move the entries under `## [Unreleased]` in `CHANGELOG.md` into a new section `## [X.Y.Z] - YYYY-MM-DD`, set
-   `"version": "X.Y.Z"` in `web/extension/public/manifest.json`, and commit.
-2. `./zs release X.Y.Z` checks that the versions agree, the tree is clean and you are on `main`, then makes the tag.
-3. `git push origin vX.Y.Z`: the release workflow checks the same again, builds the extension and publishes the GitHub
-   release with `zerostress-extension.zip` and its SHA-256 attached.
+The project stays below 1.0.0 until it is stable: fixes raise the last number (0.9.1), new capabilities the middle one
+(0.10.0). Each release is an annotated tag `vX.Y.Z` on `main`, and its notes are its section of
+[CHANGELOG.md](../CHANGELOG.md). Versions 0.1.0 to 0.8.0 were tagged afterwards on the commits of their milestones.
 
-The latest extension is always at
-`https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip`. The agent inside it is the
-page `/panel` of the site, so it changes with every deploy; the extension needs replacing only when its own version does.
-`deploy/test/release-check.sh` (in CI) makes sure each of these checks refuses what it should.
+1. `./zs version set X.Y.Z` writes the version into `VERSION`, the extension's manifest and every `package.json` and lock
+   file, and turns the entries under `## [Unreleased]` in `CHANGELOG.md` into a dated section. Review it and commit.
+2. `./zs release X.Y.Z` checks that every place agrees, that the tree is clean and you are on `main`, then makes the tag.
+3. `git push origin main && git push origin vX.Y.Z`: the release workflow checks the same again, checks that the tag is
+   on `main`, runs the client's tests, builds the extension and publishes the GitHub release with
+   `zerostress-extension-X.Y.Z.zip` and its SHA-256.
+
+The site links to the extension of its own release
+(`https://github.com/xhero-xandr/zerostress/releases/download/vX.Y.Z/zerostress-extension-X.Y.Z.zip`), never to
+"latest". The agent inside the extension is the page `/panel` of the site, so it changes with every deploy; the
+extension needs replacing only when its own version does. `deploy/test/release-check.sh` (in CI) makes sure each of
+these checks refuses what it should.
 
 ## Development
 - The site runs straight from the checkout: a change in `web/` goes live when the service restarts (`./zs update` or `./zs restart`). To try a change first: `./zs dev`.

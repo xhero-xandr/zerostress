@@ -13,6 +13,9 @@ import (
 	"time"
 )
 
+// version is set at build time from VERSION and git (deploy/release.sh describe, supervisor/build.sh)
+var version = "dev"
+
 func environ() map[string]string {
 	env := map[string]string{}
 	for _, kv := range os.Environ() {

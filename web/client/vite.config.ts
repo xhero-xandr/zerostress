@@ -2,9 +2,11 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { buildVersion } from './build-version.ts';
 
 export default defineConfig({
   base: '/',
+  define: { __ZS_VERSION__: JSON.stringify(buildVersion()) },
   plugins: [react(), tailwindcss()],
   // generated files live in the repository's build/ only (spec 010, 4.2)
   build: { outDir: '../../build/client', emptyOutDir: true },

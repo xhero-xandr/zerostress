@@ -1,6 +1,6 @@
 {
   "name": "zerostress-collector",
-  "version": "0.1.0",
+  "version": "0.9.0",
   "private": true,
   "description": "Evidence collector that runs inside the guest microVM",
   "license": "MIT",

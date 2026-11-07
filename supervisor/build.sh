@@ -8,5 +8,7 @@ OUT=$(cd .. && pwd)/build/supervisor
 mkdir -p "$OUT"
 go vet ./...
 go test -count=1 -race ./...
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$OUT/zerostress-supervisor" .
+VERSION=$(bash ../deploy/release.sh describe)
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$VERSION" -o "$OUT/zerostress-supervisor" .
+echo "version $VERSION"
 ls -l "$OUT/zerostress-supervisor"

@@ -1,6 +1,7 @@
 # A release: pushing a tag vX.Y.Z (made with ./zs release X.Y.Z) publishes a GitHub release whose notes are the version's
-# section of CHANGELOG.md, with the browser extension attached. The latest one is always at
-# https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip
+# section of CHANGELOG.md, with the browser extension of that version attached:
+# https://github.com/xhero-xandr/zerostress/releases/download/vX.Y.Z/zerostress-extension-X.Y.Z.zip (the site links to
+# the one of its own version, never to "latest")
 name: release
 
 on:
@@ -45,15 +46,17 @@ jobs:
         working-directory: web/client
       - name: zip
         run: |
-          (cd build/extension && zip -qr "$GITHUB_WORKSPACE/zerostress-extension.zip" .)
-          sha256sum zerostress-extension.zip | tee zerostress-extension.zip.sha256
+          zip="zerostress-extension-$VERSION.zip"
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+          (cd build/extension && zip -qr "$GITHUB_WORKSPACE/$zip" .)
+          sha256sum "$zip" | tee "$zip.sha256"
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo
-            echo "**Browser extension:** download \`zerostress-extension.zip\` below, unzip it, then \`chrome://extensions\` → Developer mode → Load unpacked → the unzipped folder. The agent inside it is https://zerostress.space/panel and updates with the site."
+            echo "**Browser extension:** download \`$ZIP\` below, unzip it, then \`chrome://extensions\` → Developer mode → Load unpacked → the unzipped folder. The agent inside it is https://zerostress.space/panel and updates with the site."
           } >> release-notes.md
           gh release create "$GITHUB_REF_NAME" --title "ZeroStress $VERSION" --notes-file release-notes.md --verify-tag \
-            zerostress-extension.zip zerostress-extension.zip.sha256
+            "$ZIP" "$ZIP.sha256"

@@ -9,6 +9,9 @@
 #   ./zs config [web|supervisor]             edit config/<name>.env, then restart that service
 #   ./zs verify [--live]     check the host against the repository; changes nothing
 #   ./zs dev                 run the web layer from this checkout on port 8081, with its own data in build/dev
+#   ./zs version             this checkout's version (VERSION, and the build: X.Y.Z+N.gHASH after a release) and the
+#                            running supervisor's
+#   ./zs version set X.Y.Z   write a new version everywhere it is kept, and date its CHANGELOG section
 #   ./zs release X.Y.Z       check CHANGELOG.md and the versions, then tag vX.Y.Z on main (push the tag yourself)
 #
 # A new server: git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress && sudo ./zs install host
@@ -28,6 +31,12 @@ shift || true
 case $cmd in
   help | -h | --help) usage ;;
   release) exec bash "$S/deploy/release.sh" tag "$@" ;;
+  version)
+    if [[ ${1:-} == set ]]; then shift; exec bash "$S/deploy/release.sh" set "$@"; fi
+    echo "release:    $(tr -d '[:space:]' < "$S/VERSION")"
+    echo "this build: $(bash "$S/deploy/release.sh" describe)"
+    echo "supervisor: $(curl -fsS --max-time 5 --unix-socket "$S/run/supervisor.sock" http://localhost/v1/health 2>/dev/null | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' || true)"
+    ;;
   install)
     sudo_self install "$@"
     if [[ $# -eq 0 ]]; then set -- "${ORDER[@]}"; fi

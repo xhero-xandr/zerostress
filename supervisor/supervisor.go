@@ -408,7 +408,7 @@ func (s *Supervisor) Health() Health {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	h := Health{
-		OK: true, Version: "0.2.0", Concurrency: s.cfg.Concurrency, Running: len(s.active), Queued: len(s.queue),
+		OK: true, Version: version, Concurrency: s.cfg.Concurrency, Running: len(s.active), Queued: len(s.queue),
 		Sessions: SessionsHealth{Running: s.sessionRuns, Limit: s.cfg.SessionSlots},
 	}
 	if g := s.freeGB(); !math.IsInf(g, 0) {
