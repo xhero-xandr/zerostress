@@ -73,6 +73,13 @@ test('a meta refresh is reported as scheduled and followed', async () => {
   assert.equal(r.first('page').title, 'Final');
 });
 
+test('a refresh that has begun but not yet committed is waited for, not read as the old page', async () => {
+  const r = await scanOnce(`${pages.origin}/meta-late`);
+  assert.equal(r.code, 0, r.stderr());
+  assert.equal(r.first('summary').final_url, `${pages.origin}/final-late`);
+  assert.equal(r.first('page').title, 'Final late');
+});
+
 test('after a refresh the page is read once it has loaded, not as soon as it commits', async () => {
   const r = await scanOnce(`${pages.origin}/meta-slow`);
   assert.equal(r.code, 0, r.stderr());

@@ -96,6 +96,12 @@ const routes = {
     }, 5000);
   },
   '/nolink': () => html('<button>Press</button>', '<title>No link</title>'),
+  // a refresh to a page whose answer starts 1.5 s late: the refresh has begun but nothing has committed yet
+  '/meta-late': () => html('<p>Moving</p>', '<title>Meta</title><meta http-equiv="refresh" content="1; url=/final-late">'),
+  '/final-late': (req, res) => setTimeout(() => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(html('<h1>Final late</h1>', '<title>Final late</title>'));
+  }, 1500),
   // a refresh to a page that commits at once (headers and the start of the document) but finishes loading 2 s later
   '/meta-slow': () => html('<p>Moving</p>', '<title>Meta</title><meta http-equiv="refresh" content="1; url=/final-slow">'),
   '/final-slow': (req, res) => {

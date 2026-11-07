@@ -103,8 +103,14 @@ export async function attachTracker({ page, context, cdp, emitter }) {
     scheduled = { until: Date.now() + Math.min(e.delay, 10) * 1000 + 1500 };
     emit('nav', { via: 'scheduled', from: cut(current, LIMITS.urlChars), to: cut(e.url, LIMITS.urlChars), reason: e.reason, delay_s: e.delay });
   });
+  // Chromium clears the schedule when the navigation starts, a few milliseconds (or, with a slow server, seconds) before
+  // the new page commits: a navigation that has started keeps the wait going until frameNavigated, or a cancelled one
+  // until its time runs out. Read in that window, the scan took the old page for the final one.
+  cdp.on('Page.frameStartedNavigating', (e) => {
+    if (scheduled && e.frameId === mainFrameId) scheduled = { until: Date.now() + 10_000, started: true };
+  });
   cdp.on('Page.frameClearedScheduledNavigation', (e) => {
-    if (e.frameId === mainFrameId) scheduled = null;
+    if (e.frameId === mainFrameId && !scheduled?.started) scheduled = null;
   });
   cdp.on('Page.frameNavigated', (e) => {
     if (e.frame.parentId) return;
