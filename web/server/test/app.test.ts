@@ -776,3 +776,12 @@ test('second opinion: the body is ours only, from this site', async () => {
   assert.equal(s.calls.length, 0);
   assert.equal((await ask(rig(), j.id, j.key)).status, 404, 'without a scanner configured there is no such endpoint');
 });
+
+
+test('our browser extension may start a check and decide; any other extension may not', async () => {
+  const r = rig();
+  const ours = await post(r.app, { url: 'https://example.com/' }, { origin: 'chrome-extension://eanjmnmjjbbcpgnhdifdpmednecllbbc' });
+  assert.equal(ours.status, 202);
+  assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: 'chrome-extension://aaaabbbbccccddddeeeeffffgggghhhh' })).status, 403);
+  assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: 'chrome-extension://eanjmnmjjbbcpgnhdifdpmednecllbbc.evil.test' })).status, 403);
+});

@@ -42,6 +42,7 @@ export interface AppDeps {
 
 // The client sends everything with fetch, it has no forms, so form-action can be 'none' (spec 007, 3.5).
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+export const EXTENSION_ORIGIN = 'chrome-extension://eanjmnmjjbbcpgnhdifdpmednecllbbc';
 export const MAX_BODY = 4096;
 const SHOT_MAX = 4 * 1024 * 1024;
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -112,8 +113,9 @@ async function readCapped(c: Context, max: number): Promise<string | null> {
 async function readJsonBody(c: Context): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; res: Response }> {
   const origin = c.req.header('origin');
   if (origin !== undefined) {
-    let ok = false;
-    try { ok = new URL(origin).host === c.req.header('host'); } catch { /* not an origin */ }
+    // this site, or our own browser extension (its id is fixed by the public key in web/extension/manifest.json)
+    let ok = origin === EXTENSION_ORIGIN;
+    try { ok ||= new URL(origin).host === c.req.header('host'); } catch { /* not an origin */ }
     if (!ok) return { ok: false, res: fail(c, 403, 'forbidden') };
   }
   if (!(c.req.header('content-type') ?? '').toLowerCase().startsWith('application/json')) return { ok: false, res: fail(c, 415, 'bad_request') };

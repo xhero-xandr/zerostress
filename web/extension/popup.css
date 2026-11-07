@@ -1,9 +1,0 @@
-:root { color-scheme: light dark; --accent: #0f766e; --fg: #0f172a; --muted: #475569; --bg: #ffffff; --line: #cbd5e1; }
-@media (prefers-color-scheme: dark) { :root { --fg: #e2e8f0; --muted: #94a3b8; --bg: #0b1220; --line: #334155; --accent: #2dd4bf; } }
-body { margin: 0; padding: 14px; width: 320px; font: 14px/1.4 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
-h1 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 16px; }
-.hint { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; }
-label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; color: var(--muted); }
-input { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--fg); font: 13px ui-monospace, monospace; }
-button { margin-top: 10px; width: 100%; padding: 9px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
-.error { margin: 8px 0 0; color: #dc2626; font-size: 12.5px; }

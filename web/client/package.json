@@ -8,7 +8,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "node e2e-check.mjs"
+    "e2e": "node e2e-check.mjs",
+    "build:extension": "vite build --config vite.extension.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "5.106.1",
