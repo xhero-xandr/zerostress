@@ -147,8 +147,8 @@ export function Panel() {
   async function second(id: string, key: string, publish: boolean) {
     const at = say(T.second.asking);
     try {
-      await askSecondOpinion(id, key, publish);
-      update(at, () => ({ kind: 'agent', text: T.log.second('found', null, null, '') }));
+      const { second_opinion: so } = await askSecondOpinion(id, key, publish);
+      update(at, () => ({ kind: 'agent', text: T.log.second(so.source, so.status, so.malicious, so.final_host) }));
       await finish(id, key);
     } catch (e) {
       if (e instanceof ApiError && e.code === 'needs_consent') update(at, () => ({ kind: 'consent', id, key }));
