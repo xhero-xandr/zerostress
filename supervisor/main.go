@@ -1,5 +1,5 @@
 // Command zerostress-supervisor is the privileged supervisor: one disposable Firecracker microVM per job.
-// Standard library only (CLAUDE.md, containment rule 6). Spec 006.
+// Standard library only (docs/containment.md, rule 6). Spec 006.
 package main
 
 import (

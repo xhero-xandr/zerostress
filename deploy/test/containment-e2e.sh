@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Containment, tried from the inside (CLAUDE.md, containment rules 1-5). Each wall is attacked from a real microVM, as the
+# Containment, tried from the inside (docs/containment.md, rules 1-5). Each wall is attacked from a real microVM, as the
 # same unprivileged user the browser runs as, through the real supervisor and the real zsvm limits; then the host is
 # measured to see whether the limits held and nothing was left behind.
 #

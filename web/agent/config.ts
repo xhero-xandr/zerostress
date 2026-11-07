@@ -1,5 +1,5 @@
 // Settings of the agent (spec 008, 6), read from the environment of the service. The key lives only there: on the
-// host, in /zerostress/config/web.env (CLAUDE.md, containment rule 2). A missing key or model is not an error: the
+// host, in /zerostress/config/web.env (docs/containment.md, rule 2). A missing key or model is not an error: the
 // agent then works by the rules alone.
 
 export interface AgentConfig {

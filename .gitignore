@@ -35,3 +35,5 @@ Thumbs.db
 
 # internal notes in Russian (specs, status, backlog): kept on the server, not published
 /notes/
+# instructions for the coding assistant: kept in the checkout, not published
+/CLAUDE.md

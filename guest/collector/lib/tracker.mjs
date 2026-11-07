@@ -13,7 +13,7 @@ const ipOf = (v) => (typeof v === 'string' && /^[0-9a-fA-F:.]{2,45}$/.test(v) ? 
 
 /**
  * Everything the network and the navigation machinery report, read from ONE CDP session so the order of the events is
- * deterministic (CLAUDE.md). The page cannot influence this layer: it sees the browser, not the page's JavaScript.
+ * deterministic. The page cannot influence this layer: it sees the browser, not the page's JavaScript.
  */
 export async function attachTracker({ page, context, cdp, emitter }) {
   const { emit } = emitter;

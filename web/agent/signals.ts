@@ -243,7 +243,7 @@ function confidenceOf(verdict: Verdict, signals: Signal[], page: readonly [Ev, n
 const RANK: Record<Verdict, number> = { unknown: 0, benign: 1, suspicious: 2, malicious: 3 };
 
 /**
- * The verdict after the model has spoken. The model may raise the rules' verdict, never lower it (CLAUDE.md, rule 8).
+ * The verdict after the model has spoken. The model may raise the rules' verdict, never lower it (docs/containment.md, rule 8).
  * "unknown" (the page was not read) is not something a model can turn into "benign" by opinion: only a warning counts.
  */
 export function raise(rules: Verdict, model: Verdict | null): Verdict {

@@ -1,7 +1,7 @@
 // The gatekeeper of the agent's actions (spec 008, 5). The model proposes; this code decides. It never takes an id, a
 // snapshot number or a text from the proposal: it builds the command itself from the page as it stands, and it only
 // lets through the small set of actions the model may ask for. Anything risky is passed on marked as needing a
-// person; the agent never approves anything itself (CLAUDE.md, rules 8 and 9; spec 006).
+// person; the agent never approves anything itself (docs/containment.md, rules 8 and 9).
 
 import { REF, validateCommand, type Risk } from './commands.ts';
 
