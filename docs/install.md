@@ -50,12 +50,15 @@ Every step is idempotent, and every download is checked against a pinned checksu
 | a version in `deploy/versions.env` | `sudo ./zs install runtime`, then the step that uses it |
 | a setting | `./zs config web` |
 
+## The browser extension
+The extension (`web/extension/`) is built with the client's tools and shares its texts: `cd web/client && npm ci --ignore-scripts && npm run build:extension` writes `build/extension`. Load it in Chrome, Edge or Brave: `chrome://extensions` → *Developer mode* → *Load unpacked* → `build/extension`. Its id is fixed by the public key in `web/extension/public/manifest.json`, and the web layer lets exactly that origin in (`EXTENSION_ORIGIN` in `web/server/app.ts`); a test checks that the two agree. It talks to `https://zerostress.space` only.
+
 ## Development
 - The site runs straight from the checkout: a change in `web/` goes live when the service restarts (`./zs update` or `./zs restart`). To try a change first: `./zs dev`.
 - On your own machine: `git clone`, `cp config/web.env.example config/web.env` (the key is optional), `./zs dev`. Without KVM no real link checks run (there is no supervisor), but the interface, the report and the chat work.
 
 ## Tests
-Without KVM (these also run in CI): `npm test` and `npm run typecheck` in `web/` and `web/client/`, `npm run e2e` in `web/client/` (a browser check of the CSP, Chromium as a regular user), `npm test` in `guest/collector/`, `supervisor/build.sh` and `guest/agent/build.sh` (tests with `-race`), `deploy/test/mutate-artifacts.sh`. Mutation testing of the web layer: `npm run mutate` in `web/` (about 40 minutes).
+Without KVM (these also run in CI): `npm test` and `npm run typecheck` in `web/` and `web/client/` (the client's typecheck covers the extension's sources), `node --test extension/test/*.mjs` and `npm run build:extension`, `npm run e2e` in `web/client/` (a browser check of the CSP, Chromium as a regular user), `npm test` in `guest/collector/`, `supervisor/build.sh` and `guest/agent/build.sh` (tests with `-race`), `deploy/test/mutate-artifacts.sh`. Mutation testing of the web layer: `npm run mutate` in `web/` (about 40 minutes).
 
 On real microVMs (on the server only, as `root`; everything they create they clean up; they target `/zerostress`):
 ```
