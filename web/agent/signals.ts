@@ -3,6 +3,7 @@
 // read defensively, and what cannot be read is simply not a reason.
 
 import { deviceViews } from './devices.ts';
+import { pageViews, sessionStart } from './evidence.ts';
 import { hidesText } from './hiding.ts';
 import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } from './lists.ts';
 import { domainToUnicode } from 'node:url';
@@ -62,10 +63,15 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const idx = events.map((e, i) => [e, i] as const).filter((p): p is readonly [Ev, number] => isObj(p[0]));
   const of = (kind: string) => idx.filter(([e]) => e.kind === kind);
 
-  const navs = of('nav');
-  const page = of('page').at(-1);
+  // the link's own visit decides the chain, the walls and the landing page; pages the agent opened afterwards in a deep
+  // check are judged too, each against its own address (evidence.ts)
+  const visitEnd = sessionStart(events);
+  const navs = of('nav').filter(([, i]) => i < visitEnd);
+  const pages = pageViews(events);
+  const land = pages.filter((v) => !v.bySession).at(-1);
+  const page = land ? ([land.page, land.at] as const) : undefined;
   const summary = of('summary').at(-1);
-  const forms = of('forms').at(-1);
+  const forms = land?.forms !== undefined ? ([land.forms, land.formsAt!] as const) : undefined;
   const navError = summary ? str(summary[0].nav_error) : '';
   const finalUrl = str(summary?.[0].final_url) || str(page?.[0].url) || str([...navs].reverse().find(([e]) => e.via === 'commit')?.[0].to);
   const finalParsed = parseUrl(finalUrl);
@@ -141,36 +147,45 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
     add('young_domain', age < 30 ? 'medium' : 'low', `The site's domain was registered ${when}. Honest sites can be new too, but most scam sites are.`);
   }
 
-  // ---- the page ----
-  const forms0 = list(forms?.[0].forms).filter(isObj);
-  const passwordForms = forms0.filter((f) => f.has_password === true);
-  const loose = Number(forms?.[0].loose_password_fields) > 0;
-  const hasPassword = passwordForms.length > 0 || loose;
-  const formRef = forms ? [forms[1]] : [];
+  // ---- the pages: each one against its own address ----
+  const once = new Set<string>();
+  const addOnce = (id: string, level: Level, text: string, refs: number[]) => {
+    if (once.has(id)) return;
+    once.add(id);
+    add(id, level, text, refs);
+  };
+  for (const v of pages) {
+    const here = parseUrl(v.url) ?? (v === land ? finalParsed : null);
+    const hereOrigin = here?.origin ?? '';
+    const vForms = list(v.forms?.forms).filter(isObj);
+    const passwordForms = vForms.filter((f) => f.has_password === true);
+    const hasPassword = passwordForms.length > 0 || Number(v.forms?.loose_password_fields) > 0;
+    const formRef = v.formsAt !== undefined ? [v.formsAt] : [];
 
-  const cross = passwordForms.filter((f) => {
-    const target = parseUrl(f.action);
-    const actionOrigin = str(f.action_origin) || target?.origin || '';
-    return (actionOrigin !== '' && pageOrigin !== '' && actionOrigin !== pageOrigin) || f.origin_differs === true;
-  });
-  if (cross.length) add('password_form_cross_origin', 'high', 'A form that asks for a password sends it to a different site than the one shown.', formRef);
+    const cross = passwordForms.filter((f) => {
+      const target = parseUrl(f.action);
+      const actionOrigin = str(f.action_origin) || target?.origin || '';
+      return (actionOrigin !== '' && hereOrigin !== '' && actionOrigin !== hereOrigin) || f.origin_differs === true;
+    });
+    if (cross.length) addOnce('password_form_cross_origin', 'high', 'A form that asks for a password sends it to a different site than the one shown.', formRef);
 
-  const overHttp = hasPassword && (finalParsed?.protocol === 'http:' || passwordForms.some((f) => parseUrl(f.action)?.protocol === 'http:'));
-  if (overHttp) add('password_over_http', 'high', 'A password is asked for on, or sent over, an unencrypted connection.', formRef);
+    const overHttp = hasPassword && (here?.protocol === 'http:' || passwordForms.some((f) => parseUrl(f.action)?.protocol === 'http:'));
+    if (overHttp) addOnce('password_over_http', 'high', 'A password is asked for on, or sent over, an unencrypted connection.', formRef);
 
-  if (page && finalParsed) {
-    const title = str(page[0].title).toLowerCase();
-    const body = str(page[0].text).slice(0, 3000).toLowerCase();
-    const loginish = hasPassword || LOGIN_WORDS.test(title);
-    for (const b of BRANDS) {
-      const named = b.words.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(title)) ||
-        (hasPassword && b.words.some((w) => body.includes(w)));
-      if (named && loginish && !belongsTo(b, finalParsed.hostname)) {
-        add('brand_domain_mismatch', hasPassword ? 'high' : 'medium', `The page presents itself as ${b.words[0]!} but its address is ${sld(finalParsed.hostname)}.`, [page[1]]);
-        break;
+    if (here) {
+      const title = str(v.page.title).toLowerCase();
+      const body = str(v.page.text).slice(0, 3000).toLowerCase();
+      const loginish = hasPassword || LOGIN_WORDS.test(title);
+      for (const b of BRANDS) {
+        const named = b.words.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(title)) ||
+          (hasPassword && b.words.some((w) => body.includes(w)));
+        if (named && loginish && !belongsTo(b, here.hostname)) {
+          addOnce('brand_domain_mismatch', hasPassword ? 'high' : 'medium', `The page presents itself as ${b.words[0]!} but its address is ${sld(here.hostname)}.`, [v.at]);
+          break;
+        }
       }
     }
-    if (hidesText(page[0].hidden_text)) add('hidden_text', 'low', 'The page hides text from visitors (invisible, zero-size or the colour of the background).', [page[1]]);
+    if (hidesText(v.page.hidden_text)) addOnce('hidden_text', 'low', 'The page hides text from visitors (invisible, zero-size or the colour of the background).', [v.at]);
   }
 
   // ---- downloads ----
@@ -190,7 +205,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const popups = of('popup');
   const dialogs = of('dialog');
   if (popups.length || dialogs.length) add('popups_dialogs', 'low', 'The page opened extra windows or dialogs on its own.', [...popups, ...dialogs].map(([, i]) => i));
-  const reqs = of('request');
+  const reqs = of('request').filter(([, i]) => i < visitEnd);
   const third = new Set(reqs.map(([e]) => origin(e.url)).filter((o) => o !== '' && o !== pageOrigin));
   if (third.size > 10) add('many_third_parties', 'info', `The page contacted ${third.size} other sites.`, []);
   const blocked = reqs.filter(([e]) => e.blocked != null && e.blocked !== false);
@@ -203,7 +218,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   // A real page that merely carries a captcha widget has content, so the widget alone does not count.
   const title = str(page?.[0].title);
   const textLen = str(page?.[0].text).trim().length;
-  const linkCount = (of('links').at(-1)?.[0].links as unknown[] | undefined)?.length ?? 0;
+  const linkCount = (land?.links?.links as unknown[] | undefined)?.length ?? 0;
   const formCount = (forms?.[0].forms as unknown[] | undefined)?.length ?? 0;
   const thin = textLen < 300 && linkCount < 3;
   // the status of the page that was asked for (the first document), not of a captcha frame loaded after it

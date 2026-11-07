@@ -3,6 +3,7 @@
 // from the page or the network, so report.ts lists them as untrusted.
 
 import { parseUrl } from './domain.ts';
+import { landingView, linkVisit } from './evidence.ts';
 import { asksOf, type Ask } from './fields.ts';
 import { deviceViews, type DeviceView } from './devices.ts';
 import { hidesText } from './hiding.ts';
@@ -56,12 +57,17 @@ export interface FactsExtra {
 }
 
 export function buildFacts(events: readonly unknown[], extra: FactsExtra = {}): Facts {
-  const evs = events.filter(isObj);
+  // the report describes the link's own visit and the page it led to, all from that one page (evidence.ts); what the
+  // agent did afterwards in a deep check is reported as its steps, not as the site
+  const evs = linkVisit(events).filter(isObj);
   const of = (kind: string) => evs.filter((e) => e.kind === kind);
+  // behaviour (pop-ups, dialogs, downloads) counts for the whole check, including the agent's approved download
+  const all = (kind: string) => events.filter(isObj).filter((e) => e.kind === kind);
 
-  const summary = of('summary').at(-1);
-  const page = of('page').at(-1);
-  const finalUrl = parseUrl(summary?.final_url) ?? parseUrl(page?.url);
+  const summary = events.filter(isObj).filter((e) => e.kind === 'summary').at(-1);
+  const land = landingView(events);
+  const page = land?.page;
+  const finalUrl = parseUrl(summary?.final_url) ?? parseUrl(land?.url);
 
   const chain: Facts['chain'] = [];
   for (const n of of('nav')) {
@@ -98,7 +104,8 @@ export function buildFacts(events: readonly unknown[], extra: FactsExtra = {}): 
     return { ip, country: g.country, asn: g.asn, org: g.org === null ? null : cut(g.org, 80), hosts: [...e.hosts].slice(0, 3).map((h) => cut(h, 100)), requests: Math.min(e.requests, 99999) };
   });
 
-  const links = list(of('links').at(-1)?.links).filter(isObj).slice(0, 30).map((l) => {
+  // without any page there is nothing to mix them up with, so the visit's last forms and links stand on their own
+  const links = list((land?.links ?? of('links').at(-1))?.links).filter(isObj).slice(0, 30).map((l) => {
     const h = parseUrl(l.href)?.host ?? '';
     const href = str(l.href).trim();
     // an empty address, a bare # or a script call lead nowhere; a relative address stays on the site
@@ -110,7 +117,7 @@ export function buildFacts(events: readonly unknown[], extra: FactsExtra = {}): 
     final_host: cut(last, 100),
     page_title: cut(str(page?.title), 200),
     chain: chain.slice(0, 12),
-    forms: list(of('forms').at(-1)?.forms).filter(isObj).slice(0, 5).map((f) => ({
+    forms: list((land?.forms ?? of('forms').at(-1))?.forms).filter(isObj).slice(0, 5).map((f) => ({
       action_host: cut(parseUrl(f.action)?.host ?? '', 100),
       cross_origin: f.origin_differs === true,
       has_password: f.has_password === true,
@@ -127,8 +134,8 @@ export function buildFacts(events: readonly unknown[], extra: FactsExtra = {}): 
     domain: extra.domain ? { name: cut(extra.domain.domain, 100), created: extra.domain.created, age_days: extra.domain.age_days, registrar: extra.domain.registrar === null ? null : cut(extra.domain.registrar, 80) } : null,
     devices: deviceViews(events).map(({ file, at: _at, ...v }) => ({ ...v, image: file !== null })),
     hidden_text: hidesText(page?.hidden_text),
-    popups: Math.min(of('popup').length, 99),
-    dialogs: Math.min(of('dialog').length, 99),
-    downloads: of('download').slice(0, 5).map((e) => ({ filename: cut(str(e.filename), 100), saved: e.saved === true })),
+    popups: Math.min(all('popup').length, 99),
+    dialogs: Math.min(all('dialog').length, 99),
+    downloads: all('download').slice(0, 5).map((e) => ({ filename: cut(str(e.filename), 100), saved: e.saved === true })),
   };
 }

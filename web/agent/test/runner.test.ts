@@ -55,9 +55,11 @@ const finish = (sup: FakeSup, state = 'done', extra: Record<string, unknown> = {
  */
 function nextPage(sup: FakeSup, cmd: any, snap: number, refs: string[], title = 'Next') {
   sup.emit('command', { command_id: cmd.id, cmd: cmd.cmd, status: 'sent', risk: 'safe', command_sha256: 'a'.repeat(64) });
+  // in the collector's order for every page it reads: page, forms, snapshot, links (scan.mjs reportPage, reportSnapshot)
+  sup.evidence(ev('page', { url: 'http://other.test/', title, lang: 'en', text: 'Another page', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }));
+  sup.evidence(ev('forms', { forms: [], total: 0, loose_password_fields: 0 }));
   sup.evidence(ev('snapshot', { snap, text: '- generic', lines: 1, truncated: false }));
   sup.evidence(ev('links', { snap, links: refs.map((ref) => ({ ref, text: 'x', href: 'http://other.test/', origin_differs: true })) }));
-  sup.evidence(ev('page', { url: 'http://other.test/', title, lang: 'en', text: 'Another page', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }));
   sup.evidence(ev('cmd_result', { id: cmd.id, ok: true, snap }));
   sup.emit('command', { command_id: cmd.id, cmd: cmd.cmd, status: 'done', risk: 'safe', command_sha256: 'a'.repeat(64) });
 }
@@ -452,6 +454,25 @@ test('the domain is asked about by name only, once, from the start; its age is a
   assert.ok(r.assessment.rules.signals.some((s) => s.id === 'young_domain'));
   assert.deepEqual(r.facts.domain, { name: 'page.test', created: '2026-11-01T00:00:00.000Z', age_days: 4, registrar: 'Some Registrar' });
   assert.deepEqual(r.facts.servers[0], { ip: '93.184.216.34', country: 'US', asn: 15133, org: 'EdgeCast', hosts: ['page.test'], requests: 1 });
+});
+
+test('in a deep check the domain asked about is the one the link led to, not a page the agent opened', async () => {
+  let calls = 0;
+  const { sup, deps } = await setup({}, () => {
+    calls++;
+    return chat(calls === 1 ? answer({ verdict: 'benign', next: { action: 'open_link', ref: refOfPlain() } }) : answer({ verdict: 'benign', next: { action: 'none' } }));
+  });
+  const asked: string[] = [];
+  deps.rdap = async (name) => { asked.push(name); return null; };
+  sup.onCommand = (cmd, s) => {
+    if (cmd.cmd === 'open_link') nextPage(s, cmd, 2, ['e1']);
+    if (cmd.cmd === 'close') { s.evidence(ev('cmd_result', { id: cmd.id, ok: true })); finish(s); }
+  };
+  // a real deep check sends its summary only at the very end, so none is there while the agent works
+  begin(sup, plain().filter((e) => e.kind !== 'summary'), true);
+  await run(runTask({ url: 'http://page.test/', session: { idle_s: 30, max_s: 120 } }, deps));
+  assert.ok(calls >= 2, 'the model was asked again after the agent opened the other page');
+  assert.deepEqual([...new Set(asked)], ['page.test']);
 });
 
 test('a registry that fails or hangs does not stop the task and the age is unknown', async () => {

@@ -2,6 +2,7 @@
 // hooks, ask for the verdict, let the model's proposals through the gatekeeper into the live session, and give a result
 // that says what happened. The supervisor is the one that opens the page; nothing here touches a page.
 
+import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
 import type { Budget } from './budget.ts';
 import type { AgentConfig } from './config.ts';
@@ -154,14 +155,10 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   };
   const inputHost = parseUrl(input.url)?.hostname ?? '';
   void domainFor(inputHost);
+  // the site the link led to, never a page the agent opened later in a deep check (evidence.ts)
   const finalHost = (): string => {
-    for (const e of [...events].reverse()) {
-      if (isObj(e) && (e.kind === 'summary' || e.kind === 'page')) {
-        const h = parseUrl(e.kind === 'summary' ? e.final_url : e.url)?.hostname;
-        if (h) return h;
-      }
-    }
-    return inputHost;
+    const summary = [...events].reverse().find((e) => isObj(e) && e.kind === 'summary') as Record<string, unknown> | undefined;
+    return parseUrl(summary?.final_url)?.hostname || parseUrl(landingView(events)?.url)?.hostname || inputHost;
   };
   // one limit for the whole task, counted from its start, so that asking again later never waits again
   const registryUntil = Date.now() + 6000;
