@@ -46,6 +46,17 @@ for f in $(cd "$F" && find . -type f | sort); do
 done
 for h in zsvm zsnet; do check "bin/$h is deploy/helpers/$h" cmp -s "$S/bin/$h" "$S/deploy/helpers/$h"; done
 
+# A finished check of example.com, the stable control: the run must be done (a failed run has a report too, saying it
+# could not check) and the verdict benign. Takes a task id, so it can be tried on a task that is already there.
+live_ok() {
+  local st rep
+  st=$(curl -fsS "https://$DOMAIN/api/tasks/$1" || true)
+  grep -q '"stage":"done"' <<<"$st" || return 1
+  rep=$(curl -fsS "https://$DOMAIN/r/$1/report.json" || true)
+  grep -Eq '"verdict": *"benign"' <<<"$rep"
+}
+[[ ${1:-} == --live-task ]] && { DOMAIN=${DOMAIN:-zerostress.space}; live_ok "$2" && echo ok || echo no; exit 0; }
+
 if [[ ${1:-} == --live ]]; then
   resp=$(curl -fsS -X POST "https://$DOMAIN/api/tasks" -H 'content-type: application/json' --data '{"url":"https://example.com/"}' || true)
   id=$(sed -n 's/.*"id":"\([0-9a-f]\{32\}\)".*/\1/p' <<<"$resp")
@@ -57,7 +68,7 @@ if [[ ${1:-} == --live ]]; then
       grep -q '"has_report":true\|"stage":"failed"' <<<"$st" && break
       sleep 1
     done
-    if grep -q '"has_report":true' <<<"$st"; then ok "live check: a report for https://example.com/"; else no "live check: no report"; fi
+    if live_ok "$id"; then ok "live check: https://example.com/ was opened and judged benign"; else no "live check: the run did not finish, or the verdict is not benign: $st"; fi
   fi
 fi
 

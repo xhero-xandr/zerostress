@@ -28,6 +28,11 @@ inh sysctl -qw net.ipv4.ip_forward=1
 # zsnet hands its tap to the supervisor's user; the user only has to exist
 id zerostress-sup >/dev/null 2>&1 || { echo "zerostress-sup is missing (./zs install host)"; exit 1; }
 
+# a host without the table (after a reboot): the first "up" makes it, with no slots to keep
+if inh $ZSNET up 2 && inh nft list set inet zerostress slots | grep -q zstap2; then ok "a host without the table gets it on the first up"; else no "the first up on a host without the table failed"; fi
+inh $ZSNET down 2 || true
+inh nft delete table inet zerostress 2>/dev/null || true
+
 # an older table (no version, no egress rules) with a guest running on slot 3
 inh nft -f - <<'EOF'
 table inet zerostress {
