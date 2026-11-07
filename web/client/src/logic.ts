@@ -135,3 +135,101 @@ export function asLogEntry(x: unknown): LogEntry | null {
 
 /** Seconds since the start, for the log's left column. */
 export const logTime = (t: number): string => `+${(t / 1000).toFixed(1)} s`;
+
+// ---- links in an email ------------------------------------------------------------------------------------------------
+// The email is read here, in the visitor's browser, and never sent: only the link the person picks goes to a check.
+
+export interface EmailLink {
+  /** the address a click really opens (unwrapped from a known redirector) */
+  url: string;
+  host: string;
+  /** the text of the link, when it looks like an address on another site than the one it opens */
+  shown: string | null;
+  /** the redirector it was wrapped in (Safe Links and the like), if any */
+  wrapper: string | null;
+}
+
+const MAX_EMAIL = 300_000;
+const MAX_LINKS = 30;
+
+/** Known redirectors and the parameter that carries the real address. */
+const WRAPPERS: Array<{ host: RegExp; param: string[]; name: string }> = [
+  { host: /(^|\.)safelinks\.protection\.outlook\.com$/, param: ['url'], name: 'Microsoft Safe Links' },
+  { host: /^(www\.)?google\.[a-z.]+$/, param: ['q', 'url'], name: 'Google' },
+  { host: /^l\.facebook\.com$/, param: ['u'], name: 'Facebook' },
+];
+
+const bare = (h: string) => h.replace(/^www\./, '');
+
+function httpUrl(s: string): URL | null {
+  try {
+    const u = new URL(s.trim());
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+function unwrap(u: URL): { url: URL; wrapper: string | null } {
+  for (const w of WRAPPERS) {
+    if (!w.host.test(u.hostname) || (w.name === 'Google' && u.pathname !== '/url')) continue;
+    for (const p of w.param) {
+      const inner = httpUrl(u.searchParams.get(p) ?? '');
+      if (inner) return { url: inner, wrapper: w.name };
+    }
+  }
+  return { url: u, wrapper: null };
+}
+
+/** The text of a link, if it reads as an address of its own (example.com, https://example.com/x). */
+function shownHost(text: string): string | null {
+  const t = text.trim();
+  if (!t || t.length > 200 || /\s/.test(t)) return null;
+  const u = httpUrl(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+  return u && u.hostname.includes('.') ? u.hostname : null;
+}
+
+export function linksFromEmail(raw: string): EmailLink[] {
+  // the source of an email is often quoted-printable: soft line breaks and "=3D" for "=" inside the links
+  let text = raw.slice(0, MAX_EMAIL);
+  if (/=\r?\n|=3D/i.test(text)) text = text.replace(/=\r?\n/g, '').replace(/=3D/gi, '=');
+  const found: Array<{ href: string; text: string | null }> = [];
+  let plain = text;
+  if (/<a[\s>]/i.test(text) && typeof DOMParser !== 'undefined') {
+    // an inert document: nothing in it runs or loads
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    for (const a of doc.querySelectorAll('a[href]')) {
+      found.push({ href: a.getAttribute('href') ?? '', text: (a.textContent ?? '').slice(0, 300) });
+      // the text of a link is not a link of its own: a click on it opens the href
+      a.remove();
+    }
+    plain = doc.body?.textContent ?? '';
+  }
+  for (const m of plain.matchAll(/\bhttps?:\/\/[^\s<>"'`{}|\\^[\]]+/gi)) found.push({ href: m[0].replace(/[.,;:!?)\]>'"]+$/, ''), text: null });
+
+  const out: EmailLink[] = [];
+  const seen = new Set<string>();
+  for (const f of found) {
+    const u = httpUrl(f.href);
+    if (!u) continue;
+    const { url, wrapper } = unwrap(u);
+    if (seen.has(url.href)) {
+      // the same address met again as a link with text: keep the warning if this text disagrees
+      const prev = out.find((x) => x.url === url.href);
+      const shown = f.text ? shownHost(f.text) : null;
+      if (prev && !prev.shown && shown && bare(shown) !== bare(url.hostname)) prev.shown = f.text!.trim();
+      continue;
+    }
+    seen.add(url.href);
+    const shown = f.text ? shownHost(f.text) : null;
+    out.push({ url: url.href, host: url.host, shown: shown && bare(shown) !== bare(url.hostname) ? f.text!.trim() : null, wrapper });
+    if (out.length >= MAX_LINKS) break;
+  }
+  return out;
+}
+
+/** The address handed over in "/?u=", if it is one we would check (the person still presses the button). */
+export function linkFromQuery(search: string): string {
+  const u = httpUrl(new URLSearchParams(search).get('u') ?? '');
+  return u && u.href.length <= 2048 ? u.href : '';
+}

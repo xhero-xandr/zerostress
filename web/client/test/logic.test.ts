@@ -1,7 +1,7 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
 import { LOG_CODES } from '../../agent/agent-log.ts';
-import { agentLines, asLogEntry, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
+import { agentLines, asLogEntry, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
 import { hostile, unread } from './fixtures.ts';
 
 describe('the sentence under the verdict', () => {
@@ -114,5 +114,37 @@ describe('the agent log in our words', () => {
   test('only something shaped like an entry is taken from the stream', () => {
     expect(asLogEntry({ t: 1, code: 'page', d: {} })).not.toBeNull();
     for (const bad of [null, 5, 'x', { t: '1', code: 'page', d: {} }, { t: 1, code: 'page', d: [] }]) expect(asLogEntry(bad)).toBeNull();
+  });
+});
+
+describe('links in an email', () => {
+  test('plain text: addresses found, trailing punctuation dropped, duplicates once', () => {
+    const links = linksFromEmail('Your parcel is waiting: https://track.example.com/p?id=7. Or see https://track.example.com/p?id=7, https://help.example.org/x)');
+    expect(links.map((l) => l.url)).toEqual(['https://track.example.com/p?id=7', 'https://help.example.org/x']);
+  });
+  test('an HTML email: a link whose text shows another site is marked', () => {
+    const html = '<p>Hello</p><a href="https://paypa1-secure.test/login">www.paypal.com</a> <a href="https://www.paypal.com/help">www.paypal.com/help</a> <a href="https://shop.test/">Open your account</a>';
+    const links = linksFromEmail(html);
+    expect(links.map((l) => [l.host, l.shown])).toEqual([['paypa1-secure.test', 'www.paypal.com'], ['www.paypal.com', null], ['shop.test', null]]);
+  });
+  test('the source of an email in quoted-printable', () => {
+    const src = 'Content-Transfer-Encoding: quoted-printable\n\n<a href=3D"https://evil.test/very/long/pa=\nth?x=3D1">https://bank.example/</a>';
+    expect(linksFromEmail(src).map((l) => [l.url, l.shown])).toEqual([['https://evil.test/very/long/path?x=1', 'https://bank.example/']]);
+  });
+  test('redirectors are unwrapped to the address a click really opens', () => {
+    const safe = `https://eur01.safelinks.protection.outlook.com/?url=${encodeURIComponent('https://login-update.test/a?b=1')}&data=05`;
+    const g = `https://www.google.com/url?q=${encodeURIComponent('https://target.test/')}&sa=D`;
+    const links = linksFromEmail(`${safe}\n${g}\nhttps://www.google.com/search?q=https://not-a-redirect.test/`);
+    expect(links.map((l) => [l.url, l.wrapper])).toEqual([['https://login-update.test/a?b=1', 'Microsoft Safe Links'], ['https://target.test/', 'Google'], ['https://www.google.com/search?q=https://not-a-redirect.test/', null]]);
+  });
+  test('only web addresses: no script, mail or data links, and no more than thirty', () => {
+    expect(linksFromEmail('<a href="javascript:alert(1)">x</a><a href="mailto:a@b.c">m</a><a href="data:text/html,x">d</a>')).toEqual([]);
+    const many = Array.from({ length: 50 }, (_, i) => `https://s${i}.example/`).join(' ');
+    expect(linksFromEmail(many)).toHaveLength(30);
+  });
+  test('"/?u=" gives an address to check, nothing else', () => {
+    expect(linkFromQuery('?u=https%3A%2F%2Fexample.com%2Fa')).toBe('https://example.com/a');
+    expect(linkFromQuery('?u=javascript:alert(1)')).toBe('');
+    expect(linkFromQuery('?x=1')).toBe('');
   });
 });

@@ -1,27 +1,31 @@
 import { useQuery } from '@tanstack/react-query';
 import { Monitor, ScanSearch, ShieldHalf } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startTask } from '../api.ts';
-import { isTaskId } from '../logic.ts';
+import { isTaskId, linkFromQuery, linksFromEmail, type EmailLink } from '../logic.ts';
 import { T } from '../text.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
 
 export function Home() {
   const navigate = useNavigate();
   const input = useRef<HTMLInputElement>(null);
-  const [url, setUrl] = useState('');
+  // "/?u=<link>" (the browser extension, a bookmark) fills the field; the person still presses the button
+  const given = linkFromQuery(useLocation().search);
+  const [url, setUrl] = useState(given);
+  const [mode, setMode] = useState<'link' | 'email'>('link');
+  const [email, setEmail] = useState('');
+  const [links, setLinks] = useState<EmailLink[] | null>(null);
   const [deep, setDeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const demos = useQuery({ queryKey: ['demos'], queryFn: getDemos, staleTime: Infinity });
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const start = async (target: string) => {
     setError('');
     setBusy(true);
     try {
-      const { id, key } = await startTask(url, deep);
+      const { id, key } = await startTask(target, deep);
       if (!isTaskId(id) || !/^[A-Za-z0-9_-]{20,100}$/.test(key)) throw new ApiError(500, 'server', T.serverError);
       navigate({ pathname: `/r/${id}`, hash: `k=${key}` });
     } catch (err) {
@@ -29,6 +33,7 @@ export function Home() {
       setBusy(false);
     }
   };
+  const submit = (e: React.FormEvent) => { e.preventDefault(); void start(url); };
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-fg">
@@ -47,7 +52,50 @@ export function Home() {
           <h1 id="hero" className="max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl">{T.heroTitle}</h1>
           <p className="max-w-2xl text-lg leading-relaxed text-muted">{T.heroText}</p>
 
-          <form className="mt-3 flex w-full max-w-3xl flex-col gap-2.5 text-left" onSubmit={submit} noValidate>
+          <div role="tablist" aria-label={T.modeLabel} className="mt-3 inline-flex rounded-xl border border-line bg-surface p-1">
+            {(['link', 'email'] as const).map((m) => (
+              <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(''); }}
+                className={`h-9 rounded-lg px-4 text-[15px] ${mode === m ? 'bg-accent text-white' : 'text-muted hover:text-fg'}`}>
+                {m === 'link' ? T.modeLink : T.modeEmail}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'email' && (
+            <div className="flex w-full max-w-3xl flex-col gap-2.5 text-left">
+              <label htmlFor="email" className="text-sm font-semibold text-muted">{T.emailLabel}</label>
+              <textarea id="email" value={email} onChange={(e) => { setEmail(e.target.value); setLinks(null); }} rows={8} maxLength={300_000}
+                spellCheck={false} placeholder={T.emailPlaceholder}
+                className="min-h-40 w-full rounded-xl border border-line-strong bg-surface p-4 font-mono text-sm text-fg outline-none placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/25" />
+              <p className="text-sm text-faint">{T.emailPrivacy}</p>
+              <button type="button" className={`${btnPrimary} self-start`} disabled={!email.trim()} onClick={() => setLinks(linksFromEmail(email))}>{T.emailFind}</button>
+              {links !== null && (links.length === 0 ? <p className="text-muted">{T.emailNone}</p> : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[15px] text-muted">{T.emailFound(links.length)}</p>
+                  <ul aria-label={T.emailFound(links.length)} className="flex flex-col gap-2">
+                    {links.map((l) => (
+                      <li key={l.url} className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3">
+                        <div className="flex min-w-0 flex-[999_1_320px] flex-col gap-1">
+                          <span className="font-mono text-[15px] font-semibold [overflow-wrap:anywhere]">{l.host}</span>
+                          <span className="font-mono text-xs text-faint [overflow-wrap:anywhere]">{l.url.length > 140 ? `${l.url.slice(0, 140)}…` : l.url}</span>
+                          {l.shown && <span className="text-sm text-danger">{T.emailShown(l.shown)}</span>}
+                          {l.wrapper && <span className="text-sm text-muted">{T.emailWrapped(l.wrapper)}</span>}
+                        </div>
+                        <button type="button" className={`${btnPrimary} flex-[1_1_auto]`} disabled={busy} onClick={() => void start(l.url)}>{busy ? T.checking : T.emailCheck}</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              <label className="flex items-start gap-2.5 text-[15px]">
+                <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-1 size-4 accent-[var(--zs-accent)]" />
+                <span><span className="font-semibold">{T.deepLabel}</span><br /><span className="text-sm text-faint">{T.deepHint}</span></span>
+              </label>
+              {error && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-2.5 text-[15px] text-danger">{error}</p>}
+            </div>
+          )}
+
+          {mode === 'link' && <form className="flex w-full max-w-3xl flex-col gap-2.5 text-left" onSubmit={submit} noValidate>
             <label htmlFor="url" className="text-sm font-semibold text-muted">{T.inputLabel}</label>
             <div className="flex flex-wrap gap-2.5">
               <input
@@ -65,9 +113,9 @@ export function Home() {
               <span><span className="font-semibold">{T.deepLabel}</span><br /><span className="text-sm text-faint">{T.deepHint}</span></span>
             </label>
             {error && <p id="url-error" role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-2.5 text-[15px] text-danger">{error}</p>}
-          </form>
+          </form>}
 
-          {(demos.data?.demos.length ?? 0) > 0 && (
+          {mode === 'link' && (demos.data?.demos.length ?? 0) > 0 && (
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-sm text-faint">{T.tryTitle}</span>
               {demos.data!.demos.map((d) => (
