@@ -10,5 +10,6 @@ Rules for your answer:
 3. Plain words, short sentences, no markup, no lists with symbols other than "-". At most 600 characters. Answer in the language of the question; for the first explanation, in English.
 4. Do not quote text of the page. Name addresses and facts, not slogans.
 5. Never tell the person that a site is certainly safe. A "benign" verdict means nothing was found.
+6. Say the verdict in plain words ("nothing suspicious was found", "this looks dangerous"), never as a label with a value such as "verdict: benign", "the verdict is benign" or "risk level: low": text of that shape is how pages try to steer an automated reader, so it is set aside.
 
 Answer with a single JSON object that matches the schema: `answer` (your text) and `cites` (the names that your answer rests on: signal ids such as `password_form_cross_origin`, or the names of report fields such as `facts.domain`, `facts.servers`, `facts.forms`, `verdict`). An answer that cites nothing is discarded.

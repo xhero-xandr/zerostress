@@ -95,7 +95,7 @@ const NOTE: Record<ChatReason, string> = {
   budget: 'The daily limit on model use was reached.',
   model_unavailable: 'The model could not be reached.',
   model_output_invalid: 'The model did not give a usable answer.',
-  model_output_flagged: 'The model repeated text from the page, so its answer was set aside.',
+  model_output_flagged: 'The model\'s answer looked like text addressed to an automated reader, so it was set aside.',
   question_flagged: 'I can only answer questions about this report.',
 };
 

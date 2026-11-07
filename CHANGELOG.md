@@ -30,6 +30,7 @@ The agent in the browser, and releases.
 
 ### Fixed
 - A report blamed the page for text addressed to AI assistants when only the model's own answer had tripped the detectors; the verdict still comes from the rules alone then, but the notice says what happened.
+- The explanation of a benign report was mostly our fixed text: the model wrote "the verdict is benign", which the detectors set aside (3 of 4 answers on a real report); both prompts now ask for the verdict in plain words (0 of 4).
 - A question typed into the panel while a check was still running was silently dropped (and so was a second link); the question is now answered after the verdict's explanation, and a second link is told to wait.
 - A link right-clicked into the panel with "let the agent act" ticked ran a quick check instead of a deep one.
 - After Cloudflare's "malicious" raised a verdict, the explanation still said the page had not been read; it is now asked again, and both the model and the plain explanation are told why.
