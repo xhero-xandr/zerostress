@@ -40,12 +40,26 @@ const login = () => realResult(lines('./fixtures/login.ndjson'), true);
 
 // ---- the public view ---------------------------------------------------------------------------------------------------------
 
+test('public: the page is blamed for an injection only when the detectors fired on what the page gave', async () => {
+  const r = await injection();
+  const f = (place: string) => ({ ...r.hooks.findings[0]!, place });
+  const source = (hooks: unknown) => publicReport({ ...r, hooks } as TaskResult).injection_source;
+  assert.equal(source({ ...r.hooks, triggered: false, findings: [] }), null);
+  assert.equal(source({ ...r.hooks, triggered: true, findings: [f('model')] }), 'answer');
+  assert.equal(source({ ...r.hooks, triggered: true, findings: [f('model'), f('model')] }), 'answer');
+  assert.equal(source({ ...r.hooks, triggered: true, findings: [f('model'), f('dossier')] }), 'page', 'any finding of the page counts');
+  assert.equal(source({ ...r.hooks, triggered: true, findings: [f('page.text'), f('model')] }), 'page');
+  assert.equal(source({ ...r.hooks, triggered: true, findings: [] }), 'page', 'fired without a finding: the page, as before');
+  assert.equal(source({ ...r.hooks, triggered: true, findings: [{ ...f('model'), place: 'Model' }] }), 'page', 'exactly the place model');
+});
+
 test('public: the page that addressed the model: the fact is told, the rule and the place are not', async () => {
   const r = await injection();
   assert.ok(r.hooks.findings.length > 0);
   const pub = publicReport(r);
   const text = JSON.stringify(pub);
   assert.equal(pub.injection_attempt, true);
+  assert.equal(pub.injection_source, 'page');
   assert.equal(pub.mode, 'rules_only');
   assert.equal(pub.mode_reason, 'hooks_fired');
   assert.equal(pub.mode_text, MODE_TEXT.hooks_fired);
@@ -202,6 +216,7 @@ const SAFE: Record<string, RegExp> = {
   mode: /^(rules_only|text|vision)$/,
   mode_reason: /^[a-z_]{1,40}$/,
   mode_text: /^[A-Z][^<>]{1,300}$/,
+  injection_source: /^(page|answer)$/,
   'signals[].id': /^[a-z_]{1,40}$/,
   'signals[].level': /^(info|low|medium|high)$/,
   'facts.forms[].asks[]': /^(password|card_number|card_security|card_expiry|one_time_code|id_number|birth_date|email|phone|address|name)$/,

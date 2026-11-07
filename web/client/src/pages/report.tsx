@@ -4,7 +4,7 @@ import { DropdownMenu } from 'radix-ui';
 import { useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { getReport, reportJsonUrl, type TaskStatus } from '../api.ts';
-import { fmtTime } from '../logic.ts';
+import { fmtTime, injectionText } from '../logic.ts';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary, Card, Notice, Page } from '../ui.tsx';
 import { AgentLog } from './agent-log.tsx';
@@ -74,7 +74,7 @@ export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
         </div>
       </section>
 
-      {r.injection_attempt && tab !== 'security' && <Notice>{T.injection}</Notice>}
+      {r.injection_attempt && tab !== 'security' && <Notice>{injectionText(r)}</Notice>}
 
       <nav aria-label={T.tabsLabel} className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (

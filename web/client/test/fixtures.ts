@@ -23,6 +23,7 @@ export function hostile(over: Partial<PublicReport> = {}, facts: Partial<PublicR
     mode_reason: null,
     mode_text: null,
     injection_attempt: false,
+    injection_source: null,
     signals: [{ id: 'password_form_cross_origin', level: 'high', text: `Password goes to ${EVIL}` }],
     summary: `Summary ${EVIL}`,
     reasons: [{ claim: `Claim ${EVIL}`, evidence: [EVIL] }],

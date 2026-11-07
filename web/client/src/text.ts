@@ -97,6 +97,7 @@ export const T = {
   rows: { title: 'Page title', host: 'Final site', domain: 'Domain', redirects: 'Redirects', forms: 'Forms', cert: 'Certificates', site: 'Site', issuer: 'Issued by', validUntil: 'Valid until', blocked: 'Blocked requests', hidden: 'Hidden text', popups: 'Extra windows', dialogs: 'Dialog boxes', downloads: 'Download offers', requests: 'Requests', otherSites: 'Other sites', registered: 'Registered' },
   sumLine: (sites: number, requests: number) => `This page called ${plural(sites, 'other site', 'other sites')} and made ${plural(requests, 'request', 'requests')} while loading.`,
   injection: 'This page contains text addressed to AI assistants. We ignored it and judged the page by fixed rules only.',
+  injectionAnswer: 'The model\'s answer about this page looked like text addressed to AI assistants, so we set it aside and judged the page by fixed rules only. Nothing like it was found on the page itself.',
 
   screenshotTitle: 'What the browser saw',
   screenshotNote: 'The screenshot is evidence, not a live page: nothing on it can run in your browser.',

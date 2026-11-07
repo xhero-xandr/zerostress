@@ -71,7 +71,7 @@ export const MODE_TEXT: Readonly<Record<string, string>> = {
   budget: 'The daily limit on model use was reached. The verdict comes from fixed rules.',
   model_unavailable: 'The model could not be reached. The verdict comes from fixed rules.',
   model_output_invalid: 'The model did not give a usable answer. The verdict comes from fixed rules.',
-  model_output_flagged: 'The model repeated text from the page, so its opinion was set aside. The verdict comes from fixed rules.',
+  model_output_flagged: 'The model\'s answer looked like text addressed to an automated reader, so it was set aside. The verdict comes from fixed rules.',
 };
 
 export interface OwnerReport extends PublicReport {
@@ -144,6 +144,14 @@ function publicFacts(v: unknown): PublicFacts {
 
 const SCAN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/** Only the model's answer tripped the detectors: every finding is in place 'model'. Anything else counts as the page's. */
+function injectionSource(hooks: unknown): PublicReport['injection_source'] {
+  const h = o(hooks);
+  if (h.triggered !== true) return null;
+  const findings = list<Record<string, unknown>>(h.findings, 1000);
+  return findings.length > 0 && findings.every((f) => o(f).place === 'model') ? 'answer' : 'page';
+}
+
 function secondOpinion(x: unknown): PublicReport['second_opinion'] {
   const so = o(x);
   if (typeof so.uuid !== 'string' || !SCAN_ID.test(so.uuid)) return null;
@@ -181,6 +189,7 @@ export function publicReport(r: TaskResult): PublicReport {
     second_opinion: secondOpinion(r.second_opinion),
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,
+    injection_source: injectionSource(r.hooks),
     signals: list<Record<string, unknown>>(o(a.rules).signals, 40).map((x) => ({ id: s(x.id, 40), level: s(x.level, 10), text: s(x.text, 300) })),
     summary: typeof a.summary === 'string' ? a.summary.slice(0, 400) : null,
     reasons: list<Record<string, unknown>>(a.reasons, 8).map((x) => ({ claim: s(x.claim, 200), evidence: list<unknown>(x.evidence, 6).map((e) => s(e, 80)) })),

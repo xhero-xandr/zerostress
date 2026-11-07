@@ -1,8 +1,9 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
 import { LOG_CODES } from '../../agent/agent-log.ts';
-import { agentLines, asLogEntry, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
+import { agentLines, asLogEntry, injectionText, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
 import { hostile, unread } from './fixtures.ts';
+import { T } from '../src/text.ts';
 
 describe('the sentence under the verdict', () => {
   test('a bot-check wall, an error answer and an empty page are told apart, and none is "no threat found"', () => {
@@ -147,4 +148,12 @@ describe('links in an email', () => {
     expect(linkFromQuery('?u=javascript:alert(1)')).toBe('');
     expect(linkFromQuery('?x=1')).toBe('');
   });
+});
+
+test('injection notice: the page is blamed only when the detectors fired on it', () => {
+  expect(injectionText({ injection_source: 'page' })).toBe(T.injection);
+  expect(injectionText({ injection_source: null })).toBe(T.injection);
+  expect(injectionText({ injection_source: 'answer' })).toBe(T.injectionAnswer);
+  expect(T.injectionAnswer).not.toBe(T.injection);
+  expect(T.injectionAnswer).toMatch(/Nothing like it was found on the page itself/);
 });

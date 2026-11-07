@@ -59,6 +59,7 @@ test('the model repeating the page\'s instructions ends the model\'s part for th
   assert.equal(r.hooks.triggered, true);
   assert.ok(r.hooks.findings.some((f) => f.place === 'model'), 'the finding is kept with the run');
   assert.equal(publicReport(r).injection_attempt, true, 'the report says so, and the chat then stays without the model');
+  assert.equal(publicReport(r).injection_source, 'answer', 'and does not blame the page for words of the model');
 });
 
 test('hooks that fire while the model is thinking stop the action it proposes', async () => {

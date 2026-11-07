@@ -67,6 +67,11 @@ export interface PublicReport {
   mode_text: string | null;
   /** the page tried to address an automated reader (and nothing more is said about it) */
   injection_attempt: boolean;
+  /**
+   * where the detectors fired: in what the page gave us, or only in the model's own answer (the page itself then showed
+   * no such text, and is not to be blamed for it); null when they did not fire
+   */
+  injection_source: 'page' | 'answer' | null;
   signals: Array<{ id: string; level: string; text: string }>;
   summary: string | null;
   reasons: Array<{ claim: string; evidence: string[] }>;

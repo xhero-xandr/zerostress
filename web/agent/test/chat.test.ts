@@ -9,7 +9,7 @@ import type { PublicReport } from '../report.ts';
 
 const report = (over: Partial<PublicReport> = {}): PublicReport => ({
   schema: 1, run_id: '11111111-2222-4333-8444-555555555555', url: 'https://shop.example/', verdict: 'suspicious', confidence: 0.6,
-  status: { state: 'done', failure: null }, mode: 'rules_only', mode_reason: null, mode_text: null, injection_attempt: false,
+  status: { state: 'done', failure: null }, mode: 'rules_only', mode_reason: null, mode_text: null, injection_attempt: false, injection_source: null,
   signals: [
     { id: 'young_domain', level: 'medium', text: 'The site\'s domain was registered 3 days ago.' },
     { id: 'password_form_cross_origin', level: 'high', text: 'A password form sends the password to another site.' },

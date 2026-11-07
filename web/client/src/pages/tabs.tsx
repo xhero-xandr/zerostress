@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { shotUrl, type TaskStatus } from '../api.ts';
-import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
+import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, injectionText, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
 import { T } from '../text.ts';
 import { SecondOpinion } from './second-opinion.tsx';
 import { Card, Fact, Facts, LevelPill, Notice, TableWrap, Td, Th, VERDICT_STYLE } from '../ui.tsx';
@@ -202,7 +202,7 @@ export function Security({ r }: R) {
           </>
         ) : <p className="text-muted">{T.formNone}</p>}
       </Card>
-      {r.injection_attempt && <Notice>{T.injection}</Notice>}
+      {r.injection_attempt && <Notice>{injectionText(r)}</Notice>}
     </div>
   );
 }

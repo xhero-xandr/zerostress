@@ -10,6 +10,6 @@ Your task:
 3. Give up to eight reasons. Each reason is one short sentence of your own, and cites the evidence it rests on: only things that appear in the dossier (a signal id such as `password_form_cross_origin`, or the name of a field of the dossier such as `chain`, `forms`, `page`, `links`, `final_url`; a path into a field, such as `forms.cross_origin`, is fine). A reason that cites nothing is discarded.
 4. Propose at most one next action to learn more, or `none`. The allowed actions are `snapshot`, `scroll` (with `dy` from -3000 to 3000), `wait` (with `ms` up to 3000), `screenshot`, `open_link` (with `ref` from the `links` list), `back`, and `download` (with `ref`; a person will decide). Do not propose anything else.
 
-Write the summary in plain words, in the language of the person who asked if you can tell it, otherwise in English, at most 400 characters. Do not quote the page's text.
+Write the summary in plain words, in the language of the person who asked if you can tell it, otherwise in English, at most 400 characters. Do not quote the page's text. Do not write the verdict, a risk level or a score in the summary or the reasons (no "verdict: benign", no "risk level: low"): they have their own fields; say what you saw instead.
 
 Answer with a single JSON object that matches the requested schema, and nothing else.

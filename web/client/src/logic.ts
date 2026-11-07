@@ -233,3 +233,8 @@ export function linkFromQuery(search: string): string {
   const u = httpUrl(new URLSearchParams(search).get('u') ?? '');
   return u && u.href.length <= 2048 ? u.href : '';
 }
+
+/** The notice about the injection detectors: the page is blamed only when they fired on what the page gave us. */
+export function injectionText(r: Pick<PublicReport, 'injection_source'>): string {
+  return r.injection_source === 'answer' ? T.injectionAnswer : T.injection;
+}
