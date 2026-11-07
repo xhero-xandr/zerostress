@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ZeroStress: a sandboxed agent for suspicious links",
   "short_name": "ZeroStress",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Right-click a suspicious link: an agent opens it in a disposable microVM at zerostress.space, tells you what it sees, and asks you before anything risky.",
   "permissions": [
     "contextMenus",
@@ -28,12 +28,9 @@
     "128": "icons/icon128.png"
   },
   "content_security_policy": {
-    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://zerostress.space; connect-src https://zerostress.space"
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; frame-src https://zerostress.space"
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwIpRDKhJ4E7B3EXVwXapwY5cHwqsenp2AZcttShASnvQWirI4wYrIP48fifrvh9I5gUxE7hrOs+kaJQ07wfYIMfYlAm621S2IgWLnnl60COV7uv3yVJqo+kqx6hhSiMYjztpnviRIDSueXJm8RQsAx/XTAvRE8mAYrxwLMygsDYFJ8poURHdeDEW4wCM82KrwIBmAp3H83QfKXrphCqEuAadWXCw6+Gqk+yzVUyn+ktwapNjwPekxEou8SB5VjuOM6PJrqhTOenNLGhXBCZLb1iJ/AdqsE0WWdv/xVP3u8QCcuflAJK4ikG4SqQTcK0hASCQWh/pDdVQhdKVv98lhwIDAQAB",
-  "host_permissions": [
-    "https://zerostress.space/*"
-  ],
   "side_panel": {
     "default_path": "sidepanel.html"
   }

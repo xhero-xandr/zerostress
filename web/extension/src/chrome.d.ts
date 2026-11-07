@@ -17,8 +17,4 @@ declare namespace chrome {
   namespace storage {
     const session: { set(v: Record<string, unknown>): Promise<void>; get(k: string): Promise<Record<string, unknown>>; remove(k: string): Promise<void> };
   }
-  namespace tabs {
-    function create(p: { url: string }): Promise<unknown>;
-    function query(q: { active: boolean; currentWindow: boolean }): Promise<Array<{ url?: string }>>;
-  }
 }

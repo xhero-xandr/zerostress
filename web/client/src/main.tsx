@@ -5,6 +5,7 @@ import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import './index.css';
 import { Home } from './pages/home.tsx';
+import { Panel } from './pages/panel.tsx';
 import { NotFound, Task } from './pages/task.tsx';
 import { initTheme } from './theme.ts';
 
@@ -12,6 +13,7 @@ initTheme();
 
 const router = createBrowserRouter([
   { path: '/', Component: Home },
+  { path: '/panel', Component: Panel },
   { path: '/r/:id/:tab?', Component: Task },
   { path: '*', Component: NotFound },
 ]);

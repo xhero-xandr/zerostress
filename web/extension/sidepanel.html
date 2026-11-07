@@ -7,17 +7,7 @@
   <script type="module" src="./src/sidepanel.ts"></script>
 </head>
 <body>
-  <header>
-    <img src="/icons/icon48.png" alt="" width="22" height="22">
-    <div><strong>ZeroStress agent</strong><span>Every link opens in a disposable microVM, never here.</span></div>
-  </header>
-  <main id="chat" aria-live="polite"></main>
-  <form id="form">
-    <label class="deep"><input type="checkbox" id="deep"> Let the agent act on the page (you approve anything risky)</label>
-    <div class="row">
-      <input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a link to check…" aria-label="Message to the agent">
-      <button id="send" type="submit">Check</button>
-    </div>
-  </form>
+  <!-- the agent itself is a page of the site: it updates with every deploy, the extension stays as it is -->
+  <iframe id="agent" src="https://zerostress.space/panel" title="ZeroStress agent"></iframe>
 </body>
 </html>

@@ -19,17 +19,20 @@ test('a link to ZeroStress itself needs no check', () => {
 
 const manifest = JSON.parse(readFileSync(new URL('../public/manifest.json', import.meta.url), 'utf8'));
 
-test('the extension may reach ZeroStress only, and reads no page', () => {
+test('the extension frames ZeroStress only, and reads no page', () => {
   assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'contextMenus', 'sidePanel', 'storage']);
-  assert.deepEqual(manifest.host_permissions, ['https://zerostress.space/*']);
+  assert.equal(manifest.host_permissions, undefined, 'no access to any site: the panel is a frame, not a client');
   assert.equal(manifest.content_scripts, undefined);
   assert.equal(manifest.manifest_version, 3);
-  assert.match(manifest.content_security_policy.extension_pages, /connect-src https:\/\/zerostress\.space(;|$)/);
+  assert.match(manifest.content_security_policy.extension_pages, /frame-src https:\/\/zerostress\.space(;|$)/);
+  assert.doesNotMatch(manifest.content_security_policy.extension_pages, /connect-src|unsafe/);
 });
 
-test('its id is the one the server lets in (derived from the public key in the manifest)', () => {
+test('its id is the one the server lets frame /panel and the panel takes links from (derived from the public key)', () => {
   const hex = createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex').slice(0, 32);
   const id = [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
   const server = readFileSync(new URL('../../server/app.ts', import.meta.url), 'utf8');
   assert.match(server, new RegExp(`EXTENSION_ORIGIN = 'chrome-extension://${id}'`));
+  const client = readFileSync(new URL('../../client/src/extension.ts', import.meta.url), 'utf8');
+  assert.match(client, new RegExp(`EXTENSION_ORIGIN = 'chrome-extension://${id}'`));
 });

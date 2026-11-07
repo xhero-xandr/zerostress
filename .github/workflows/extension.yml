@@ -1,0 +1,51 @@
+# The browser extension's shell, built on every push to main that touches it and published as the release "extension"
+# (one zip, replaced each time). The agent itself is the page /panel of the site and updates with every deploy; this
+# shell changes only when its manifest, menu or frame does.
+name: extension
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/extension/**', 'web/client/**', '.github/workflows/extension.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extension
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24.22.2"
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --ignore-scripts
+        working-directory: web/client
+      - run: node --test extension/test/*.mjs
+        working-directory: web
+      - run: npm run build:extension
+        working-directory: web/client
+      - name: zip
+        run: |
+          version=$(node -p "require('./web/extension/public/manifest.json').version")
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          (cd build/extension && zip -qr "$GITHUB_WORKSPACE/zerostress-extension.zip" .)
+          sha256sum zerostress-extension.zip | tee zerostress-extension.zip.sha256
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="ZeroStress browser extension $VERSION, built from ${GITHUB_SHA::7}. Unzip, then chrome://extensions → Developer mode → Load unpacked → the unzipped folder. The agent inside it is https://zerostress.space/panel and updates with the site; replace this folder only when the version changes."
+          gh release view extension >/dev/null 2>&1 || gh release create extension --title "Browser extension" --notes "$notes" --latest=false
+          gh release edit extension --notes "$notes"
+          gh release upload extension zerostress-extension.zip zerostress-extension.zip.sha256 --clobber
