@@ -26,6 +26,9 @@ func run(ctx context.Context, timeout time.Duration, name string, args ...string
 	defer cancel()
 	c := exec.CommandContext(ctx, name, args...)
 	c.Env = cleanEnv
+	// The context kills only the direct child; a grandchild (sudo's command, a forking shell) keeps the output pipes
+	// open and Wait would block until it exits. WaitDelay makes the timeout hold anyway.
+	c.WaitDelay = time.Second
 	var out, errb bytes.Buffer
 	c.Stdout = &out
 	c.Stderr = &errb

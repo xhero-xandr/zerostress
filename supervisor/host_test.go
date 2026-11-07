@@ -903,7 +903,7 @@ func TestHost_RunUsesACleanEnvironmentAndReportsStderr(t *testing.T) {
 		t.Errorf("failure = %v, want the stderr text", err)
 	}
 	start := time.Now()
-	if _, err = run(hostTCtx(t, 10*time.Second), 200*time.Millisecond, "/bin/sh", "-c", "sleep 5"); err == nil {
+	if _, err = run(hostTCtx(t, 10*time.Second), 200*time.Millisecond, "/bin/sh", "-c", "sleep 5; true"); err == nil {
 		t.Error("a command over its timeout must fail")
 	}
 	if time.Since(start) > 3*time.Second {
