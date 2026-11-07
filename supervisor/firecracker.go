@@ -181,20 +181,32 @@ func launchFirecracker(ctx context.Context, cfg Config, o StartOptions) (*firecr
 	if _, err := os.Stat(vm.apiSock); err != nil || vm.isDead() {
 		return fail(newRunError(ReasonFcAPI, "firecracker did not start: "+clip(tail(vm.Console(), 200), 200)))
 	}
-	steps := []struct{ path, body string }{
-		{"/machine-config", fmt.Sprintf(`{"vcpu_count":%d,"mem_size_mib":%d}`, o.VCPU, o.MemMiB)},
-		{"/boot-source", fmt.Sprintf(`{"kernel_image_path":%q,"boot_args":%q}`, cfg.KernelPath, bootArgs(o.Slot))},
-		{"/drives/rootfs", fmt.Sprintf(`{"drive_id":"rootfs","path_on_host":%q,"is_root_device":true,"is_read_only":false}`, filepath.Join(o.RunDir, "rootfs.ext4"))},
-		{"/network-interfaces/net1", fmt.Sprintf(`{"iface_id":"net1","guest_mac":%q,"host_dev_name":"zstap%d"}`, guestMAC(o.Slot), o.Slot)},
-		{"/vsock", fmt.Sprintf(`{"guest_cid":3,"uds_path":%q}`, vm.vsockUDS)},
-		{"/actions", `{"action_type":"InstanceStart"}`},
-	}
-	for _, st := range steps {
+	for _, st := range vmConfig(cfg, o, vm.vsockUDS) {
 		if err := fcPut(ctx, vm.apiSock, st.path, st.body); err != nil {
 			return fail(err)
 		}
 	}
 	return vm, nil
+}
+
+// netTxLimit caps what a guest sends, in Firecracker's virtio-net device itself: a guest taken over by a page could
+// otherwise flood or spray from the host's address for the whole run (docs/containment.md, rule 3). A page sends
+// little (requests, acknowledgements); downloads come in and are not capped here. 2 MiB/s after an 8 MiB first burst,
+// and 3000 frames/s (the acknowledgements of a fast download stay well below it).
+const netTxLimit = `{"bandwidth":{"size":2097152,"one_time_burst":8388608,"refill_time":1000},"ops":{"size":3000,"refill_time":1000}}`
+
+type fcStep struct{ path, body string }
+
+// vmConfig is the whole configuration of one microVM, in the order the API takes it.
+func vmConfig(cfg Config, o StartOptions, vsockUDS string) []fcStep {
+	return []fcStep{
+		{"/machine-config", fmt.Sprintf(`{"vcpu_count":%d,"mem_size_mib":%d}`, o.VCPU, o.MemMiB)},
+		{"/boot-source", fmt.Sprintf(`{"kernel_image_path":%q,"boot_args":%q}`, cfg.KernelPath, bootArgs(o.Slot))},
+		{"/drives/rootfs", fmt.Sprintf(`{"drive_id":"rootfs","path_on_host":%q,"is_root_device":true,"is_read_only":false}`, filepath.Join(o.RunDir, "rootfs.ext4"))},
+		{"/network-interfaces/net1", fmt.Sprintf(`{"iface_id":"net1","guest_mac":%q,"host_dev_name":"zstap%d","tx_rate_limiter":%s}`, guestMAC(o.Slot), o.Slot, netTxLimit)},
+		{"/vsock", fmt.Sprintf(`{"guest_cid":3,"uds_path":%q}`, vsockUDS)},
+		{"/actions", `{"action_type":"InstanceStart"}`},
+	}
 }
 
 func tail(s string, n int) string {

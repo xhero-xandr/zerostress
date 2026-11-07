@@ -55,7 +55,7 @@ The hackathon's own containment checklist, the way this project meets it:
 |---|---|
 | Process isolation | One Firecracker micro-VM per task; Chromium runs as an unprivileged guest user with its own sandbox enabled (no `--no-sandbox`) |
 | Secret hygiene | API keys live only in the host's service environment; never copied into the guest image or a micro-VM |
-| Resource limits | vCPU, memory, task time, and download size are capped per run |
+| Resource limits | vCPU, memory, task time, and download size are capped per run; so is what a guest sends (2 MiB/s in Firecracker's network device) and how fast it opens new connections; mail ports are closed |
 | Lifecycle | A clean disk image per task; the micro-VM is torn down after every run, including on error or timeout |
 
 Verified from *inside* a real guest, as the same unprivileged user the browser runs as (`deploy/test/containment-e2e.sh`): no write access outside the task, no secrets on disk or in any readable environment, no shared mounts, no route to the host, the cloud metadata address, or the host's gateway.
