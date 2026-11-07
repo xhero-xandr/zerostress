@@ -744,9 +744,17 @@ test('second opinion: only the owner asks, and a new public scan needs a yes', a
 
 test('second opinion: Cloudflare\'s "malicious" raises the verdict', async () => {
   const s = scanner({ ok: true, opinion: { ...OPINION, malicious: true }, screenshot: null });
-  const r = rig({ urlscan: s.urlscan });
+  const t = talker({ source: 'rules', reason: 'page_not_read' });
+  const r = rig({ urlscan: s.urlscan, chat: t.chat });
   const j = await walledTask(r);
+  const explain = () => r.app.request(`/api/reports/${j.id}/chat`, { method: 'POST', headers: JSONH, body: '{"kind":"explain"}' });
+  assert.equal((await explain()).status, 200);
+  assert.equal((await explain()).status, 200);
+  assert.equal(t.seen.length, 1, 'the explanation is kept');
   assert.equal((await ask(r, j.id, j.key)).status, 200);
+  assert.equal((await explain()).status, 200);
+  assert.equal(t.seen.length, 2, 'and asked again once the report has changed');
+  assert.equal((t.seen[1]!.report as { verdict: string }).verdict, 'malicious');
   const rep = await (await r.app.request(`/r/${j.id}/report.json`)).json() as { verdict: string; second_opinion: { malicious: boolean; screenshot: boolean } };
   assert.equal(rep.verdict, 'malicious');
   assert.equal(rep.second_opinion.screenshot, false);

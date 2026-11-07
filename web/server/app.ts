@@ -425,6 +425,9 @@ export function createApp(deps: AppDeps): Hono {
         cleanEntry({ t: at(), code: 'second_opinion', d: { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() } }),
       ]) if (entry && t.result.log.length < MAX_LOG) t.result.log.push(entry);
       deps.store.save(t);
+      // the report changed (its verdict may have been raised): what was said about it before no longer holds
+      explained.delete(t.id);
+      for (const k of talks.keys()) if (k.startsWith(`${t.id}|`)) talks.delete(k);
       return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
     } finally {
       asking.delete(t.id);

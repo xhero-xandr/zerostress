@@ -65,7 +65,7 @@ export function cleanAnswer(raw: string): string {
 
 /** The names an answer may cite: the report's signal ids and the top-level names of its parts. */
 function citable(r: PublicReport): Set<string> {
-  const ids = new Set<string>(['verdict', 'summary', 'reasons', 'signals', 'mode', 'confidence']);
+  const ids = new Set<string>(['verdict', 'summary', 'reasons', 'signals', 'mode', 'confidence', 'second_opinion']);
   for (const s of r.signals) ids.add(s.id);
   for (const k of Object.keys(r.facts)) ids.add(`facts.${k}`);
   return ids;
@@ -78,9 +78,14 @@ export function validCite(c: string, allowed: ReadonlySet<string>): boolean {
   return allowed.has(parts[0] === 'facts' ? parts.slice(0, 2).join('.') : parts[0]!);
 }
 
-/** The report as the model sees it: no run id, no artifact names, no owner details. */
+/**
+ * The report as the model sees it: no run id, no artifact names, no owner details. Of Cloudflare's second opinion only
+ * the fields of a fixed shape: its "malicious" may be why the verdict was raised; the page's title is left out.
+ */
 function modelView(r: PublicReport): Record<string, unknown> {
-  return { verdict: r.verdict, confidence: r.confidence, mode: r.mode, summary: r.summary, signals: r.signals, reasons: r.reasons, facts: r.facts };
+  const so = r.second_opinion;
+  const second = so ? { by: 'Cloudflare URL Scanner', malicious: so.malicious, final_host: so.final_host, status: so.status, scanned_at: so.scanned_at } : null;
+  return { verdict: r.verdict, confidence: r.confidence, mode: r.mode, summary: r.summary, signals: r.signals, reasons: r.reasons, facts: r.facts, second_opinion: second };
 }
 
 const NOTE: Record<ChatReason, string> = {

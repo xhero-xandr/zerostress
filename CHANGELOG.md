@@ -38,4 +38,5 @@ The first tagged release: everything built for the Vultr: Agent Rush hackathon u
 ### Fixed
 - A report blamed the page for text addressed to AI assistants when only the model's own answer had tripped the detectors; the verdict still comes from the rules alone then, but the notice says what happened.
 - A link right-clicked into the panel with "let the agent act" ticked ran a quick check instead of a deep one.
+- After Cloudflare's "malicious" raised a verdict, the explanation still said the page had not been read; it is now asked again, and both the model and the plain explanation are told why.
 - A link Cloudflare will not scan was answered with "try again shortly"; a full agent log no longer drops the second opinion's entries from the report.

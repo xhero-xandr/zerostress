@@ -27,8 +27,9 @@ export function explainPlain(r: PublicReport): string {
     .sort((a, b) => (RANK[b.level] ?? 0) - (RANK[a.level] ?? 0))
     .slice(0, MAX_REASONS);
   const lines = [HEAD[verdict]!];
+  if (r.second_opinion?.malicious === true) lines.push('', 'Cloudflare\'s URL Scanner, which got past the wall our sandbox met, marks this page as malicious.');
   if (found.length) lines.push('', 'What the checks found:', ...found.map((s) => `- ${s.text}`));
-  else if (verdict !== 'unknown') lines.push('', 'The checks found nothing unusual.');
+  else if (verdict !== 'unknown' && r.second_opinion?.malicious !== true) lines.push('', 'The checks found nothing unusual.');
   lines.push('', ADVICE[verdict]!);
   return lines.join('\n');
 }
