@@ -13,6 +13,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 ## [Unreleased]
 
 ### Added
+- Email checks, in the browser: the source of an email ("Show original") is read as MIME (base64, quoted-printable, charsets, attachments, forwarded emails), and the email itself is checked: what the receiving server recorded about the sender (SPF, DKIM, DMARC), replies to another domain, a sender name that shows another address, risky attachments (programs, web pages, macros, archives), links whose text shows another site. The side panel takes a pasted email with its line breaks.
 - A privacy policy and terms of use, at `/privacy` and `/terms` (from `docs/privacy.md` and `docs/terms.md`), linked from the footer.
 - A safe demo page, `/demo/shared-file`, that offers a harmless text file: a deep check of it has a download to ask the owner about (Pattern B on camera).
 

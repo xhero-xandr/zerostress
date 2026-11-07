@@ -3,7 +3,9 @@ import { Copy, Download, Monitor, PanelRight, ScanSearch, ShieldHalf } from 'luc
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startTask } from '../api.ts';
-import { isTaskId, linkFromQuery, linksFromEmail, mailboxOf, type EmailLink } from '../logic.ts';
+import { isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
+import { readEmail, type EmailCheck } from '../email.ts';
+import { EmailFindings } from '../email-card.tsx';
 import { T } from '../text.ts';
 import { extensionZip, RELEASE, releasePage } from '../version.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
@@ -16,7 +18,7 @@ export function Home() {
   const [url, setUrl] = useState(given);
   const [mode, setMode] = useState<'link' | 'email'>('link');
   const [email, setEmail] = useState('');
-  const [links, setLinks] = useState<EmailLink[] | null>(null);
+  const [mail, setMail] = useState<EmailCheck | null>(null);
   const [deep, setDeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -68,16 +70,17 @@ export function Home() {
           {mode === 'email' && (
             <div className="flex w-full max-w-3xl flex-col gap-2.5 text-left">
               <label htmlFor="email" className="text-sm font-semibold text-muted">{T.emailLabel}</label>
-              <textarea id="email" value={email} onChange={(e) => { setEmail(e.target.value); setLinks(null); }} rows={8} maxLength={300_000}
+              <textarea id="email" value={email} onChange={(e) => { setEmail(e.target.value); setMail(null); }} rows={8} maxLength={300_000}
                 spellCheck={false} placeholder={T.emailPlaceholder}
                 className="min-h-40 w-full rounded-xl border border-line-strong bg-surface p-4 font-mono text-sm text-fg outline-none placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/25" />
               <p className="text-sm text-faint">{T.emailPrivacy}</p>
-              <button type="button" className={`${btnPrimary} self-start`} disabled={!email.trim()} onClick={() => setLinks(linksFromEmail(email))}>{T.emailFind}</button>
-              {links !== null && (links.length === 0 ? <p className="text-muted">{T.emailNone}</p> : (
+              <button type="button" className={`${btnPrimary} self-start`} disabled={!email.trim()} onClick={() => setMail(readEmail(email))}>{T.emailFind}</button>
+              {mail !== null && <EmailFindings mail={mail} />}
+              {mail !== null && (mail.links.length === 0 ? <p className="text-muted">{mail.source ? T.mail.noLinks : T.emailNone}</p> : (
                 <div className="flex flex-col gap-2">
-                  <p className="text-[15px] text-muted">{T.emailFound(links.length)}</p>
-                  <ul aria-label={T.emailFound(links.length)} className="flex flex-col gap-2">
-                    {links.map((l) => (
+                  <p className="text-[15px] text-muted">{T.emailFound(mail.links.length)}</p>
+                  <ul aria-label={T.emailFound(mail.links.length)} className="flex flex-col gap-2">
+                    {mail.links.map((l) => (
                       <li key={l.url} className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3">
                         <div className="flex min-w-0 flex-[999_1_320px] flex-col gap-1">
                           <span className="font-mono text-[15px] font-semibold [overflow-wrap:anywhere]">{l.host}</span>

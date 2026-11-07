@@ -157,12 +157,32 @@ test('an email pasted after a check is read here: its links are offered, nothing
   const mail = 'From: Bank <no-reply@bank.example>\nSubject: Verify now\n\nDear customer, please verify your account:\n<a href="https://paypa1-verify.test/x">https://www.paypal.com/</a>\nThanks';
   fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: mail } });
   fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
-  await waitFor(() => expect(document.body.textContent).toMatch(/I found 1 link in this email/));
+  await waitFor(() => expect(document.body.textContent).toMatch(/I found 1 link in it/));
   expect(sent.slice(before)).toEqual([]);
   expect(document.body.textContent).not.toContain('Dear customer');
   expect(document.body.textContent).toMatch(/The email shows “https:\/\/www.paypal.com\/”, but the link goes somewhere else/);
   fireEvent.click(screen.getByRole('button', { name: 'Check this link' }));
   await waitFor(() => expect(sent.filter((x) => x.url === '/api/tasks').map((x) => JSON.parse(x.body).url)).toEqual(['https://paypa1-secure.test/login', 'https://paypa1-verify.test/x']));
+});
+
+test('the source of an email ("Show original"), sent with Enter: its sender checks, warnings and hidden links are shown here, and nothing is sent', async () => {
+  await checked();
+  const before = sent.length;
+  const html = Buffer.from('<a href="https://login-phish.test/a">https://www.paypal.com/</a>').toString('base64');
+  const src = ['Authentication-Results: mx.google.com; dkim=fail; spf=fail; dmarc=fail header.from=paypal.com', 'From: PayPal <service@paypal.com>', 'Reply-To: x@elsewhere.test', 'Subject: Account on hold',
+    'MIME-Version: 1.0', 'Content-Type: text/html; charset=utf-8', 'Content-Transfer-Encoding: base64', '', html].join('\r\n');
+  const box = screen.getByLabelText('Message to the agent');
+  expect(box.tagName).toBe('TEXTAREA');
+  fireEvent.change(box, { target: { value: src } });
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await waitFor(() => expect(screen.getByRole('region', { name: 'What the email itself shows' })).toBeTruthy());
+  const card = screen.getByRole('region', { name: 'What the email itself shows' });
+  expect(card.textContent).toMatch(/SPF fail · DKIM fail · DMARC fail/);
+  expect(card.textContent).toMatch(/could not confirm that this email comes from the address it shows/);
+  expect(card.textContent).toMatch(/Replies go to x@elsewhere\.test/);
+  expect(document.body.textContent).toMatch(/I found 1 link in it/);
+  expect(document.body.textContent).toContain('https://login-phish.test/a');
+  expect(sent.slice(before)).toEqual([]);
 });
 
 test('a link into one\'s own mailbox is explained, not checked', async () => {

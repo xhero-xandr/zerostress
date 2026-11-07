@@ -198,10 +198,11 @@ function shownHost(text: string): string | null {
   return u && u.hostname.includes('.') ? u.hostname : null;
 }
 
-export function linksFromEmail(raw: string): EmailLink[] {
-  // the source of an email is often quoted-printable: soft line breaks and "=3D" for "=" inside the links
+export function linksFromEmail(raw: string, opts: { decoded?: boolean } = {}): EmailLink[] {
+  // the source of an email is often quoted-printable: soft line breaks and "=3D" for "=" inside the links (a part that
+  // email.ts already decoded is taken as it is)
   let text = raw.slice(0, MAX_EMAIL);
-  if (/=\r?\n|=3D/i.test(text)) text = text.replace(/=\r?\n/g, '').replace(/=3D/gi, '=');
+  if (!opts.decoded && /=\r?\n|=3D/i.test(text)) text = text.replace(/=\r?\n/g, '').replace(/=3D/gi, '=');
   const found: Array<{ href: string; text: string | null }> = [];
   let plain = text;
   if (/<a[\s>]/i.test(text) && typeof DOMParser !== 'undefined') {
@@ -265,13 +266,6 @@ export function mailboxOf(link: string): string | null {
   try { u = new URL(link); } catch { return null; }
   const h = u.hostname.toLowerCase();
   return MAILBOXES.find((m) => m.host.test(h) && (!m.path || m.path.test(u.pathname)))?.name ?? null;
-}
-
-/** Text pasted into the chat that reads as an email (or its source), not as a question: it has links and some length. */
-export function looksLikeEmail(text: string): boolean {
-  const t = text.trim();
-  if (linksFromEmail(t).length === 0) return false;
-  return t.length > 200 || /\n/.test(t) || /<a\s|<html|^(from|subject|received|content-type):/im.test(t) || linksFromEmail(t).length > 1;
 }
 
 /** The few facts the side panel shows under its verdict, in plain words; the full report has the rest. */

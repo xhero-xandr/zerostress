@@ -7,7 +7,9 @@ import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startTask, type Pending, type TaskStatus } from '../api.ts';
 import { EXTENSION_ORIGIN } from '../extension.ts';
-import { asLogEntry, isTaskId, linkFromQuery, linksFromEmail, logLine, logTime, looksLikeEmail, mailboxOf, panelFacts, verdictLine, type EmailLink } from '../logic.ts';
+import { asLogEntry, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
+import { looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
+import { EmailFindings } from '../email-card.tsx';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary } from '../ui.tsx';
@@ -18,7 +20,7 @@ type Item =
   | { kind: 'steps'; entries: LogEntry[] }
   | { kind: 'approval'; p: Pending; done: string | null }
   | { kind: 'verdict'; r: PublicReport; id: string; key: string; shots: TaskStatus['shots'] | null }
-  | { kind: 'email'; links: EmailLink[] }
+  | { kind: 'email'; mail: EmailCheck }
   | { kind: 'consent'; id: string; key: string };
 
 const P = T.panel;
@@ -144,8 +146,7 @@ export function Panel() {
     // a pasted email is read here and never sent: its links are offered, as on the home page
     if (!webLink(t) && looksLikeEmail(t)) {
       push({ kind: 'you', text: P.pastedEmail(t.length) });
-      const links = linksFromEmail(t);
-      if (links.length) push({ kind: 'email', links }); else say(P.emailNone);
+      push({ kind: 'email', mail: readEmail(t) });
       return;
     }
     if (webLink(t)) { void check(t); return; }
@@ -210,9 +211,10 @@ export function Panel() {
           );
           if (it.kind === 'email') return (
             <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
-              <p>{P.emailFound(it.links.length)}</p>
+              <EmailFindings mail={it.mail} compact />
+              <p className="mt-3">{it.mail.links.length ? P.emailFound(it.mail.links.length) : `${P.emailRead} ${T.mail.noLinks}`}</p>
               <ul className="mt-2 flex flex-col gap-2">
-                {it.links.map((l, j) => (
+                {it.mail.links.map((l, j) => (
                   <li key={j} className="flex flex-col gap-1 rounded-lg border border-line p-2">
                     <span className="font-mono text-[12.5px] [overflow-wrap:anywhere]">{l.url}</span>
                     {l.shown && <span className="text-[12.5px] font-semibold text-danger">{T.emailShown(l.shown)}</span>}
@@ -264,9 +266,12 @@ export function Panel() {
       <form onSubmit={submit} className="flex flex-col gap-2 border-t border-line bg-surface px-4 pt-2.5 pb-3.5">
         <label className="flex items-start gap-2 text-[12.5px] text-muted"><input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-0.5" /> {P.deep}</label>
         <div className="flex gap-2">
-          <input aria-label={P.message} value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" spellCheck={false}
+          {/* a textarea, not an input: an input drops the line breaks of a pasted email, and its source needs them */}
+          <textarea aria-label={P.message} value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" spellCheck={false}
+            rows={Math.min(6, Math.max(1, text.split('\n').length))}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
             placeholder={task.current?.report ? P.askPlaceholder : P.linkPlaceholder}
-            className="min-w-0 flex-1 rounded-xl border border-line-strong bg-canvas px-3 py-2 font-mono text-[13px] outline-none focus:border-accent" />
+            className="min-w-0 flex-1 resize-none rounded-xl border border-line-strong bg-canvas px-3 py-2 font-mono text-[13px] outline-none focus:border-accent" />
           <button type="submit" className={btnPrimary}>{task.current?.report ? P.send : P.check}</button>
         </div>
       </form>
