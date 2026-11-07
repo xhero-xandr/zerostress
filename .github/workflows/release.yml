@@ -1,0 +1,51 @@
+# A release: pushing a tag vX.Y.Z (made with ./zs release X.Y.Z) publishes a GitHub release whose notes are the version's
+# section of CHANGELOG.md, with the browser extension attached. The latest one is always at
+# https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24.22.2"
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: the tag, CHANGELOG.md and the extension agree
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          bash deploy/release.sh check "$version"
+          bash deploy/release.sh notes "$version" > release-notes.md
+      - run: npm ci --ignore-scripts
+        working-directory: web/client
+      - run: node --test extension/test/*.mjs
+        working-directory: web
+      - run: npm run build:extension
+        working-directory: web/client
+      - name: zip
+        run: |
+          (cd build/extension && zip -qr "$GITHUB_WORKSPACE/zerostress-extension.zip" .)
+          sha256sum zerostress-extension.zip | tee zerostress-extension.zip.sha256
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo
+            echo "**Browser extension:** download \`zerostress-extension.zip\` below, unzip it, then \`chrome://extensions\` → Developer mode → Load unpacked → the unzipped folder. The agent inside it is https://zerostress.space/panel and updates with the site."
+          } >> release-notes.md
+          gh release create "$GITHUB_REF_NAME" --title "ZeroStress $VERSION" --notes-file release-notes.md --verify-tag \
+            zerostress-extension.zip zerostress-extension.zip.sha256

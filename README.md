@@ -40,7 +40,7 @@ A risky action a human asks the agent to take — submit a form, download a file
 
 ## Browser extension and email
 
-- **The agent in your browser** ([web/extension/](web/extension/), Manifest V3, Chrome, Edge, Brave): right-click a suspicious link and choose *Check this link in a sandbox*. A side panel opens with the agent: it starts the check on ZeroStress (the same microVM, the same rules and model), tells you step by step what happens in the sandbox, **stops and asks Allow / Don't allow before any risky action**, gives the verdict and explains it, and answers your questions about it. It may reach `zerostress.space` only and reads no page you visit. To try it: `cd web/client && npm ci --ignore-scripts && npm run build:extension`, then `chrome://extensions` → *Developer mode* → *Load unpacked* → pick `build/extension`.
+- **The agent in your browser** ([web/extension/](web/extension/), Manifest V3, Chrome, Edge, Brave): right-click a suspicious link and choose *Check this link in a sandbox*. A side panel opens with the agent: it starts the check on ZeroStress (the same microVM, the same rules and model), tells you step by step what happens in the sandbox, **stops and asks Allow / Don't allow before any risky action**, gives the verdict and explains it, and answers your questions about it. The agent is the page `/panel` of the site, so it updates with the site; the extension is only the menu and the frame, has no host permission and reads no page you visit. Install: download [zerostress-extension.zip](https://github.com/xhero-xandr/zerostress/releases/latest/download/zerostress-extension.zip) from the latest release, unzip it, then `chrome://extensions` → *Developer mode* → *Load unpacked*.
 - **Email**: on the home page choose *An email* and paste the email's text or its source. The links are found in your browser (the email is never sent anywhere); a link whose text shows another site is marked, and Safe Links / Google / Facebook redirects are unwrapped to where a click really goes. Pick one link to check it.
 - **Second opinion**: when a bot check keeps our sandbox out, the report offers Cloudflare's URL Scanner. A recent public scan of exactly that link is looked up first; a new one, which is public at Cloudflare, is sent only after you say yes. Its "malicious" may raise our verdict, never lower it.
 - **Behind the scenes**: every report has the agent's log, live during the check: the microVM booting (vCPUs, memory, guest image), the browser's steps, the injection detectors, each model call (vision, time, tokens), the gatekeeper's decisions, your approvals, the microVM's destruction.
@@ -112,6 +112,10 @@ Not done yet: when a page sits behind a "verify you are human" wall, the report 
 ## Running it yourself
 
 You need a Rocky Linux 10 host with `/dev/kvm` (on a cloud VM: nested virtualisation) and a Vultr Serverless Inference key. `git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress`, then `sudo ./zs install host`, put the key in with `./zs config web`, then `sudo ./zs install` and `./zs verify --live`. Every step is idempotent; every download is checked against a pinned checksum in `deploy/versions.env`. To try the interface locally without KVM: `./zs dev`. Details: [docs/install.md](docs/install.md); every setting: [docs/configuration.md](docs/configuration.md). A clean-machine install has not been verified yet.
+
+## Releases
+
+Every release, with what changed: [CHANGELOG.md](CHANGELOG.md) and [GitHub releases](https://github.com/xhero-xandr/zerostress/releases). How a release is made: [docs/install.md](docs/install.md#releases).
 
 ## License
 

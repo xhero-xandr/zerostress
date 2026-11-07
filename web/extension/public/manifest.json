@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ZeroStress: a sandboxed agent for suspicious links",
   "short_name": "ZeroStress",
-  "version": "0.3.0",
+  "version": "0.9.0",
   "description": "Right-click a suspicious link: an agent opens it in a disposable microVM at zerostress.space, tells you what it sees, and asks you before anything risky.",
   "permissions": [
     "contextMenus",

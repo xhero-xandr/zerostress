@@ -83,6 +83,9 @@ jobs:
       - run: npm test
       # the browser extension: how a link is handed over, and that it asks for no access to pages
       - run: node --test extension/test/*.mjs
+      # releases: the version must agree across CHANGELOG.md, the extension and the tag
+      - run: bash deploy/test/release-check.sh
+        working-directory: .
 
   client:
     name: client (spec 012)

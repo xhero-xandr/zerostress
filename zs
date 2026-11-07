@@ -9,6 +9,7 @@
 #   ./zs config [web|supervisor]             edit config/<name>.env, then restart that service
 #   ./zs verify [--live]     check the host against the repository; changes nothing
 #   ./zs dev                 run the web layer from this checkout on port 8081, with its own data in build/dev
+#   ./zs release X.Y.Z       check CHANGELOG.md and the versions, then tag vX.Y.Z on main (push the tag yourself)
 #
 # A new server: git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress && sudo ./zs install host
 # then put the model key in with `./zs config web`, reboot if it asked to, and `sudo ./zs install && ./zs verify --live`.
@@ -18,7 +19,7 @@ SERVICES=(zerostress-supervisor zerostress-web caddy)
 declare -A STEP=([host]=10-host [network]=20-network [runtime]=30-runtime [image]=40-image [supervisor]=50-supervisor [web]=60-web [verify]=90-verify)
 ORDER=(host network runtime image supervisor web verify)
 
-usage() { sed -n '2,15s/^# \{0,1\}//p' "$0"; exit "${1:-0}"; }
+usage() { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit "${1:-0}"; }
 sudo_self() { if [[ $EUID -ne 0 ]]; then exec sudo "$0" "$@"; fi; }
 step() { echo "== $1"; bash "$S/deploy/steps/${STEP[$1]}.sh" "${@:2}"; }
 
@@ -26,6 +27,7 @@ cmd=${1:-help}
 shift || true
 case $cmd in
   help | -h | --help) usage ;;
+  release) exec bash "$S/deploy/release.sh" tag "$@" ;;
   install)
     sudo_self install "$@"
     if [[ $# -eq 0 ]]; then set -- "${ORDER[@]}"; fi
