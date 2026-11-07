@@ -32,7 +32,8 @@ function CopyButton({ text, label, icon }: { text: () => string; label: string; 
 }
 
 export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
-  const report = useQuery({ queryKey: ['report', status.id], queryFn: () => getReport(status.id), staleTime: Infinity });
+  // while Cloudflare is being asked about a wall (on its own, by the server), the report is read again until it answers
+  const report = useQuery({ queryKey: ['report', status.id], queryFn: () => getReport(status.id), staleTime: Infinity, refetchInterval: (q) => (q.state.data?.second_opinion_state === 'asking' ? 4000 : false) });
   const explain = useRef<{ open: () => void }>(null);
   // the task key lives in the fragment (#k=...): every link between the sections carries it along
   const { hash } = useLocation();

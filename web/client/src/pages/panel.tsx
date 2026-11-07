@@ -7,7 +7,7 @@ import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startTask, type Pending, type TaskStatus } from '../api.ts';
 import { EXTENSION_ORIGIN } from '../extension.ts';
-import { asLogEntry, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
+import { asLink, asLogEntry, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
 import { looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
 import { ShotViewer } from '../shot-viewer.tsx';
@@ -21,11 +21,10 @@ type Item =
   | { kind: 'approval'; p: Pending; done: string | null }
   | { kind: 'verdict'; r: PublicReport; id: string; key: string; shots: TaskStatus['shots'] | null }
   | { kind: 'email'; mail: EmailCheck }
-  | { kind: 'consent'; id: string; key: string };
 
 const P = T.panel;
 const errText = (e: unknown) => (e instanceof ApiError ? e.message : T.serverError);
-const webLink = (s: string) => linkFromQuery(`?u=${encodeURIComponent(s.trim())}`);
+const webLink = (s: string) => linkFromQuery(`?u=${encodeURIComponent(asLink(s))}`);
 
 export function Panel() {
   const [items, setItems] = useState<Item[]>([{ kind: 'agent', text: P.hello }]);
@@ -72,6 +71,8 @@ export function Panel() {
     const explained = answer(id, { kind: 'explain' });
     for (const q of later) void answer(id, { kind: 'ask', message: q });
     await explained;
+    // a wall: the server is already asking Cloudflare on its own; wait for that answer here
+    if (r.second_opinion_state === 'asking') await second(id, key);
   }
 
   async function askOwner(id: string, key: string) {
@@ -170,15 +171,14 @@ export function Panel() {
     update(() => at, (it) => (it.kind === 'approval' ? { ...it, done } : it));
   }
 
-  async function second(id: string, key: string, publish: boolean) {
+  async function second(id: string, key: string) {
     const at = say(T.second.asking);
     try {
-      const { second_opinion: so } = await askSecondOpinion(id, key, publish);
+      const { second_opinion: so } = await askSecondOpinion(id, key);
       update(at, () => ({ kind: 'agent', text: T.log.second(so.source, so.status, so.malicious, so.final_host) }));
       await finish(id, key);
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'needs_consent') update(at, () => ({ kind: 'consent', id, key }));
-      else update(at, () => ({ kind: 'agent', text: errText(e) }));
+      update(at, () => ({ kind: 'agent', text: errText(e) }));
     }
   }
 
@@ -225,12 +225,6 @@ export function Panel() {
               </ul>
             </div>
           );
-          if (it.kind === 'consent') return (
-            <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
-              <p>{T.second.consentText}</p>
-              <div className="mt-2 flex gap-2"><button type="button" className={btnPrimary} onClick={() => { update(() => i, () => ({ kind: 'agent', text: T.second.consentTitle })); void second(it.id, it.key, true); }}>{T.second.consentYes}</button></div>
-            </div>
-          );
           const r = it.r;
           const serious = r.signals.filter((s) => s.level === 'high' || s.level === 'medium').slice(0, 4);
           return (
@@ -256,7 +250,7 @@ export function Panel() {
               <div className="mt-2 flex flex-wrap gap-2">
                 <a className={`${btnSecondary} no-underline`} href={`/r/${it.id}#k=${it.key}`} target="_blank" rel="noopener noreferrer">{P.openReport}</a>
                 <a className={`${btnSecondary} no-underline`} href={reportJsonUrl(it.id)} download={`report-${it.id.slice(0, 8)}.json`}>{P.downloadJson}</a>
-                {r.verdict === 'unknown' && !r.second_opinion && <button type="button" className={btnPrimary} onClick={() => void second(it.id, it.key, false)}>{T.second.ask}</button>}
+                {r.second_opinion_state === 'failed' && <button type="button" className={btnPrimary} onClick={() => void second(it.id, it.key)}>{T.second.ask}</button>}
               </div>
             </div>
           );

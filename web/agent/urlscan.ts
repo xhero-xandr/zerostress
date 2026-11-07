@@ -2,8 +2,9 @@
 // page in its own browser, on its own servers, as a verified bot. A thin fetch client like model.ts: one fixed host,
 // a deadline on every call, no redirects, and only the fields we use are read, each checked for its shape.
 //
-// Privacy first: a scan on the free plan is public at Cloudflare, so we look for a recent public scan of exactly this
-// address before anything else, and send a new one only when the person said yes to publishing it.
+// Privacy first: a recent public scan of exactly this address is used when there is one; a new scan is sent as
+// "Unlisted", seen only by our Cloudflare account and never listed in Cloudflare's public search, so it needs no one's
+// consent and is asked for on its own whenever the sandbox meets a wall.
 
 import type { ScannerConfig } from './config.ts';
 import { parseUrl } from './domain.ts';
@@ -16,7 +17,7 @@ const MAX_JSON = 8 * 1024 * 1024;
 
 export interface ScanOpinion {
   uuid: string;
-  /** found: someone's recent public scan of this very address; submitted: a new public scan we sent with consent */
+  /** found: someone's recent public scan of this very address; submitted: a new unlisted scan we sent */
   source: 'found' | 'submitted';
   /** when Cloudflare scanned it, ISO */
   scanned_at: string;
@@ -31,7 +32,7 @@ export interface ScanOpinion {
 
 export type ScanOutcome =
   | { ok: true; opinion: ScanOpinion; screenshot: Uint8Array | null }
-  | { ok: false; reason: 'not_found' | 'needs_consent' | 'refused' | 'unavailable' | 'quota' }
+  | { ok: false; reason: 'not_found' | 'refused' | 'unavailable' | 'quota' }
   /** still scanning; `submitted` is the scan we sent, to be polled on the next ask instead of sending another */
   | { ok: false; reason: 'pending'; submitted?: string };
 
@@ -44,7 +45,7 @@ export interface UrlScanDeps {
   pollMs?: number;
   /** how old a found scan may be */
   maxAgeDays?: number;
-  /** new public scans the whole service may send per day (UTC): each is published under our account */
+  /** new scans the whole service may send per day (UTC), whatever Cloudflare's own limit */
   maxScansPerDay?: number;
 }
 
@@ -146,22 +147,20 @@ export function createUrlScanClient(cfg: ScannerConfig, deps: UrlScanDeps = {}) 
 
   return {
     /**
-     * A second opinion on one address. Without `publish` only a recent public scan of this exact address is used;
-     * with it, a new public scan is sent when none is found, and waited for. `submitted` is a scan sent on an earlier
-     * ask that was still running: it is polled, and nothing new is sent.
+     * A second opinion on one address: a recent public scan of exactly this address, or else a new unlisted scan,
+     * waited for. `submitted` is a scan sent on an earlier ask that was still running: it is polled, nothing new is sent.
      */
-    async opinion(url: string, publish: boolean, submitted?: string): Promise<ScanOutcome> {
+    async opinion(url: string, submitted?: string): Promise<ScanOutcome> {
       if (!cfg.enabled) return { ok: false, reason: 'unavailable' };
       if (submitted !== undefined) return UUID.test(submitted) ? waitFor(submitted) : { ok: false, reason: 'unavailable' };
       const found = await find(url);
       if (found) return finish(found.uuid, 'found');
-      if (!publish) return { ok: false, reason: 'needs_consent' };
       if (!searchFor(url)) return { ok: false, reason: 'refused' };
       const day = new Date(now()).toISOString().slice(0, 10);
       if (scans.day !== day) scans = { day, count: 0 };
       if (scans.count >= maxScans) return { ok: false, reason: 'quota' };
       scans.count++;
-      const res = await call('/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, screenshotsResolutions: ['desktop'] }) });
+      const res = await call('/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, visibility: 'Unlisted', screenshotsResolutions: ['desktop'] }) });
       if (!res) return { ok: false, reason: 'unavailable' };
       if (res.status === 409) {
         // scanned a moment ago by someone: that scan is the answer, once it shows up in the search

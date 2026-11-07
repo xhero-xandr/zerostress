@@ -1,7 +1,7 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
 import { LOG_CODES } from '../../agent/agent-log.ts';
-import { agentLines, asLogEntry, injectionText, noFindingsText, mailboxOf, panelFacts, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
+import { agentLines, asLink, asLogEntry, injectionText, noFindingsText, mailboxOf, panelFacts, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
 import { hostile, unread } from './fixtures.ts';
 import { T } from '../src/text.ts';
 
@@ -198,4 +198,9 @@ test('no rule finding next to a raised verdict says who raised it', () => {
   expect(noFindingsText({ verdict: 'malicious', mode: 'rules_only', second_opinion: { ...so, malicious: true } })).toBe(T.noFindingsCloudflare);
   expect(noFindingsText({ verdict: 'malicious', mode: 'vision', second_opinion: { ...so, malicious: false } })).toBe(T.noFindingsModel);
   expect(noFindingsText({ verdict: 'suspicious', mode: 'rules_only', second_opinion: null })).toBe(T.noFindings);
+});
+
+test('a bare address, as people type it, becomes a link; questions, schemes and hosts without a domain do not', () => {
+  for (const [typed, link] of [['google.com', 'https://google.com'], ['  vk.com ', 'https://vk.com'], ['www.tiktok.com/@user?x=1', 'https://www.tiktok.com/@user?x=1'], ['пример.рф/путь', 'https://пример.рф/путь'], ['example.com:8443/a', 'https://example.com:8443/a']]) expect(asLink(typed), typed).toBe(link);
+  for (const same of ['https://google.com', 'http://x.example/', 'javascript:alert(1)', 'is google.com safe?', 'localhost:3000', 'hello', '1.2.3.4', 'mailto:a@b.example', 'a@b.example']) expect(asLink(same), same).toBe(same.trim());
 });

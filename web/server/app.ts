@@ -250,6 +250,8 @@ export function createApp(deps: AppDeps): Hono {
         task.stage = result.state === 'done' ? 'done' : 'failed';
         deps.store.save(task);
         deps.store.emit(task, 'final', {});
+        // a wall: Cloudflare is asked right away, nobody has to press anything
+        if (walled(task)) void askCloudflare(task, true);
       }).catch((e) => {
         task.pending = [];
         if (!taken) { taken = true; reject(e); return; }
@@ -399,54 +401,73 @@ export function createApp(deps: AppDeps): Hono {
   };
 
   // ---- a second opinion from Cloudflare's URL Scanner, on a page the sandbox could not read ----
-  const asking = new Set<string>();
+  // Asked on its own as soon as a check ends at a wall (an unlisted scan needs no one's consent, urlscan.ts). The
+  // owner's POST waits for the same answer, or asks again after a failure.
+  const asking = new Map<string, Promise<void>>();
   // a scan we sent that was still running when the answer was due: the next ask polls it instead of sending another
   const submitted = new Map<string, string>();
+  const walled = (t: Task): boolean => t.stage === 'done' && !!t.result && !t.result.second_opinion && publicReport(t.result).verdict === 'unknown';
+
+  function askCloudflare(t: Task, auto: boolean): Promise<void> {
+    const running = asking.get(t.id);
+    if (running) return running;
+    const result = t.result!;
+    const at = () => Math.min(86_400_000, Math.max(0, Date.now() - t.createdAt));
+    const log = (code: string, d: Record<string, unknown>) => {
+      const entry = cleanEntry({ t: at(), code, d });
+      result.log ??= []; // a report kept from before the log existed
+      if (entry && result.log.length < MAX_LOG) result.log.push(entry);
+    };
+    const run = async () => {
+      if (!deps.urlscan) { result.second_opinion_error = 'unavailable'; return; }
+      delete result.second_opinion_error;
+      log('second_opinion_asked', { auto });
+      deps.store.save(t);
+      let out = await deps.urlscan.opinion(result.url, submitted.get(t.id));
+      // a new scan takes a while: poll it a few more times before giving up for now
+      for (let i = 0; i < 3 && !out.ok && out.reason === 'pending'; i++) {
+        if (out.submitted) submitted.set(t.id, out.submitted);
+        out = await deps.urlscan.opinion(result.url, submitted.get(t.id));
+      }
+      if (!out.ok) {
+        if (out.reason === 'pending' && out.submitted) submitted.set(t.id, out.submitted);
+        result.second_opinion_error = out.reason;
+        return;
+      }
+      submitted.delete(t.id);
+      // the title was written by the page: it goes through the hooks like any text of a page
+      const withheld = out.opinion.title !== '' && scanText('second_opinion', out.opinion.title).triggered;
+      if (out.screenshot) deps.store.saveImage(t, 'second-opinion', out.screenshot);
+      result.second_opinion = { ...out.opinion, title: withheld ? '' : out.opinion.title, title_withheld: withheld, screenshot: out.screenshot !== null };
+      log('second_opinion', { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() });
+      // the report changed (its verdict may have been raised): what was said about it before no longer holds
+      explained.delete(t.id);
+      for (const k of talks.keys()) if (k.startsWith(`${t.id}|`)) talks.delete(k);
+    };
+    const p = run()
+      .catch(() => { result.second_opinion_error = 'unavailable'; })
+      .finally(() => { asking.delete(t.id); deps.store.save(t); });
+    asking.set(t.id, p);
+    return p;
+  }
+
   app.post('/api/tasks/:id/second-opinion', async (c) => {
     if (!deps.urlscan) return fail(c, 404, 'not_found');
     const t = owned(c);
     if (t instanceof Response) return t;
     const read = await readJsonBody(c);
     if (!read.ok) return read.res;
-    if (Object.keys(read.body).some((k) => k !== 'publish') || (read.body.publish !== undefined && typeof read.body.publish !== 'boolean')) return fail(c, 400, 'bad_request');
+    if (Object.keys(read.body).length > 0) return fail(c, 400, 'bad_request');
     if (!t.result || t.stage !== 'done') return fail(c, 404, 'not_found');
-    if (t.result.second_opinion) return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
     // only for a page we could not read: a verdict of our own needs no one else's
-    if (publicReport(t.result).verdict !== 'unknown') return fail(c, 400, 'bad_request');
-    if (asking.has(t.id)) return fail(c, 429, 'chat_busy');
-    asking.add(t.id);
-    try {
-      const publish = read.body.publish === true;
-      const at = () => Math.min(86_400_000, Math.max(0, Date.now() - t.createdAt));
-      const out = await deps.urlscan.opinion(t.result.url, publish, submitted.get(t.id));
-      if (!out.ok) {
-        if (out.reason === 'needs_consent') return json(c, 409, { code: 'needs_consent', message: errorText('needs_consent') });
-        if (out.reason === 'pending') {
-          if (out.submitted) submitted.set(t.id, out.submitted);
-          return json(c, 503, { code: 'scan_pending', message: errorText('scan_pending') }, { 'retry-after': '30' });
-        }
-        if (out.reason === 'refused') return json(c, 400, { code: 'scan_refused', message: errorText('scan_refused') });
-        if (out.reason === 'quota') return json(c, 503, { code: 'scan_quota', message: errorText('scan_quota') });
-        return fail(c, 503, 'supervisor_unavailable');
-      }
-      submitted.delete(t.id);
-      // the title was written by the page: it goes through the hooks like any text of a page
-      const withheld = out.opinion.title !== '' && scanText('second_opinion', out.opinion.title).triggered;
-      if (out.screenshot) deps.store.saveImage(t, 'second-opinion', out.screenshot);
-      t.result.second_opinion = { ...out.opinion, title: withheld ? '' : out.opinion.title, title_withheld: withheld, screenshot: out.screenshot !== null };
-      t.result.log ??= []; // a report kept from before the log existed
-      for (const entry of [
-        cleanEntry({ t: at(), code: 'second_opinion_asked', d: { publish } }),
-        cleanEntry({ t: at(), code: 'second_opinion', d: { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() } }),
-      ]) if (entry && t.result.log.length < MAX_LOG) t.result.log.push(entry);
-      deps.store.save(t);
-      // the report changed (its verdict may have been raised): what was said about it before no longer holds
-      explained.delete(t.id);
-      for (const k of talks.keys()) if (k.startsWith(`${t.id}|`)) talks.delete(k);
-      return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
-    } finally {
-      asking.delete(t.id);
-    }
+    if (!t.result.second_opinion && !walled(t)) return fail(c, 400, 'bad_request');
+    if (!t.result.second_opinion) await askCloudflare(t, false);
+    if (t.result.second_opinion) return json(c, 200, { second_opinion: publicReport(t.result).second_opinion });
+    const reason = t.result.second_opinion_error;
+    if (reason === 'pending') return json(c, 503, { code: 'scan_pending', message: errorText('scan_pending') }, { 'retry-after': '30' });
+    if (reason === 'refused') return json(c, 400, { code: 'scan_refused', message: errorText('scan_refused') });
+    if (reason === 'quota') return json(c, 503, { code: 'scan_quota', message: errorText('scan_quota') });
+    return fail(c, 503, 'supervisor_unavailable');
   });
 
   app.get('/api/tasks/:id/pending', (c) => {

@@ -30,7 +30,6 @@ export const T = {
     chat_busy: 'Your previous question is still being answered.',
     chat_cap: 'This report has had as many questions as it can take. The explanation above is still available.',
     forbidden: 'This is not allowed from here.',
-    needs_consent: 'Nobody has scanned this exact link at Cloudflare recently. A new scan there is public: anyone can find it. Say yes to publish it.',
     scan_pending: 'Cloudflare is still scanning the page. Ask again in a minute.',
     scan_refused: 'Cloudflare does not scan this link.',
     scan_quota: 'Today\'s new scans at Cloudflare are used up. A recent scan of this link by someone else can still be found: ask again tomorrow for a new one.',

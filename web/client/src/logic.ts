@@ -128,7 +128,7 @@ export function logLine(e: LogEntry): string {
     case 'stopped_by_hooks': return L.stoppedByHooks(str('action'));
     case 'verdict': return L.verdict(str('verdict'), str('by'));
     case 'hooks_summary': return L.hooksSummary(num('inspected') ?? 0, num('findings') ?? 0);
-    case 'second_opinion_asked': return L.secondAsked(d.publish === true);
+    case 'second_opinion_asked': return L.secondAsked(d.auto === true);
     case 'second_opinion': return L.second(str('source'), num('status'), typeof d.malicious === 'boolean' ? d.malicious : null, str('host'));
   }
 }
@@ -236,6 +236,16 @@ export function linksFromEmail(raw: string, opts: { decoded?: boolean } = {}): E
     if (out.length >= MAX_LINKS) break;
   }
   return out;
+}
+
+// a bare address, as people type it (google.com, vk.com/id1, www.tiktok.com/@x): letters of any script, a dot, a top
+// level domain of letters; nothing with a space in it, so "is google.com safe?" stays a question
+const BARE_HOST = /^(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+\p{L}{2,}\.?(?::\d{1,5})?(?:[/?#]\S*)?$/u;
+
+/** What a person typed, as a link: "google.com" becomes "https://google.com"; anything else is left as it is. */
+export function asLink(text: string): string {
+  const t = text.trim();
+  return !/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(t) && BARE_HOST.test(t) ? `https://${t}` : t;
 }
 
 /** The address handed over in "/?u=", if it is one we would check (the person still presses the button). */

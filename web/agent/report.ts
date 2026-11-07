@@ -187,6 +187,7 @@ export function publicReport(r: TaskResult): PublicReport {
     mode_reason: reason,
     log: cleanLog(r.log),
     second_opinion: secondOpinion(r.second_opinion),
+    second_opinion_state: secondOpinion(r.second_opinion) !== null || a.verdict !== 'unknown' || r.state !== 'done' ? null : r.second_opinion_error ? 'failed' : 'asking',
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,
     injection_source: injectionSource(r.hooks),

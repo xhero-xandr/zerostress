@@ -121,7 +121,7 @@ export function checkAddress(raw: unknown): GateResult {
 
 /** Our sentence for each refusal. It never repeats the address. */
 export const GATE_TEXT: Readonly<Record<GateReason, string>> = {
-  bad_url: 'That does not look like a web address. Paste the whole link, for example https://example.com/page.',
+  bad_url: 'That does not look like a web address. Send a site such as example.com, or a whole link such as https://example.com/page.',
   bad_scheme: 'Only links that start with http or https can be checked.',
   credentials: 'The link contains a user name or password. Remove them and try again.',
   bad_port: 'This port cannot be checked. Use an ordinary website address.',

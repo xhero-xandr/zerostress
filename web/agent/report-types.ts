@@ -43,6 +43,8 @@ import type { LogEntry } from './agent-log.ts';
 export interface PublicReport {
   /** what happened, step by step (agent-log.ts): our codes, numbers, tokens, the model's id, hosts */
   log: LogEntry[];
+  /** asked on its own when the verdict is unknown: 'asking' until Cloudflare answers, 'failed' when it could not */
+  second_opinion_state: 'asking' | 'failed' | null;
   /** Cloudflare's URL Scanner, asked afterwards about a page we could not read; its verdict may only raise ours */
   second_opinion: null | {
     source: 'found' | 'submitted';

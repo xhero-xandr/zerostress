@@ -3,7 +3,7 @@ import { Copy, Download, Monitor, PanelRight, ScanSearch, ShieldHalf } from 'luc
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startTask } from '../api.ts';
-import { isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
+import { asLink, isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
 import { readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
 import { T } from '../text.ts';
@@ -24,9 +24,10 @@ export function Home() {
   const [error, setError] = useState('');
   const demos = useQuery({ queryKey: ['demos'], queryFn: getDemos, staleTime: Infinity });
 
-  const start = async (target: string) => {
+  const start = async (typed: string) => {
     setError('');
-    const mailbox = mailboxOf(target.trim());
+    const target = asLink(typed);
+    const mailbox = mailboxOf(target);
     if (mailbox) { setError(T.panel.mailbox(mailbox)); return; }
     setBusy(true);
     try {

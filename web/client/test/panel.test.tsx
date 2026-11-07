@@ -106,11 +106,11 @@ test('a question asked while the agent is still explaining waits its turn instea
   expect(overlapped).toBe(false);
 });
 
-test('the second opinion is told as Cloudflare gave it: a new scan, its answer and its verdict', async () => {
+test('a wall: the panel waits for Cloudflare on its own, nobody presses anything; its answer and verdict are told', async () => {
   let asked = false;
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url === '/api/tasks') return new Response(JSON.stringify({ id: ID, key: KEY }), { status: 202 });
-    if (url.endsWith('/report.json')) return new Response(JSON.stringify(asked ? hostile() : { ...unread('bot_challenge', 'A bot check'), second_opinion: null }));
+    if (url.endsWith('/report.json')) return new Response(JSON.stringify(asked ? hostile() : { ...unread('bot_challenge', 'A bot check'), second_opinion: null, second_opinion_state: 'asking' }));
     if (url.endsWith('/second-opinion')) {
       asked = true;
       return new Response(JSON.stringify({ second_opinion: { source: 'submitted', scan_id: '11111111-2222-4333-8444-555555555555', scanned_at: '2026-11-07T12:00:00.000Z', final_host: 'shop.test', status: 403, title: '', title_withheld: false, malicious: true, screenshot: false } }));
@@ -123,8 +123,9 @@ test('the second opinion is told as Cloudflare gave it: a new scan, its answer a
   fireEvent.click(screen.getByRole('button', { name: 'Check' }));
   await waitFor(() => expect(FakeSource.last?.url).toBe(`/api/tasks/${ID}/events`));
   act(() => FakeSource.last!.fire('final', {}));
-  fireEvent.click(await screen.findByRole('button', { name: /Cloudflare/ }));
   await waitFor(() => expect(document.body.textContent).toContain('Cloudflare’s scanner scanned it now: shop.test answered HTTP 403, flagged as malicious'));
+  expect(asked).toBe(true);
+  expect(screen.queryByRole('button', { name: /Ask Cloudflare/ })).toBeNull();
 });
 
 async function checked() {
@@ -183,6 +184,14 @@ test('the source of an email ("Show original"), sent with Enter: its sender chec
   expect(document.body.textContent).toMatch(/I found 1 link in it/);
   expect(document.body.textContent).toContain('https://login-phish.test/a');
   expect(sent.slice(before)).toEqual([]);
+});
+
+test('a bare address typed after a check ("google.com") is a new check, not a question', async () => {
+  await checked();
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'google.com' } });
+  fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
+  await waitFor(() => expect(sent.filter((x) => x.url === '/api/tasks').map((x) => JSON.parse(x.body).url).at(-1)).toBe('https://google.com/'));
+  expect(sent.some((x) => x.url.includes('/chat') && x.body.includes('google.com'))).toBe(false);
 });
 
 test('a link into one\'s own mailbox is explained, not checked', async () => {

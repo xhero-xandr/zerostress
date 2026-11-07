@@ -8,52 +8,45 @@ import { ApiError, askSecondOpinion, secondOpinionShotUrl, type SecondOpinion as
 import { fmtTime, keyFromHash } from '../logic.ts';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
-import { btnPrimary, btnSecondary, Card, Fact, Facts, LevelPill, Notice } from '../ui.tsx';
+import { btnPrimary, Card, Fact, Facts, LevelPill, Notice } from '../ui.tsx';
 
 export function SecondOpinion({ r, id }: { r: PublicReport; id: string }) {
   const key = keyFromHash(useLocation().hash);
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [consent, setConsent] = useState(false);
   const [error, setError] = useState('');
   const [got, setGot] = useState<Opinion | null>(null);
   const so = got ?? r.second_opinion;
-  if (!so && r.verdict !== 'unknown') return null;
+  if (!so && r.second_opinion_state === null) return null;
 
-  const ask = async (publish: boolean) => {
+  // the server asks on its own when the check ends at a wall; this is only for asking again after a failure
+  const ask = async () => {
     setBusy(true);
     setError('');
     try {
-      const res = await askSecondOpinion(id, key, publish);
+      const res = await askSecondOpinion(id, key);
       setGot(res.second_opinion);
-      setConsent(false);
       void qc.invalidateQueries({ queryKey: ['report', id] });
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'needs_consent') setConsent(true);
-      else setError(e instanceof ApiError ? e.message : T.serverError);
+      setError(e instanceof ApiError ? e.message : T.serverError);
     } finally {
       setBusy(false);
     }
   };
+  const asking = busy || r.second_opinion_state === 'asking';
 
   return (
     <Card title={T.second.title} titleId="second-opinion">
       {!so && (
         <div className="flex flex-col gap-3">
           <p className="text-muted">{T.second.intro}</p>
-          {!key && <p className="text-[15px] text-muted">{T.second.ownerOnly}</p>}
-          {key && !consent && <button type="button" className={`${btnPrimary} self-start`} disabled={busy} onClick={() => void ask(false)}>{T.second.ask}</button>}
-          {key && consent && (
-            <div role="alertdialog" aria-labelledby="consent-title" className="flex flex-col gap-3 rounded-lg border border-line p-4">
-              <p id="consent-title" className="font-semibold">{T.second.consentTitle}</p>
-              <p className="text-[15px] text-muted">{T.second.consentText}</p>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" className={btnPrimary} disabled={busy} onClick={() => void ask(true)}>{T.second.consentYes}</button>
-                <button type="button" className={btnSecondary} disabled={busy} onClick={() => setConsent(false)}>{T.second.consentNo}</button>
-              </div>
-            </div>
+          {asking && <p role="status" className="text-[15px] text-muted">{T.second.asking}</p>}
+          {!asking && r.second_opinion_state === 'failed' && (
+            <>
+              <p className="text-[15px]">{T.second.failed}</p>
+              {key ? <button type="button" className={`${btnPrimary} self-start`} onClick={() => void ask()}>{T.second.ask}</button> : <p className="text-[15px] text-muted">{T.second.ownerOnly}</p>}
+            </>
           )}
-          {busy && <p role="status" className="text-[15px] text-muted">{T.second.asking}</p>}
           {error && <Notice>{error}</Notice>}
         </div>
       )}

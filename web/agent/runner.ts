@@ -70,8 +70,10 @@ export interface TaskResult {
   timeline: string[];
   /** what happened, step by step, with times: our codes and values of fixed shapes only (agent-log.ts) */
   log: LogEntry[];
-  /** Cloudflare's URL Scanner on a page the sandbox could not read, asked by the owner afterwards (urlscan.ts) */
+  /** Cloudflare's URL Scanner on a page the sandbox could not read, asked on its own right after (urlscan.ts) */
   second_opinion?: SecondOpinion;
+  /** why it could not be had, when it could not (the owner may ask again) */
+  second_opinion_error?: 'not_found' | 'refused' | 'unavailable' | 'quota' | 'pending';
   notes: string[];
 }
 

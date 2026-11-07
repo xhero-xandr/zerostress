@@ -217,6 +217,7 @@ const SAFE: Record<string, RegExp> = {
   mode_reason: /^[a-z_]{1,40}$/,
   mode_text: /^[A-Z][^<>]{1,300}$/,
   injection_source: /^(page|answer)$/,
+  second_opinion_state: /^(asking|failed)$/,
   'signals[].id': /^[a-z_]{1,40}$/,
   'signals[].level': /^(info|low|medium|high)$/,
   'facts.forms[].asks[]': /^(password|card_number|card_security|card_expiry|one_time_code|id_number|birth_date|email|phone|address|name)$/,
