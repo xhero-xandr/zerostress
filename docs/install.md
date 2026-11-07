@@ -30,7 +30,7 @@ Code changes go through git, settings through `./zs config`; the rest is filled 
 ./zs verify [--live]     compare the host with the repository without changing anything
 ./zs dev                 the site from your checkout on port 8081, with its own data in build/dev
 ```
-`verify` checks the services, the supervisor's and the site's answers, KVM, the kernel parameter, versions, the owners of `bin/`, SELinux types, the variable names in `config/*.env` (never their values) and that the files from `deploy/files/` match byte for byte. `--live` also runs one real check of `https://example.com/` through the public address: it starts a microVM and counts against the limits.
+`verify` checks the services, the supervisor's and the site's answers, KVM, the kernel parameter, versions, the owners of `bin/`, SELinux types, the variable names in `config/*.env` (never their values) and that the files from `deploy/files/` match byte for byte. `--live` also runs one real check of `https://example.com/` through the public address and requires it to finish with the verdict *benign* (a failed run has a report too, so a report alone proves nothing); it starts a microVM and counts against the limits.
 
 ## A new server
 1. A Vultr VM with KVM (Firecracker does not work without `/dev/kvm`; the `host` step checks it first), Rocky Linux 10.
@@ -69,6 +69,7 @@ deploy/test/supervisor-timeouts.sh    time limits (about 2 minutes; changes the 
 deploy/test/collector-e2e.sh          the real collector behind the supervisor (swaps the image for the test)
 deploy/test/agent-e2e.sh              the whole agent: supervisor, microVM, collector, hooks, the real model
 deploy/test/containment-e2e.sh        isolation from inside a microVM: cloud metadata, the host, internal networks
+deploy/test/zsnet-netns.sh            the real zsnet in throwaway network namespaces, real traffic: mail ports, the new-connection rate, the table rebuilt on a new ruleset (the host's network is untouched)
 deploy/test/zsvm-helper.sh            zsvm rejects everything malformed
 deploy/test/zsvm-probe.sh             the microVM unit: cgroup, signals, cleanup (stop the supervisor first)
 deploy/test/unit-compat.sh LABEL PROP...  compatibility of unit properties with SELinux
