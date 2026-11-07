@@ -911,3 +911,11 @@ test('the privacy policy and the terms are pages from docs/, with no script', as
   assert.match(privacy, /<li><strong>storage<\/strong>: keeps the link/);
   assert.match(privacy, /deleted 24 hours after the check/);
 });
+
+test('the examples under the address field: label|url, or label|url|deep for one that ticks "let the agent act"', async () => {
+  const { parseDemos, DEFAULT_DEMOS } = await import('../demo.ts');
+  assert.deepEqual(parseDemos('A|https://a.example/; B | https://b.example/ | deep ;C|javascript:alert(1);D|https://d.example/|other;|https://e.example/'), [
+    { label: 'A', url: 'https://a.example/' }, { label: 'B', url: 'https://b.example/', deep: true }]);
+  const d = parseDemos(DEFAULT_DEMOS);
+  assert.ok(d.some((x) => x.deep && x.url === 'https://zerostress.space/demo/shared-file'), 'the file to approve is one of the examples');
+});

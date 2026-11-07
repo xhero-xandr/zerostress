@@ -29,6 +29,7 @@ import { createApp } from './app.ts';
 import { createLimiter, DEFAULT_LIMITS } from './limits.ts';
 import { createStore } from './store.ts';
 import type { Demo } from './text.ts';
+import { DEFAULT_DEMOS, parseDemos } from './demo.ts';
 
 const env = process.env;
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -50,8 +51,7 @@ const budget = createBudget({ dailyRequests: cfg.dailyRequests, dailyTokens: cfg
 const model = cfg.enabled ? createModelClient(cfg) : undefined;
 const sup = createSupervisorClient({ socketPath: env.SUP_SOCKET ?? `${ROOT}run/supervisor.sock` }, { requestTimeoutMs: 20_000 });
 
-const demos: Demo[] = (env.WEB_DEMOS ?? 'A harmless page|https://example.com/')
-  .split(';').map((x) => x.split('|')).filter((x) => x.length === 2 && x[0]!.trim() && x[1]!.trim()).map(([label, url]) => ({ label: label!.trim(), url: url!.trim() }));
+const demos: Demo[] = parseDemos(env.WEB_DEMOS ?? DEFAULT_DEMOS);
 
 const geo = loadGeo(env.GEO_DIR ?? `${ROOT}data/geo`);
 console.log(geo ? 'geo: DB-IP tables loaded' : 'geo: no tables, the report names no countries');

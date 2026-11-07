@@ -13,6 +13,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 ## [Unreleased]
 
 ### Added
+- Examples under the address field include Google's phishing test page and "A file to approve", which ticks "Let the agent act on the page" so the Allow / Don't allow step can be seen (`WEB_DEMOS` takes `label|url|deep`).
 - A page behind a bot wall gets Cloudflare's second opinion on its own, with nothing to press: a recent public scan of the same address, or else a new unlisted scan (not in Cloudflare's public search, so nobody's consent is needed). The report and the side panel update when it answers.
 - A bare address (`google.com`, `vk.com/id1`) is taken as a link in the side panel and on the home page.
 - Email checks, in the browser: the source of an email ("Show original") is read as MIME (base64, quoted-printable, charsets, attachments, forwarded emails), and the email itself is checked: what the receiving server recorded about the sender (SPF, DKIM, DMARC), replies to another domain, a sender name that shows another address, risky attachments (programs, web pages, macros, archives), links whose text shows another site. The side panel takes a pasted email with its line breaks.

@@ -127,7 +127,7 @@ export function Home() {
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-sm text-faint">{T.tryTitle}</span>
               {demos.data!.demos.map((d) => (
-                <button key={d.url} type="button" onClick={() => { setUrl(d.url); input.current?.focus(); }}
+                <button key={d.url} type="button" onClick={() => { setUrl(d.url); setDeep(d.deep === true); input.current?.focus(); }}
                   className="h-9 rounded-full border border-line bg-surface px-3.5 text-sm text-muted hover:border-line-strong hover:text-fg">
                   {d.label}
                 </button>

@@ -2,6 +2,16 @@
 // model may propose `download`, which waits for the owner's Allow). The file is plain text and harmless, and the page
 // says it is a ZeroStress demo. No script runs on it: it is served under its own policy, sandboxed, no script source.
 
+import type { Demo } from './text.ts';
+
+/** The examples under the address field: WEB_DEMOS, `label|url` or `label|url|deep`, separated by `;`. */
+export const DEFAULT_DEMOS = 'A harmless page|https://example.com/;A phishing test page|https://testsafebrowsing.appspot.com/s/phishing.html;A file to approve|https://zerostress.space/demo/shared-file|deep';
+export function parseDemos(spec: string): Demo[] {
+  return spec.split(';').map((x) => x.split('|').map((p) => p.trim()))
+    .filter((x) => (x.length === 2 || (x.length === 3 && x[2] === 'deep')) && x[0] && /^https?:\/\//.test(x[1]!))
+    .map(([label, url, deep]) => ({ label: label!, url: url!, ...(deep ? { deep: true as const } : {}) }));
+}
+
 export const DEMO_FILE_NAME = 'Invoice-2026-11.txt';
 
 export const DEMO_FILE = `ZeroStress demo file.

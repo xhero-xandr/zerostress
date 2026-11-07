@@ -4,7 +4,8 @@
 import { GATE_TEXT, type GateReason } from './gate.ts';
 import type { Stage } from './store.ts';
 
-export interface Demo { label: string; url: string }
+/** an example under the address field; `deep` also ticks "Let the agent act on the page" */
+export interface Demo { label: string; url: string; deep?: true }
 
 export const T = {
   queued: (n: number | null) => (n && n > 1 ? `Waiting in line (${n - 1} ahead of you)` : 'Waiting for a free sandbox'),

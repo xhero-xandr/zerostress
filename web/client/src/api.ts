@@ -22,7 +22,7 @@ export interface TaskStatus {
   shots: { desktop: boolean; tablet: boolean; mobile: boolean };
 }
 
-export interface Demo { label: string; url: string }
+export interface Demo { label: string; url: string; deep?: true }
 
 /** An answer of ours that is not a success: the server's code and its sentence. */
 export class ApiError extends Error {

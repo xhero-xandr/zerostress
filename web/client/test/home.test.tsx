@@ -13,7 +13,7 @@ function show(path = '/') {
   const sent: Array<{ url: string; body: string }> = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
     sent.push({ url, body: String(init.body ?? '') });
-    if (url === '/api/demos') return new Response(JSON.stringify({ demos: [] }));
+    if (url === '/api/demos') return new Response(JSON.stringify({ demos: [{ label: 'A harmless page', url: 'https://example.com/' }, { label: 'A file to approve', url: 'https://zerostress.space/demo/shared-file', deep: true }] }));
     return new Response(JSON.stringify({ id: ID, key: KEY }), { status: 202 });
   }));
   const router = createMemoryRouter([{ path: '/', element: <Home /> }, { path: '/r/:id', element: <p>report page</p> }], { initialEntries: [path] });
@@ -55,4 +55,14 @@ test('the home page says how to get the browser agent, with the latest release',
   expect(document.body.textContent).toMatch(/Load unpacked/);
   expect(document.body.textContent).toContain('chrome://extensions');
   expect(screen.getByRole('link', { name: 'Extension' }).getAttribute('href')).toBe('#extension');
+});
+
+test('an example that needs the agent to act ticks the box for it; another one does not', async () => {
+  show();
+  const box = () => screen.getByRole('checkbox') as HTMLInputElement;
+  fireEvent.click(await screen.findByRole('button', { name: 'A file to approve' }));
+  expect((screen.getByLabelText('Link to check') as HTMLInputElement).value).toBe('https://zerostress.space/demo/shared-file');
+  expect(box().checked).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'A harmless page' }));
+  expect(box().checked).toBe(false);
 });

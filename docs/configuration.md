@@ -58,7 +58,7 @@ Both empty turns it off. One without the other, or a value of the wrong shape, s
 | `WEB_DATA_DIR` | `<root>/data/web/tasks` | finished reports (kept 24 hours) |
 | `WEB_CLIENT_DIR` | `<root>/build/client` | the built interface |
 | `SUP_SOCKET` | `<root>/run/supervisor.sock` | the supervisor's socket (the supervisor reads it too, see below) |
-| `WEB_DEMOS` | `A harmless page\|https://example.com/` | example buttons under the address field, `label\|url;label\|url` |
+| `WEB_DEMOS` | example.com, Google's phishing test page, `/demo/shared-file` (deep) | example buttons under the address field, `label\|url;label\|url\|deep`; `deep` also ticks "Let the agent act on the page" |
 | `GEO_DIR` | `<root>/data/geo` | DB-IP Lite tables; without them no countries are shown |
 | `WEB_RDAP` | empty | `off` stops domain-age lookups |
 
