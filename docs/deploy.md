@@ -51,7 +51,7 @@
 | настройка | `./zs config web` |
 
 ## Переезд со старой раскладки (один раз)
-Сервер до 7 ноября 2026 жил по старой раскладке: программа в `/opt/zerostress`, рабочая копия в `/opt/zerostress-src`, настройки в `/etc/zerostress`, данные в `/var/lib/zerostress*`. Переезд:
+Сервер до 7 ноября 2026 жил по старой раскладке (переехал 7 ноября; осталось `cleanup`): программа в `/opt/zerostress`, рабочая копия в `/opt/zerostress-src`, настройки в `/etc/zerostress`, данные в `/var/lib/zerostress*`. Переезд:
 ```
 sudo mv /opt/zerostress-src /zerostress && cd /zerostress
 sudo deploy/migrate-from-opt.sh prepare     # без простоя
@@ -61,7 +61,7 @@ sudo deploy/migrate-from-opt.sh cleanup     # когда новая раскла
 ```
 
 ## Разработка
-- Рабочая копия на сервере: `/zerostress` (после переезда), владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`. Удалённый репозиторий: https://github.com/xhero-xandr/zerostress (`origin`); пуш делает владелец.
+- Рабочая копия на сервере: `/zerostress` (переезд 7 ноября 2026), владелец `linuxuser`, локальный конфиг автора `xhero-xandr <devp.xandr@gmail.com>`. Удалённый репозиторий: https://github.com/xhero-xandr/zerostress (`origin`); пуш делает владелец.
 - Сайт работает прямо из рабочей копии: правка `web/` попадает в бой при перезапуске службы (`./zs update` или `./zs restart`). Пробовать изменения — `./zs dev`.
 - У разработчика на своей машине: `git clone`, `cp config/web.env.example config/web.env` (ключ по желанию), `./zs dev`. Без KVM настоящие проверки ссылок не идут (нет супервизора); интерфейс, отчёт и чат работают.
 

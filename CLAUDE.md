@@ -70,7 +70,7 @@ ZeroStress — веб-агент, который открывает подозр
 Спецификации: [docs/specs/](docs/specs/README.md); структура проекта, настройки и развёртывание: спека 010. Актуальный статус и дальнейшие шаги: docs/status.md, раздел 0.
 
 ## Команды
-Рабочая копия на сервере: `/zerostress` после переезда (до него `/opt/zerostress-src`), `ssh vultr`; подробности в [docs/deploy.md](docs/deploy.md), настройки в [docs/config.md](docs/config.md). Коротко (из корня проекта):
+Рабочая копия на сервере: `/zerostress` (с 7 ноября 2026; раньше `/opt/zerostress-src`), `ssh vultr`; подробности в [docs/deploy.md](docs/deploy.md), настройки в [docs/config.md](docs/config.md). Коротко (из корня проекта):
 - `./zs install [этап…]`, `./zs update`, `./zs status`, `./zs logs`, `./zs config web`, `./zs verify [--live]`, `./zs dev`. В бой (`install`, `update`, `restart`, `config`) только с явного разрешения владельца.
 - `web/`: `npm ci --ignore-scripts`, `npm test`, `npm run typecheck`, `npm run mutate` (около 40 минут), `npm run corpus`, `npm run bench` (ключ из `config/web.env`).
 - Сборка: `supervisor/build.sh`, `guest/agent/build.sh` (выход в `build/`), образ `guest/image/build.sh` и `install.sh`.
