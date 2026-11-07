@@ -43,7 +43,7 @@ export const T = {
   check: 'Check link',
   checking: 'Starting…',
   deepLabel: 'Let the agent act on the page',
-  deepHint: 'The agent can scroll and look around. Anything risky, such as sending a form, waits for your approval.',
+  deepHint: 'The agent can scroll, look around and follow the page’s links inside the sandbox. Anything risky, such as a download, waits for your approval; it never sends a form.',
   limitsNote: 'A few checks an hour per person. The report link can be shared; only you can make decisions.',
   tryTitle: 'Try an example:',
   howTitle: 'How a check works',

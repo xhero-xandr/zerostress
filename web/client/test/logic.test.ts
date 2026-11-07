@@ -192,3 +192,8 @@ test('the panel\'s facts: where it ended, what forms ask for, where they send it
   expect(f.length).toBeGreaterThan(2);
   expect(f.every(([k, v]) => typeof k === 'string' && typeof v === 'string')).toBe(true);
 });
+
+test('the deep-check hint says what really waits for approval: a download, never a form', () => {
+  expect(T.deepHint).toMatch(/download/);
+  expect(T.deepHint).not.toMatch(/such as (sending|submitting) a form/);
+});

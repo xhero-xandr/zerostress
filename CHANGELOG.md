@@ -12,6 +12,9 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 
 ## [Unreleased]
 
+### Fixed
+- The home page said a deep check waits for approval before "sending a form"; the model can never send a form, and a download is what waits for approval.
+
 ## [0.9.0] - 2026-11-07
 
 The agent in the browser, and releases.
