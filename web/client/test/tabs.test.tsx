@@ -3,10 +3,14 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, test } from 'vitest';
 import { EVIL, hostile, ID, status, unread } from './fixtures.ts';
 import { Behavior, Links, Network, Security, Summary } from '../src/pages/tabs.tsx';
+import { AgentLog } from '../src/pages/agent-log.tsx';
+import type { PublicReport } from '../../agent/report-types.ts';
+
+const Agent = ({ r }: { r: PublicReport }) => <AgentLog entries={r.log} />;
 
 afterEach(cleanup);
 
-const ALL = { summary: Summary, security: Security, network: Network, links: Links, behavior: Behavior };
+const ALL = { summary: Summary, security: Security, network: Network, links: Links, behavior: Behavior, agent: Agent };
 
 describe('every text that comes from outside stays text, on every section', () => {
   for (const [name, Tab] of Object.entries(ALL)) {

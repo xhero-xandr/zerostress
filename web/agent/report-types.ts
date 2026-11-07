@@ -38,7 +38,11 @@ export interface PublicFacts {
   downloads: Array<{ filename: string; saved: boolean }>;
 }
 
+import type { LogEntry } from './agent-log.ts';
+
 export interface PublicReport {
+  /** what happened, step by step (agent-log.ts): our codes, numbers, tokens, the model's id, hosts */
+  log: LogEntry[];
   schema: 1;
   run_id: string;
   url: string;

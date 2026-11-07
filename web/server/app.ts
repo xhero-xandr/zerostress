@@ -1,6 +1,7 @@
 // The web layer's routes (spec 007). The app is built from its parts (the task runner, the supervisor calls, the store and the
 // limiter are passed in), so a test can drive it without a supervisor.
 
+import { cleanEntry } from '../agent/agent-log.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -197,6 +198,12 @@ export function createApp(deps: AppDeps): Hono {
       };
       const onProgress = (p: Progress) => {
         if (!taken) { taken = true; resolve(); }
+        if (p.kind === 'log') {
+          // the agent's log as it happens: cleaned again here, so only entries of the right shape reach the page
+          const entry = cleanEntry(p.entry);
+          if (entry) deps.store.emit(task, 'log', entry);
+          return;
+        }
         if (p.kind === 'approval') {
           task.runId = p.run_id;
           task.pending.push({ command_id: p.command_id, cmd: p.cmd, sha256: p.sha256 });
@@ -248,7 +255,7 @@ export function createApp(deps: AppDeps): Hono {
     });
   });
 
-  const SECTIONS = new Set(['security', 'network', 'links', 'behavior']);
+  const SECTIONS = new Set(['security', 'network', 'links', 'behavior', 'agent']);
   const taskPage = (c: Context, section: string | null) =>
     deps.store.get(c.req.param('id') ?? '') && (section === null || SECTIONS.has(section)) ? page(c) : page(c, 404);
   app.get('/r/:id', (c) => taskPage(c, null));

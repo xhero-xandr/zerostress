@@ -2,6 +2,7 @@
 // hooks, ask for the verdict, let the model's proposals through the gatekeeper into the live session, and give a result
 // that says what happened. The supervisor is the one that opens the page; nothing here touches a page.
 
+import { createLog, type LogCode, type LogEntry } from './agent-log.ts';
 import { taskHooks } from './task-hooks.ts';
 import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
@@ -63,6 +64,8 @@ export interface TaskResult {
   /** which of the images is the computer's, the phone's and the tablet's */
   shots: Shots;
   timeline: string[];
+  /** what happened, step by step, with times: our codes and values of fixed shapes only (agent-log.ts) */
+  log: LogEntry[];
   notes: string[];
 }
 
@@ -74,7 +77,9 @@ export type Progress =
   /** a risky command waits for a person: the web layer shows it to the task's owner and passes their decision on */
   | { kind: 'approval'; run_id: string; command_id: string; cmd: string; sha256: string }
   /** the person decided, or the time for it ran out: the command is no longer waiting */
-  | { kind: 'decided'; command_id: string; status: string };
+  | { kind: 'decided'; command_id: string; status: string }
+  /** one line of the agent's log, as it happens */
+  | { kind: 'log'; entry: LogEntry };
 
 export interface RunnerDeps {
   /** called as the task moves; a failure in it never affects the task */
@@ -111,6 +116,16 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     try { deps.onProgress?.(p); } catch { /* a watcher must not break the task */ }
   };
   progress({ kind: 'state', state: sub.state, position: sub.position });
+  const log = createLog();
+  const note = (code: LogCode, d: Record<string, unknown> = {}) => {
+    const entry = log.add(code, d);
+    if (entry) progress({ kind: 'log', entry });
+  };
+  const hostOf = (u: unknown): string => parseUrl(u)?.host ?? '';
+  note('submitted', { position: sub.position ?? 0 });
+  let asked = 0;
+  let hooksNoted = false;
+  let inspected = 0;
 
   const events: unknown[] = [];
   const steps: Step[] = [];
@@ -171,8 +186,17 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     try { return await Promise.race([domainFor(finalHost()), limit]); } finally { clearTimeout(timer); }
   };
 
-  const assessNow = async (): Promise<Assessment> =>
-    assess({ events: [...events], hooks: task, screenshot: await screenshot(), domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+  const assessNow = async (): Promise<Assessment> => {
+    const shot = await screenshot();
+    const step = ++asked;
+    const willAsk = deps.cfg.enabled && deps.model !== undefined && !task.triggered;
+    if (willAsk) note('model_asked', { model: deps.cfg.model, mode: shot ? 'vision' : 'text', step });
+    const t0 = Date.now();
+    const a = await assess({ events: [...events], hooks: task, screenshot: shot, domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+    if (a.mode === 'rules_only') note('rules_only', { reason: a.mode_reason ?? 'no_model_configured', verdict: a.rules.verdict, step });
+    else note('model_answered', { ms: Date.now() - t0, tokens: a.usage?.total ?? 0, verdict: a.model?.verdict ?? a.verdict, next: a.next?.action ?? 'none', mode: a.mode, step });
+    return a;
+  };
 
   // ---- the agent's part of a session: look, decide, act, look again ----
   async function drive(): Promise<void> {
@@ -181,17 +205,20 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (a.mode === 'rules_only' || !a.next) break;
       // the page kept streaming while the model was thinking: a proposal made before the hooks fired is not carried out
       if (task.triggered) {
+        note('stopped_by_hooks', { action: a.next.action });
         notes.push('the hooks fired while the model was deciding; its proposal was not carried out');
         break;
       }
       const d = gate.decide(a.next);
       if (!d.ok) {
         refused.push({ proposal: a.next, reason: d.reason });
+        note('gate_refused', { action: typeof a.next.action === 'string' ? a.next.action : 'unknown', reason: d.reason });
         break;
       }
       const id = String(d.command.id);
       const step: Step = { id, action: String(d.command.cmd), line: d.line, risk: d.risk, status: 'sending' };
       steps.push(step);
+      note('gate_allowed', { action: step.action, risk: d.risk });
       const done = new Promise<void>((resolve) => { waiters.set(id, resolve); });
       try {
         const receipt = await deps.sup.command(runId, d.line);
@@ -203,11 +230,13 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
           // outcome, the agent then closes the session, so the report says what happened in it.
           const p = { command_id: receipt.command_id, cmd: step.action, sha256: receipt.command_sha256 };
           pending.push(p);
+          note('approval_wait', { action: step.action });
           progress({ kind: 'approval', run_id: runId, ...p });
           if (!COMMAND_END.has(step.status)) await Promise.race([done, new Promise<void>((r) => setTimeout(r, approvalWaitMs).unref())]);
           if (!COMMAND_END.has(step.status)) notes.push(`nobody decided on command ${id} in time`);
           pending.splice(pending.indexOf(p), 1);
           progress({ kind: 'decided', command_id: p.command_id, status: COMMAND_END.has(step.status) ? step.status : 'expired' });
+          note('approval_done', { result: COMMAND_END.has(step.status) ? step.status : 'expired' });
           break;
         }
       } catch (e) {
@@ -232,6 +261,28 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
 
   let driving: Promise<void> | null = null;
 
+  // what the collector did, in the log: hosts and counts only, never the page's words
+  function noteEvidence(ev: unknown): void {
+    if (!isObj(ev)) return;
+    if (ev.kind === 'nav') {
+      if (ev.via === 'requested') note('nav_requested', { host: hostOf(ev.to) });
+      else if (ev.via === 'http') note('redirect', { from: hostOf(ev.from), to: hostOf(ev.to), ...(typeof ev.status === 'number' ? { status: ev.status } : {}) });
+      else if (ev.via === 'scheduled') note('scheduled', { to: hostOf(ev.to), ...(typeof ev.delay_s === 'number' ? { delay_s: Math.round(ev.delay_s) } : {}) });
+    } else if (ev.kind === 'page') {
+      note('page', { host: hostOf(ev.url), by_session: ready });
+    } else if (ev.kind === 'forms') {
+      const list = Array.isArray(ev.forms) ? ev.forms : [];
+      if (list.length) note('forms', { count: list.length, password: list.some((f) => isObj(f) && f.has_password === true) });
+    } else if (ev.kind === 'device') {
+      note('device', { device: ev.device });
+    } else if (ev.kind === 'download') {
+      note('download', { saved: ev.saved === true });
+    } else if (ev.kind === 'summary') {
+      const reqs = events.filter((x): x is Ev => isObj(x) && x.kind === 'request');
+      note('visit_done', { requests: reqs.length, hosts: new Set(reqs.map((q) => hostOf(q.url)).filter(Boolean)).size, blocked: reqs.filter((q) => q.blocked != null && q.blocked !== false).length });
+    }
+  }
+
   // ---- reading the run ----
   async function handle(type: string, data: string): Promise<void> {
     if (type === 'state') {
@@ -240,6 +291,8 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (!isObj(s) || typeof s.state !== 'string') return;
       state = s.state;
       timeline.push(state);
+      if (state === 'booting' && isObj(s.vm)) note('vm_booting', { slot: s.vm.slot, vcpu: s.vm.vcpu, mem_mib: s.vm.mem_mib, image: s.vm.image });
+      else note('vm_state', { state, ...(typeof s.position === 'number' ? { position: s.position } : {}), ...(typeof s.reason === 'string' ? { reason: s.reason } : {}) });
       progress({ kind: 'state', state, position: typeof s.position === 'number' ? s.position : null });
       if (typeof s.reason === 'string' && /^[a-z_]{1,40}$/.test(s.reason)) failure ??= s.reason;
       if (TERMINAL.has(state)) finished = true;
@@ -249,7 +302,13 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       try { o = JSON.parse(data); } catch { return; }
       if (!isObj(o)) return;
       const r = await hooks.inspect(o);
+      inspected++;
       events.push(r.event);
+      if (r.findings.length && !hooksNoted) {
+        hooksNoted = true;
+        note('hooks_fired');
+      }
+      noteEvidence(r.event);
       gate.observe(r.event);
       const e = r.event as Ev;
       if (e.kind === 'session_ready') {
@@ -270,6 +329,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (step) {
         step.status = c.status;
         progress({ kind: 'step', action: step.action, status: step.status });
+        if (COMMAND_END.has(step.status) || step.status === 'sent') note('command', { action: step.action, state: step.status });
         if (COMMAND_END.has(c.status)) wake(c.command_id);
       }
     } else if (type === 'artifact') {
@@ -278,6 +338,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (isObj(a) && a.saved === true && typeof a.name === 'string' && typeof a.sha256 === 'string' && typeof a.bytes === 'number' && typeof a.mime === 'string') {
         artifacts.push({ name: a.name, bytes: a.bytes, sha256: a.sha256, mime: a.mime });
         progress({ kind: 'artifact', name: a.name, mime: a.mime });
+        if (a.mime === 'image/png') note('screenshot');
       }
     }
   }
@@ -311,6 +372,8 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     if (driving) await driving.catch(() => notes.push('the session driver failed'));
     const assessment = await assessNow();
     const hs = { triggered: task.triggered, findings: task.findings(), ruleset: hooks.state().ruleset };
+    note('verdict', { verdict: assessment.verdict, by: assessment.mode });
+    note('hooks_summary', { inspected, findings: hs.findings.length });
     return {
       schema: 1,
       run_id: runId,
@@ -327,6 +390,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       artifacts,
       shots: pickShots(events, artifacts),
       timeline,
+      log: log.entries,
       notes: [...notes, ...(ready ? [] : input.session ? ['the session never became ready'] : [])],
     };
   } finally {

@@ -216,6 +216,19 @@ const SAFE: Record<string, RegExp> = {
   'steps[].status': /^[a-z_]{1,20}$/,
   'artifacts[].name': /^[0-9a-f]{16}\.(png|bin)$/,
   'artifacts[].mime': /^[a-z]+\/[a-z0-9.+-]+$/,
+  'log[].code': /^[a-z_]{1,30}$/,
+  'log[].d.state': /^[a-z][a-z0-9_]{0,39}$/,
+  'log[].d.reason': /^[a-z][a-z0-9_]{0,39}$/,
+  'log[].d.mode': /^(rules_only|text|vision)$/,
+  'log[].d.verdict': /^(benign|suspicious|malicious|unknown)$/,
+  'log[].d.next': /^[a-z_]{1,30}$/,
+  'log[].d.action': /^[a-z_]{1,30}$/,
+  'log[].d.risk': /^(safe|risky)$/,
+  'log[].d.device': /^(mobile|tablet)$/,
+  'log[].d.result': /^[a-z_]{1,30}$/,
+  'log[].d.by': /^(rules_only|text|vision)$/,
+  'log[].d.image': /^[0-9a-f]{8,64}$/,
+  'log[].d.model': /^[A-Za-z0-9._:/-]{1,100}$/,
 };
 
 function leaves(v: unknown, path = ''): Array<[string, string]> {

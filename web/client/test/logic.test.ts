@@ -1,6 +1,7 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
-import { agentLines, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
+import { LOG_CODES } from '../../agent/agent-log.ts';
+import { agentLines, asLogEntry, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
 import { hostile, unread } from './fixtures.ts';
 
 describe('the sentence under the verdict', () => {
@@ -91,5 +92,27 @@ describe('what the agent did', () => {
     const lines = agentLines(hostile({ pending_approval: 1 }));
     expect(lines.join(' ')).not.toMatch(/^Waiting|Waiting for your decision/);
     expect(lines).toContain('An action waited for your decision, but the check ended first');
+  });
+});
+
+
+describe('the agent log in our words', () => {
+  test('every code has a sentence, and none says undefined', () => {
+    for (const code of LOG_CODES) {
+      const line = logLine({ t: 0, code, d: {} });
+      expect(line.length, code).toBeGreaterThan(5);
+      expect(line, code).not.toMatch(/undefined|NaN|null/);
+    }
+  });
+  test('the values go into their places', () => {
+    expect(logLine({ t: 0, code: 'vm_booting', d: { slot: 1, vcpu: 2, mem_mib: 1024, image: '7e016b2b2375' } })).toBe('Booting a fresh Firecracker microVM: 2 vCPUs, 1024 MiB, network slot 1, guest image 7e016b2b2375');
+    expect(logLine({ t: 0, code: 'model_asked', d: { model: 'qwen3.8-27b', mode: 'vision' } })).toMatch(/qwen3\.8-27b on Vultr Serverless Inference, with the screenshot/);
+    expect(logLine({ t: 0, code: 'vm_state', d: { state: 'failed', reason: 'net_setup' } })).toBe('The run stopped (net setup)');
+    expect(logLine({ t: 0, code: 'rules_only', d: { reason: 'hooks_fired' } })).toMatch(/tried to instruct the model/);
+    expect(logTime(12345)).toBe('+12.3 s');
+  });
+  test('only something shaped like an entry is taken from the stream', () => {
+    expect(asLogEntry({ t: 1, code: 'page', d: {} })).not.toBeNull();
+    for (const bad of [null, 5, 'x', { t: '1', code: 'page', d: {} }, { t: 1, code: 'page', d: [] }]) expect(asLogEntry(bad)).toBeNull();
   });
 });

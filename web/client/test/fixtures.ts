@@ -12,6 +12,12 @@ export function hostile(over: Partial<PublicReport> = {}, facts: Partial<PublicR
     verdict: 'malicious',
     confidence: 0.9,
     status: { state: 'done', failure: null },
+    // a host of the wrong shape never passes the server; the page must hold even if one did
+    log: [
+      { t: 0, code: 'vm_booting', d: { slot: 0, vcpu: 2, mem_mib: 1024, image: '7e016b2b2375' } },
+      { t: 900, code: 'page', d: { host: EVIL } },
+      { t: 1500, code: 'model_answered', d: { ms: 1100, tokens: 2300, verdict: 'malicious', next: 'none', mode: 'vision' } },
+    ],
     mode: 'text',
     mode_reason: null,
     mode_text: null,

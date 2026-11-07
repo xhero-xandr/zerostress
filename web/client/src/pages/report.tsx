@@ -6,12 +6,13 @@ import { NavLink, useLocation } from 'react-router';
 import { getReport, reportJsonUrl, type TaskStatus } from '../api.ts';
 import { fmtTime } from '../logic.ts';
 import { T } from '../text.ts';
-import { btnPrimary, btnSecondary, Notice, Page } from '../ui.tsx';
+import { btnPrimary, btnSecondary, Card, Notice, Page } from '../ui.tsx';
+import { AgentLog } from './agent-log.tsx';
 import { Explain } from './explain.tsx';
 import { Behavior, Links, Network, Security, Summary } from './tabs.tsx';
 import { Message } from './task.tsx';
 
-export const TABS = ['summary', 'security', 'network', 'links', 'behavior'] as const;
+export const TABS = ['summary', 'security', 'network', 'links', 'behavior', 'agent'] as const;
 export type Tab = (typeof TABS)[number];
 
 function CopyButton({ text, label, icon }: { text: () => string; label: string; icon: 'copy' | 'link' }) {
@@ -89,6 +90,7 @@ export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
       {tab === 'network' && <Network r={r} />}
       {tab === 'links' && <Links r={r} />}
       {tab === 'behavior' && <Behavior r={r} />}
+      {tab === 'agent' && <Card title={T.logTitle} titleId="log"><p className="mb-4 text-muted">{T.logIntro}</p><AgentLog entries={r.log ?? []} /></Card>}
 
       <p className="text-[13px] text-faint">{T.verdictNotGuarantee}</p>
       <Explain ref={explain} id={status.id} hasShot={status.shots.desktop} />

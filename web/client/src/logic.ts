@@ -1,5 +1,6 @@
 // What the report says, decided from its data: pure functions, tested on their own (ported from web/server/views.ts).
 import type { PublicReport } from '../../agent/report-types.ts';
+import type { LogEntry } from '../../agent/agent-log.ts';
 import { plural, T } from './text.ts';
 
 type Signal = PublicReport['signals'][number];
@@ -83,3 +84,52 @@ export function keyFromHash(hash: string): string {
 }
 
 export const isTaskId = (id: string | undefined): id is string => typeof id === 'string' && /^[0-9a-f]{32}$/.test(id);
+
+/** One line of the agent's log in our words. The values have fixed shapes (agent/agent-log.ts); a host is shown as text. */
+export function logLine(e: LogEntry): string {
+  const d = e.d;
+  const str = (k: string): string => (typeof d[k] === 'string' ? (d[k] as string) : '');
+  const num = (k: string): number | null => (typeof d[k] === 'number' ? (d[k] as number) : null);
+  const L = T.log;
+  switch (e.code) {
+    case 'submitted': return L.submitted(Math.max(0, (num('position') ?? 1) - 1));
+    case 'vm_state': {
+      const st = str('state');
+      if (st === 'failed' && str('reason')) return L.failedBecause(str('reason'));
+      return L.state[st] ?? L.stateOther(st);
+    }
+    case 'vm_booting': return L.booting(num('vcpu') ?? 0, num('mem_mib') ?? 0, num('slot') ?? 0, str('image'));
+    case 'nav_requested': return L.navRequested(str('host'));
+    case 'redirect': return L.redirect(str('from'), str('to'), num('status'));
+    case 'scheduled': return L.scheduled(str('to'), num('delay_s'));
+    case 'page': return d.by_session === true ? L.agentPage(str('host')) : L.page(str('host'));
+    case 'forms': return L.forms(num('count') ?? 0, d.password === true);
+    case 'device': return L.device(str('device'));
+    case 'screenshot': return L.screenshot;
+    case 'download': return L.download(d.saved === true);
+    case 'visit_done': return L.visitDone(num('requests') ?? 0, num('hosts') ?? 0, num('blocked') ?? 0);
+    case 'hooks_fired': return L.hooksFired;
+    case 'model_asked': return L.modelAsked(str('model'), str('mode') === 'vision');
+    case 'model_answered': return L.modelAnswered(((num('ms') ?? 0) / 1000).toFixed(1), num('tokens') ?? 0, str('verdict'), str('next') && str('next') !== 'none' ? str('next') : null);
+    case 'rules_only': return L.rulesOnly[str('reason')] ?? L.rulesOther;
+    case 'gate_allowed': return L.gateAllowed(str('action'), str('risk') === 'risky');
+    case 'gate_refused': return L.gateRefused(str('action'), str('reason'));
+    case 'command': return L.command(str('action'), str('state'));
+    case 'approval_wait': return L.approvalWait(str('action'));
+    case 'approval_done': return L.approvalDone(str('result'));
+    case 'stopped_by_hooks': return L.stoppedByHooks(str('action'));
+    case 'verdict': return L.verdict(str('verdict'), str('by'));
+    case 'hooks_summary': return L.hooksSummary(num('inspected') ?? 0, num('findings') ?? 0);
+  }
+}
+
+/** What the stream sent, if it looks like a log entry; the server has already cleaned it, this only guards the shape. */
+export function asLogEntry(x: unknown): LogEntry | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const e = x as Record<string, unknown>;
+  if (typeof e.t !== 'number' || typeof e.code !== 'string' || typeof e.d !== 'object' || e.d === null || Array.isArray(e.d)) return null;
+  return e as unknown as LogEntry;
+}
+
+/** Seconds since the start, for the log's left column. */
+export const logTime = (t: number): string => `+${(t / 1000).toFixed(1)} s`;

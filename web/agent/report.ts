@@ -11,6 +11,7 @@
 // submitter or the model; the web layer must escape them and may never put them where the browser would read them as
 // markup, script or an instruction (spec 007).
 
+import { cleanLog } from './agent-log.ts';
 import { ASK_CODES } from './fields.ts';
 import type { PublicFacts, PublicReport, PublicVerdict } from './report-types.ts';
 import type { TaskResult } from './runner.ts';
@@ -31,6 +32,10 @@ export const UNTRUSTED: readonly string[] = [
   'owner.steps[].error',
   'owner.hook_findings[].place',
   'owner.notes[]',
+  // the log names hosts the page led to
+  'log[].d.host',
+  'log[].d.from',
+  'log[].d.to',
   // facts are read off the page and the network
   'facts.final_host',
   'facts.page_title',
@@ -146,6 +151,7 @@ export function publicReport(r: TaskResult): PublicReport {
     status: { state: s(r.state, 20), failure: r.failure === null ? null : s(r.failure, 40) },
     mode,
     mode_reason: reason,
+    log: cleanLog(r.log),
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,
     signals: list<Record<string, unknown>>(o(a.rules).signals, 40).map((x) => ({ id: s(x.id, 40), level: s(x.level, 10), text: s(x.text, 300) })),

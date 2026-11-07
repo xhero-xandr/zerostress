@@ -611,6 +611,15 @@ type stateEvent struct {
 	Position    *int       `json:"position,omitempty"`
 	AgentStatus string     `json:"agent_status,omitempty"`
 	Partial     bool       `json:"partial,omitempty"`
+	// the microVM being booted, so the web layer can show what really runs the check (only on "booting")
+	VM *vmEvent `json:"vm,omitempty"`
+}
+
+type vmEvent struct {
+	Slot   int    `json:"slot"`
+	VCPU   int    `json:"vcpu"`
+	MemMiB int    `json:"mem_mib"`
+	Image  string `json:"image,omitempty"`
 }
 
 func (s *Supervisor) setState(id string, state RunState, patch func(*RunRecord)) {
@@ -638,6 +647,13 @@ func (s *Supervisor) stateDataLocked(rec RunRecord) string {
 	ev := stateEvent{State: rec.State, Reason: rec.Reason, AgentStatus: rec.AgentStatus, Partial: rec.Partial}
 	if rec.State == StateQueued {
 		ev.Position = s.positionOfLocked(rec.ID)
+	}
+	if rec.State == StateBooting && rec.Slot != nil {
+		image := s.imageSH()
+		if len(image) > 12 {
+			image = image[:12]
+		}
+		ev.VM = &vmEvent{Slot: *rec.Slot, VCPU: s.cfg.VCPU, MemMiB: s.cfg.MemMiB, Image: image}
 	}
 	return toJSON(ev)
 }

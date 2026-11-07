@@ -11,7 +11,7 @@ export type Stage = 'queued' | 'starting' | 'opening' | 'analysing' | 'done' | '
 
 export interface TaskEvent {
   seq: number;
-  type: 'stage' | 'approval' | 'final';
+  type: 'stage' | 'approval' | 'final' | 'log';
   data: string;
 }
 

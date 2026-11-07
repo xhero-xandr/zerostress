@@ -2,9 +2,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ApiError, getStatus, type TaskStatus } from '../api.ts';
-import { isTaskId } from '../logic.ts';
+import type { LogEntry } from '../../../agent/agent-log.ts';
+import { asLogEntry, isTaskId } from '../logic.ts';
 import { T } from '../text.ts';
 import { btnPrimary, Card, Page } from '../ui.tsx';
+import { AgentLog } from './agent-log.tsx';
 import { Approval } from './approval.tsx';
 import { Report, TABS, type Tab } from './report.tsx';
 
@@ -30,6 +32,7 @@ function Progress({ status }: { status: TaskStatus }) {
   const qc = useQueryClient();
   const [live, setLive] = useState({ label: status.label, at: status.at });
   const [polling, setPolling] = useState(false);
+  const [log, setLog] = useState<LogEntry[]>([]);
   // once asked, the card stays until the report comes, so the owner sees the answer to what they chose
   const [asked, setAsked] = useState(status.awaiting);
   if (status.awaiting && !asked) setAsked(true);
@@ -46,6 +49,12 @@ function Progress({ status }: { status: TaskStatus }) {
       try {
         const d = JSON.parse((e as MessageEvent<string>).data) as { label?: unknown; at?: unknown };
         setLive((cur) => ({ label: typeof d.label === 'string' ? d.label : cur.label, at: typeof d.at === 'number' ? d.at : cur.at }));
+      } catch { /* not ours */ }
+    });
+    es.addEventListener('log', (e) => {
+      try {
+        const entry = asLogEntry(JSON.parse((e as MessageEvent<string>).data));
+        if (entry) setLog((cur) => (cur.length >= 200 ? cur : [...cur, entry]));
       } catch { /* not ours */ }
     });
     // the agent waits for the owner, or stopped waiting: the status says which
@@ -79,6 +88,11 @@ function Progress({ status }: { status: TaskStatus }) {
         <p aria-live="polite" className="text-[15px] text-muted">{shown.label}</p>
       </Card>
       {asked && <div className="mx-auto w-full max-w-2xl"><Approval id={status.id} /></div>}
+      {log.length > 0 && (
+        <Card title={T.logLive} titleId="live-log" className="mx-auto w-full max-w-2xl">
+          <AgentLog entries={log} live />
+        </Card>
+      )}
     </Page>
   );
 }
