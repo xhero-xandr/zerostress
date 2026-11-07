@@ -39,11 +39,17 @@ export function Panel() {
   const update = (where: () => number, f: (it: Item) => Item) => setItems((cur) => cur.map((it, i) => (i === where() ? f(it) : it)));
   useEffect(() => { end.current?.scrollIntoView?.({ block: 'end' }); }, [items]);
 
-  async function answer(id: string, payload: { kind: 'explain' } | { kind: 'ask'; message: string }) {
+  // the server answers one question at a time per person: a question asked while the agent is still explaining waits
+  // its turn here instead of being refused as "still being answered"
+  const talking = useRef<Promise<void>>(Promise.resolve());
+  function answer(id: string, payload: { kind: 'explain' } | { kind: 'ask'; message: string }): Promise<void> {
     const at = say(P.thinking);
-    let reply: string;
-    try { reply = (await askChat(id, payload)).text; } catch (e) { reply = errText(e); }
-    update(at, () => ({ kind: 'agent', text: reply }));
+    talking.current = talking.current.then(async () => {
+      let reply: string;
+      try { reply = (await askChat(id, payload)).text; } catch (e) { reply = errText(e); }
+      update(at, () => ({ kind: 'agent', text: reply }));
+    });
+    return talking.current;
   }
 
   async function finish(id: string, key: string) {

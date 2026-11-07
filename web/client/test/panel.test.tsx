@@ -67,3 +67,30 @@ test('the agent tells its steps, asks before a risky action, then gives and expl
   expect(document.querySelectorAll('script, iframe').length).toBe(0);
   expect(screen.getByRole('link', { name: 'Open the full report' }).getAttribute('href')).toBe(`/r/${ID}#k=${KEY}`);
 });
+
+test('a question asked while the agent is still explaining waits its turn instead of being refused', async () => {
+  let inFlight = 0;
+  let overlapped = false;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
+    if (url === '/api/tasks') return new Response(JSON.stringify({ id: ID, key: KEY }), { status: 202 });
+    if (url.endsWith('/report.json')) return new Response(JSON.stringify(hostile()));
+    if (url.endsWith('/chat')) {
+      if (++inFlight > 1) overlapped = true;
+      await new Promise((r) => setTimeout(r, 30));
+      inFlight--;
+      return new Response(JSON.stringify({ text: JSON.parse(String(init.body)).kind === 'explain' ? 'The explanation.' : 'The answer.', source: 'model', note: null }));
+    }
+    return new Response('{}', { status: 404 });
+  }));
+  render(<Panel />);
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://x.example/' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+  await waitFor(() => expect(FakeSource.last).not.toBeNull());
+  act(() => FakeSource.last!.fire('final', {}));
+  await screen.findByText(/^Verdict:/);
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'Does it ask for a password?' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await screen.findByText('The answer.');
+  await screen.findByText('The explanation.');
+  expect(overlapped).toBe(false);
+});
