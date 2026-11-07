@@ -9,6 +9,10 @@
 }
 
 @DOMAIN@ {
+	# the API takes small JSON bodies (4 KiB); the web layer cuts a longer one off too, this keeps it from reaching Node
+	request_body {
+		max_size 16KB
+	}
 	reverse_proxy 127.0.0.1:8080 {
 		header_up X-Real-IP {client_ip}
 		header_up -CF-Connecting-IP

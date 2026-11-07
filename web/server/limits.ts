@@ -24,8 +24,11 @@ export type Denied = 'rate_hour' | 'rate_day' | 'too_many_active' | 'daily_cap';
 export type ChatDenied = 'chat_rate' | 'chat_busy' | 'chat_cap';
 
 export interface Limiter {
-  /** reserve a task for this client or say why not; call `release` when the task ends */
-  start(client: string): { ok: true; release: () => void } | { ok: false; reason: Denied; retryAfterS: number };
+  /**
+   * reserve a task for this client or say why not; call `release` when the task ends, or `cancel` when it never started
+   * (the supervisor refused it): a cancelled start is taken back from the client's and the service's counts
+   */
+  start(client: string): { ok: true; release: () => void; cancel: () => void } | { ok: false; reason: Denied; retryAfterS: number };
   openStream(client: string): (() => void) | null;
   /** counts a wrong key; true while the client is still within its allowance */
   badKey(client: string): boolean;
@@ -75,7 +78,18 @@ export function createLimiter(cfg: LimitConfig = DEFAULT_LIMITS, now: () => numb
       today++;
       bump(active, client, 1);
       let released = false;
-      return { ok: true, release: () => { if (!released) { released = true; bump(active, client, -1); } } };
+      const release = () => { if (!released) { released = true; bump(active, client, -1); } };
+      let cancelled = false;
+      const cancel = () => {
+        if (cancelled) return;
+        cancelled = true;
+        release();
+        const list = starts.get(client);
+        const at = list ? list.lastIndexOf(t) : -1;
+        if (at >= 0) list!.splice(at, 1);
+        if (dayKey === dk && today > 0) today--;
+      };
+      return { ok: true, release, cancel };
     },
     openStream(client) {
       if ((streams.get(client) ?? 0) >= cfg.streams) return null;

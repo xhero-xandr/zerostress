@@ -83,6 +83,26 @@ function shotName(result: TaskResult, device: 'desktop' | 'mobile' | 'tablet'): 
   return device === 'desktop' && !result.shots ? (png.at(-1) ?? null) : null; // results stored before the devices existed
 }
 
+/** The body as text, read up to `max` bytes; null if it is longer (the rest is never read). */
+async function readCapped(c: Context, max: number): Promise<string | null> {
+  const stream = c.req.raw.body;
+  if (!stream) return '';
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 /** A JSON object from a POST: the same page as the sender, the right type, a small body. Anything else is a plain refusal. */
 async function readJsonBody(c: Context): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; res: Response }> {
   const origin = c.req.header('origin');
@@ -94,8 +114,9 @@ async function readJsonBody(c: Context): Promise<{ ok: true; body: Record<string
   if (!(c.req.header('content-type') ?? '').toLowerCase().startsWith('application/json')) return { ok: false, res: fail(c, 415, 'bad_request') };
   const declared = Number(c.req.header('content-length') ?? 0);
   if (declared > MAX_BODY) return { ok: false, res: fail(c, 413, 'bad_request') };
-  const text = await c.req.text();
-  if (text.length > MAX_BODY) return { ok: false, res: fail(c, 413, 'bad_request') };
+  // a body sent in chunks has no length to check first: it is read only up to the limit and then cut off
+  const text = await readCapped(c, MAX_BODY);
+  if (text === null) return { ok: false, res: fail(c, 413, 'bad_request') };
   let body: unknown;
   try { body = JSON.parse(text); } catch { return { ok: false, res: fail(c, 400, 'bad_request') }; }
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return { ok: false, res: fail(c, 400, 'bad_request') };
@@ -156,7 +177,8 @@ export function createApp(deps: AppDeps): Hono {
     try {
       await begin(task, deep === true, slot.release);
     } catch (e) {
-      slot.release();
+      // the supervisor never took it: nothing ran, so it costs the person and the service nothing
+      slot.cancel();
       deps.store.drop(task.id);
       if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
       return fail(c, 503, 'supervisor_unavailable');
@@ -348,11 +370,10 @@ export function createApp(deps: AppDeps): Hono {
   app.post('/api/tasks/:id/approvals', async (c) => {
     const t = owned(c);
     if (t instanceof Response) return t;
-    if (!(c.req.header('content-type') ?? '').toLowerCase().startsWith('application/json')) return fail(c, 415, 'bad_request');
-    const text = await c.req.text();
-    if (text.length > MAX_BODY) return fail(c, 413, 'bad_request');
-    let b: any;
-    try { b = JSON.parse(text); } catch { return fail(c, 400, 'bad_request'); }
+    const read = await readJsonBody(c);
+    if (!read.ok) return read.res;
+    if (Object.keys(read.body).some((k) => k !== 'command_id' && k !== 'command_sha256' && k !== 'allow')) return fail(c, 400, 'bad_request');
+    const b = read.body as { command_id?: unknown; command_sha256?: unknown; allow?: unknown };
     // only what is waiting now, in a live run: a decision on a finished run has nothing left to act on
     const listed = t.pending.find((p) => p.command_id === b?.command_id && p.sha256 === b?.command_sha256);
     if (!listed || !t.runId || typeof b.allow !== 'boolean') return fail(c, 400, 'bad_request');

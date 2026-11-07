@@ -58,7 +58,7 @@ const CLIENT = (() => {
 
 interface Rig { app: ReturnType<typeof createApp>; calls: { approve: unknown[][]; reject: unknown[][]; inputs: TaskInput[]; shots: string[] }; finish(r?: TaskResult): void; fail(): void; progress(p: Progress): void }
 
-function rig(opts: { chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error; shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
+function rig(opts: { chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error | (() => Error | null); shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
   const calls = { approve: [] as unknown[][], reject: [] as unknown[][], inputs: [] as TaskInput[], shots: [] as string[] };
   const dones: Array<(r: TaskResult) => void> = [];
   const watchers: Array<(p: Progress) => void> = [];
@@ -66,7 +66,8 @@ function rig(opts: { chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; subm
   const deps: AppDeps = {
     run(input, onProgress: (p: Progress) => void) {
       calls.inputs.push(input);
-      if (opts.submitError) return Promise.reject(opts.submitError);
+      const refusal = typeof opts.submitError === 'function' ? opts.submitError() : opts.submitError;
+      if (refusal) return Promise.reject(refusal);
       return new Promise<TaskResult>((resolve, reject) => {
         dones.push(resolve); bads.push(reject); watchers.push(onProgress);
         onProgress({ kind: 'state', state: 'queued', position: 1 });
@@ -622,4 +623,60 @@ test('an assistant that breaks gives our plain error, and frees the person\'s sl
   assert.equal(bad.status, 500);
   assert.doesNotMatch(await bad.text(), /boom|secret/);
   assert.equal((await chatPost(r, id, { kind: 'ask', message: 'y' })).status, 200);
+});
+
+
+// ---- what a refusal costs, and how much of a body is read -----------------------------------------------------------
+
+test('a start the supervisor refuses uses up none of the limits: busy many times, then a real start', async () => {
+  let busy = true;
+  const { app } = rig({ submitError: () => (busy ? new SupervisorError(429, 'queue_full', 'x') : null), limits: { perHour: 3, perDay: 3, dailyCap: 3 } });
+  for (let i = 0; i < 6; i++) assert.equal((await post(app, { url: 'https://example.com/' })).status, 503, `try ${i}`);
+  busy = false;
+  assert.equal((await post(app, { url: 'https://example.com/' })).status, 202, 'the person and the service still have their whole allowance');
+});
+
+test('a started check still counts: the limits hold for checks that ran', async () => {
+  const { app } = rig({ limits: { perHour: 2, active: 5 } });
+  assert.equal((await post(app, { url: 'https://example.com/' })).status, 202);
+  assert.equal((await post(app, { url: 'https://example.com/' })).status, 202);
+  assert.equal((await post(app, { url: 'https://example.com/' })).status, 429);
+});
+
+/** A body sent in chunks with no length: counts how much of it the server pulled. */
+function streamed(total: number, chunk = 64 * 1024) {
+  let pulled = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(ctl) {
+      if (pulled >= total) return ctl.close();
+      pulled += chunk;
+      ctl.enqueue(new Uint8Array(chunk).fill(0x20));
+    },
+  });
+  return { body, pulled: () => pulled };
+}
+
+test('a body over the limit is cut off while it is read, not read whole first', async () => {
+  for (const [path, headers] of [['/api/tasks', JSONH], ['/api/reports/x/chat', JSONH]] as const) {
+    const { app } = rig();
+    const s = streamed(50 * 1024 * 1024);
+    const res = await app.request(path, { method: 'POST', headers, body: s.body, duplex: 'half' } as RequestInit);
+    assert.equal(res.status, path === '/api/tasks' ? 413 : res.status, path);
+    assert.ok(s.pulled() <= 4 * 64 * 1024, `${path}: pulled ${s.pulled()} bytes of a 50 MiB body`);
+  }
+});
+
+test('a decision takes only its own fields, from this site, in a small body', async () => {
+  const r = rig();
+  const created = await (await post(r.app, { url: 'https://example.com/', deep: true })).json() as { id: string; key: string };
+  await tick();
+  r.progress(WAITING);
+  const ok = { command_id: 'cmd-1', command_sha256: 'b'.repeat(64), allow: false };
+  assert.equal((await decide(r, created.id, created.key, { ...ok, extra: 1 })).status, 400, 'an unknown field');
+  assert.equal((await r.app.request(`/api/tasks/${created.id}/approvals`, { method: 'POST', headers: { ...keyed(created.key), origin: 'https://evil.test' }, body: JSON.stringify(ok) })).status, 403, 'another site');
+  const s = streamed(50 * 1024 * 1024);
+  const big = await r.app.request(`/api/tasks/${created.id}/approvals`, { method: 'POST', headers: keyed(created.key), body: s.body, duplex: 'half' } as RequestInit);
+  assert.equal(big.status, 413);
+  assert.ok(s.pulled() <= 4 * 64 * 1024, `pulled ${s.pulled()} bytes`);
+  assert.equal((await decide(r, created.id, created.key, ok)).status, 202, 'the control: the right body is taken');
 });
