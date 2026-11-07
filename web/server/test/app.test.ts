@@ -854,3 +854,24 @@ test('the API takes no request from an extension: the panel calls it from this s
   assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: 'chrome-extension://eanjmnmjjbbcpgnhdifdpmednecllbbc' })).status, 403);
   assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: `https://${HOST}` })).status, 202);
 });
+
+test('the demo page offers a harmless file, runs no script, and is not indexed', async () => {
+  const r = rig();
+  const page = await r.app.request('/demo/shared-file');
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /href="\/demo\/files\/Invoice-2026-11\.txt" download/);
+  assert.match(html, /A ZeroStress demo page/);
+  assert.doesNotMatch(html, /<script|\son[a-z]+=/i);
+  const csp = page.headers.get('content-security-policy') ?? '';
+  assert.match(csp, /^sandbox;/);
+  assert.match(csp, /default-src 'none'/);
+  assert.doesNotMatch(csp, /script-src/);
+  assert.equal(page.headers.get('x-robots-tag'), 'noindex');
+  const file = await r.app.request('/demo/files/Invoice-2026-11.txt');
+  assert.equal(file.status, 200);
+  assert.equal(file.headers.get('content-type'), 'text/plain; charset=utf-8');
+  assert.equal(file.headers.get('content-disposition'), 'attachment; filename="Invoice-2026-11.txt"');
+  assert.match(await file.text(), /^ZeroStress demo file\./);
+  assert.equal((await r.app.request('/demo/files/other.txt')).status, 404);
+});

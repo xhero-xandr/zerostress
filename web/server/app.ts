@@ -2,6 +2,7 @@
 // limiter are passed in), so a test can drive it without a supervisor.
 
 import { cleanEntry, MAX_LOG } from '../agent/agent-log.ts';
+import { DEMO_CSP, DEMO_FILE, DEMO_FILE_NAME, DEMO_PAGE } from './demo.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanText } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -166,6 +167,16 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/', (c) => page(c));
   app.get('/panel', (c) => { c.header('content-security-policy', PANEL_CSP); return page(c); });
   app.get('/api/demos', (c) => json(c, 200, { demos: deps.demos }));
+
+  // a safe page that offers a harmless file: the risky step a deep check can ask the owner about (server/demo.ts)
+  app.get('/demo/shared-file', (c) => c.html(DEMO_PAGE, 200, { 'content-security-policy': DEMO_CSP, 'x-robots-tag': 'noindex', 'cache-control': 'no-store' }));
+  app.get(`/demo/files/${DEMO_FILE_NAME}`, (c) => c.body(DEMO_FILE, 200, {
+    'content-type': 'text/plain; charset=utf-8',
+    'content-disposition': `attachment; filename="${DEMO_FILE_NAME}"`,
+    'content-security-policy': DEMO_CSP,
+    'x-robots-tag': 'noindex',
+    'cache-control': 'no-store',
+  }));
 
   // ---- start a check ----
   app.post('/api/tasks', async (c) => {
