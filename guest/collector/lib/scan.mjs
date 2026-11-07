@@ -90,6 +90,9 @@ export async function runScan({ job, browser, context, page, emitter, artifactDi
   if (!navError) {
     await page.waitForLoadState('networkidle', { timeout: LIMITS.settleMs }).catch(() => {});
     await tracker.waitForScheduled();
+    // a scheduled navigation (a meta refresh, a timer) ends when its page has loaded, not when it commits: reading a
+    // page that is still loading timed out and failed the whole check
+    await page.waitForLoadState('load', { timeout: job.navTimeoutS * 1000 }).catch(() => {});
   }
 
   const finalUrl = page.url();

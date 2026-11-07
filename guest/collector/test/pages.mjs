@@ -96,6 +96,13 @@ const routes = {
     }, 5000);
   },
   '/nolink': () => html('<button>Press</button>', '<title>No link</title>'),
+  // a refresh to a page that commits at once (headers and the start of the document) but finishes loading 2 s later
+  '/meta-slow': () => html('<p>Moving</p>', '<title>Meta</title><meta http-equiv="refresh" content="1; url=/final-slow">'),
+  '/final-slow': (req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.write('<!doctype html><html lang="en"><head><meta charset="utf-8">');
+    setTimeout(() => res.end('<title>Final slow</title></head><body><h1>Final slow</h1></body></html>'), 2000);
+  },
 };
 
 function redirect(res, code, to) {

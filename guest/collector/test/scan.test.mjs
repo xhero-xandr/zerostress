@@ -73,6 +73,13 @@ test('a meta refresh is reported as scheduled and followed', async () => {
   assert.equal(r.first('page').title, 'Final');
 });
 
+test('after a refresh the page is read once it has loaded, not as soon as it commits', async () => {
+  const r = await scanOnce(`${pages.origin}/meta-slow`);
+  assert.equal(r.code, 0, r.stderr());
+  assert.equal(r.first('summary').final_url, `${pages.origin}/final-slow`);
+  assert.equal(r.first('page').title, 'Final slow');
+});
+
 test('a JavaScript redirect after load is followed', async () => {
   const r = await scanOnce(`${pages.origin}/js`);
   assert.equal(r.code, 0, r.stderr());
