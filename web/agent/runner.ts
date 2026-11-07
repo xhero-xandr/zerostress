@@ -192,7 +192,9 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     try { return await Promise.race([domainFor(finalHost()), limit]); } finally { clearTimeout(timer); }
   };
 
-  const assessNow = async (): Promise<Assessment> => {
+  // `live`: the session is still open, so a proposed next action can be carried out; the last assessment, after the
+  // microVM is gone, has nothing to act on, and the log does not say it proposed anything
+  const assessNow = async (live: boolean): Promise<Assessment> => {
     const shot = await screenshot();
     const step = ++asked;
     const willAsk = deps.cfg.enabled && deps.model !== undefined && !task.triggered;
@@ -200,14 +202,14 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     const t0 = Date.now();
     const a = await assess({ events: [...events], hooks: task, screenshot: shot, domainAgeDays: (await domainNow())?.age_days ?? null }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
     if (a.mode === 'rules_only') note('rules_only', { reason: a.mode_reason ?? 'no_model_configured', verdict: a.rules.verdict, step });
-    else note('model_answered', { ms: Date.now() - t0, tokens: a.usage?.total ?? 0, verdict: a.model?.verdict ?? a.verdict, next: a.next?.action ?? 'none', mode: a.mode, step });
+    else note('model_answered', { ms: Date.now() - t0, tokens: a.usage?.total ?? 0, verdict: a.model?.verdict ?? a.verdict, next: (live && a.next?.action) || 'none', mode: a.mode, step });
     return a;
   };
 
   // ---- the agent's part of a session: look, decide, act, look again ----
   async function drive(): Promise<void> {
     for (let i = 0; i < deps.cfg.maxSteps && !finished; i++) {
-      const a = await assessNow();
+      const a = await assessNow(true);
       if (a.mode === 'rules_only' || !a.next) break;
       // the page kept streaming while the model was thinking: a proposal made before the hooks fired is not carried out
       if (task.triggered) {
@@ -376,7 +378,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     finished = true;
     for (const id of [...waiters.keys()]) wake(id);
     if (driving) await driving.catch(() => notes.push('the session driver failed'));
-    const assessment = await assessNow();
+    const assessment = await assessNow(false);
     const hs = { triggered: task.triggered, findings: task.findings(), ruleset: hooks.state().ruleset };
     note('verdict', { verdict: assessment.verdict, by: assessment.mode });
     note('hooks_summary', { inspected, findings: hs.findings.length });

@@ -1,7 +1,7 @@
 import { taskHooks } from '../task-hooks.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -303,6 +303,6 @@ test('the prompt: loaded with its hash; an empty one is refused; it tells the mo
   assert.match(prompt.sha256, /^[0-9a-f]{64}$/);
   const dir = mkdtempSync(join(tmpdir(), 'zs-prompt-'));
   writeFileSync(join(dir, 'p.md'), 'short');
-  assert.throws(() => loadPrompt(join(dir, 'p.md')), /missing or empty/);
-  for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only things that appear in the dossier/, /Do not propose anything else/]) assert.match(prompt.text, must);
+  try { assert.throws(() => loadPrompt(join(dir, 'p.md')), /missing or empty/); } finally { rmSync(dir, { recursive: true, force: true }); }
+  for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only things that appear in the dossier/, /Do not propose anything else/, /propose `download`.*only if the person agrees/]) assert.match(prompt.text, must);
 });

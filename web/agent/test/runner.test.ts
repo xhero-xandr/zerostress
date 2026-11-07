@@ -232,6 +232,21 @@ test('a session: look, follow a link the model chose, look again, close', async 
   assert.ok(second.includes('other.test'), 'the second look sees the page that was opened');
 });
 
+test('the last verdict, after the microVM is gone, proposes nothing in the log: nothing is left to act on', async () => {
+  let calls = 0;
+  const { sup, deps } = await setup({}, () => {
+    calls++;
+    return chat(calls === 1 ? answer({ verdict: 'suspicious', next: { action: 'none' } }) : answer({ verdict: 'suspicious', next: { action: 'download', ref: refOfPlain() } }));
+  });
+  sup.onCommand = (cmd, s) => { if (cmd.cmd === 'close') { s.evidence(ev('cmd_result', { id: cmd.id, ok: true })); finish(s); } };
+  begin(sup, plain(), true);
+  const r = await run(runTask({ url: 'http://page.test/', session: {} }, deps));
+  assert.equal(calls, 2);
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['close']);
+  const answered = r.log.filter((e) => e.code === 'model_answered').map((e) => [e.d!.step, e.d!.next]);
+  assert.deepEqual(answered, [[1, 'none'], [2, 'none']]);
+});
+
 /** The command a person is asked about: the supervisor holds it until the web layer passes the decision on. */
 const held = (cmd: any) => ({ body: { command_id: cmd.id, status: 'awaiting_approval', command_sha256: 'b'.repeat(64) } });
 const download = () => chat(answer({ next: { action: 'download', ref: refOfPlain() } }));

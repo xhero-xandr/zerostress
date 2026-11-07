@@ -18,8 +18,10 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 
 ### Changed
 - The code and every build belong to a new account, `zerostress`, with no sudo and no login, instead of the server's administrator; `./zs install` and `./zs update` give back any file written as root, and `./zs verify` checks both. The logs are root's only. `web/tools/panel-check.mjs` runs a deep check through the extension.
+- In a deep check the model is asked to propose a download when a page offers a file (the person still decides), so that the file itself becomes evidence.
 
 ### Fixed
+- The agent log no longer says the model "proposes" an action after the microVM is gone (the last verdict has nothing to act on).
 - The home page said a form submit waits for approval; a download does, and a form is never sent.
 - The extension’s description fits the Chrome Web Store limit (132 characters), and a release also carries a store package without the manifest’s `key`, which the store refuses.
 - A report with no rule finding said "Nothing unusual was recorded" next to a verdict the model or Cloudflare had raised; it now says who raised it.
