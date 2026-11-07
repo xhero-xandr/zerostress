@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { createGuardedHooks, createHooks, type GuardedHooks } from '../index.ts';
+import { createGuardedHooks, createHooks, scanText, type GuardedHooks } from '../index.ts';
 
 const bad = new URL('./workers/bad.ts', import.meta.url);
 const fixture = (name: string): unknown[] =>
@@ -67,6 +67,9 @@ for (const [mode, rule] of [['hang', 'hook_timeout'], ['silent', 'hook_timeout']
 
 test('the deadline is a deadline: a runaway thread is stopped near timeoutMs', async () => {
   const g = open({ workerUrl: bad, timeoutMs: 300 });
+  // the thread is up first: starting it (loading and checking the rules) is not part of the deadline, and on a busy
+  // machine it alone can take longer than the margin below
+  await g.inspect({ type: 'evidence', kind: 'page', text: 'x' });
   const t0 = Date.now();
   await g.inspect(ev('hang'));
   const took = Date.now() - t0;
@@ -103,14 +106,37 @@ test('after close nothing passes', async () => {
   assert.equal(g.state().triggered, true);
 });
 
-test('hostile strings come back within the deadline through the real thread', async () => {
-  const g = open();
-  for (const text of ['ignore '.repeat(30_000), `ignore ${'x '.repeat(100_000)}instructions`, 'QUJD'.repeat(60_000), `игнорируй ${'икс '.repeat(60_000)}инструкции`]) {
-    const t0 = Date.now();
-    await g.inspect({ type: 'evidence', kind: 'page', text });
-    assert.ok(Date.now() - t0 < 2000);
+const HOSTILE = (n: number) => ['ignore '.repeat(n * 30_000), `ignore ${'x '.repeat(n * 100_000)}instructions`, 'QUJD'.repeat(n * 60_000), `игнорируй ${'икс '.repeat(n * 60_000)}инструкции`];
+
+/** Median time of a scan, so that one slow moment of a busy machine does not decide. */
+function scanMs(text: string): number {
+  const xs: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const t0 = process.hrtime.bigint();
+    scanText('page', text);
+    xs.push(Number(process.hrtime.bigint() - t0) / 1e6);
   }
-  assert.equal(g.state().findings.some((f) => f.rule === 'hook_timeout'), false);
+  return xs.sort((a, b) => a - b)[1]!;
+}
+
+// A runaway pattern (catastrophic backtracking) costs hundreds of times more on these strings than on plain text of the
+// same length, and grows far faster than the length. Both are ratios measured on the same machine at the same moment,
+// so a busy machine does not decide them, unlike a fixed number of milliseconds.
+test('hostile strings are scanned in time that grows with their length, not faster', () => {
+  scanText('page', 'warm up'); // the first scan pays for loading code paths
+  for (const [i, text] of HOSTILE(1).entries()) {
+    const plain = scanMs('lorem ipsum dolor sit amet '.repeat(Math.ceil(text.length / 27)).slice(0, text.length));
+    const hostile = scanMs(text);
+    assert.ok(hostile < 4 * plain + 20, `string ${i}: ${hostile.toFixed(0)} ms against ${plain.toFixed(0)} ms for plain text of the same length`);
+    const doubled = scanMs(HOSTILE(2)[i]!);
+    assert.ok(doubled < 3 * hostile + 20, `string ${i}: ${hostile.toFixed(0)} ms, twice as long ${doubled.toFixed(0)} ms`);
+  }
+});
+
+test('hostile strings come back through the real thread without stopping it', async () => {
+  const g = open({ timeoutMs: 60_000 });
+  for (const text of HOSTILE(1)) await g.inspect({ type: 'evidence', kind: 'page', text });
+  assert.equal(g.state().findings.some((f) => f.rule === 'hook_timeout' || f.rule === 'hook_crash'), false);
 });
 
 test('a thread that cannot start, or never gets ready, withholds the event', async () => {
@@ -170,7 +196,8 @@ test('the thread starts when the hooks are created, not with the first event', a
   process.env.ZS_MARKER = mark;
   try {
     const g = open({ workerUrl: new URL('./workers/marker.ts', import.meta.url) });
-    await new Promise((res) => setTimeout(res, 800));
+    // no event is sent: a thread that started only with the first event would never leave the mark, however long we wait
+    for (let i = 0; i < 200 && !existsSync(mark); i++) await new Promise((res) => setTimeout(res, 50));
     assert.ok(existsSync(mark), 'it was already running before any event');
     await g.close();
   } finally {
