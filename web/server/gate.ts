@@ -121,10 +121,10 @@ export function checkAddress(raw: unknown): GateResult {
 
 /** Our sentence for each refusal. It never repeats the address. */
 export const GATE_TEXT: Readonly<Record<GateReason, string>> = {
-  bad_url: 'Это не похоже на адрес сайта. Вставьте ссылку целиком, например https://example.com/page.',
-  bad_scheme: 'Можно проверять только ссылки, которые начинаются с http или https.',
-  credentials: 'В ссылке указаны логин или пароль. Уберите их и повторите.',
-  bad_port: 'Этот порт проверять нельзя. Допустимы обычные адреса сайтов.',
-  bad_host: 'Не удалось разобрать имя сайта в ссылке.',
-  private_address: 'Это внутренний или служебный адрес. Такие адреса мы не открываем.',
+  bad_url: 'That does not look like a web address. Paste the whole link, for example https://example.com/page.',
+  bad_scheme: 'Only links that start with http or https can be checked.',
+  credentials: 'The link contains a user name or password. Remove them and try again.',
+  bad_port: 'This port cannot be checked. Use an ordinary website address.',
+  bad_host: 'The site name in the link could not be read.',
+  private_address: 'This is an internal or service address. We never open those.',
 };
