@@ -44,6 +44,8 @@ if (args.includes('--list')) {
 const work = mkdtempSync(join(tmpdir(), 'zs-mutate-'));
 cpSync(webDir, join(work, 'web'), { recursive: true, filter: (p) => !p.includes('node_modules') && !p.includes('/client/dist') && !p.includes('/build/') });
 const root = join(work, 'web');
+// an interrupted run (Ctrl-C, a timeout) skips the finally below: remove the copy then too
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { rmSync(work, { recursive: true, force: true }); process.exit(130); });
 // the command tests read the supervisor's shared fixture, which lives next to web/ in the repository
 cpSync(join(dirname(webDir), 'supervisor/testdata'), join(work, 'supervisor/testdata'), { recursive: true });
 symlinkSync(join(webDir, 'node_modules'), join(root, 'node_modules'), 'junction');

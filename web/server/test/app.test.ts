@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import type { ChatInput, ChatReply } from '../../agent/chat.ts';
 import type { Progress, TaskInput, TaskResult } from '../../agent/runner.ts';
 import { SupervisorError } from '../../agent/supervisor.ts';
@@ -56,6 +56,7 @@ const CLIENT = (() => {
   writeFileSync(join(dir, 'assets', 'notes.txt'), 'not an asset');
   return dir;
 })();
+after(() => rmSync(CLIENT, { recursive: true, force: true }));
 
 interface Rig { app: ReturnType<typeof createApp>; calls: { approve: unknown[][]; reject: unknown[][]; inputs: TaskInput[]; shots: string[] }; finish(r?: TaskResult): void; fail(): void; progress(p: Progress): void }
 
