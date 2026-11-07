@@ -16,6 +16,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 - A safe demo page, `/demo/shared-file`, that offers a harmless text file: a deep check of it has a download to ask the owner about (Pattern B on camera).
 
 ### Fixed
+- The extension’s description fits the Chrome Web Store limit (132 characters), and a release also carries a store package without the manifest’s `key`, which the store refuses.
 - A report with no rule finding said "Nothing unusual was recorded" next to a verdict the model or Cloudflare had raised; it now says who raised it.
 - The home page said a deep check waits for approval before "sending a form"; the model can never send a form, and a download is what waits for approval.
 

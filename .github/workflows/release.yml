@@ -50,6 +50,7 @@ jobs:
           echo "ZIP=$zip" >> "$GITHUB_ENV"
           (cd build/extension && zip -qr "$GITHUB_WORKSPACE/$zip" .)
           sha256sum "$zip" | tee "$zip.sha256"
+          node web/tools/extension-store.mjs "zerostress-extension-$VERSION-store.zip"
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,4 +60,4 @@ jobs:
             echo "**Browser extension:** download \`$ZIP\` below, unzip it, then \`chrome://extensions\` → Developer mode → Load unpacked → the unzipped folder. The agent inside it is https://zerostress.space/panel and updates with the site."
           } >> release-notes.md
           gh release create "$GITHUB_REF_NAME" --title "ZeroStress $VERSION" --notes-file release-notes.md --verify-tag \
-            "$ZIP" "$ZIP.sha256"
+            "$ZIP" "$ZIP.sha256" "zerostress-extension-$VERSION-store.zip"

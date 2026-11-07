@@ -37,3 +37,10 @@ test('its id is the one the server lets frame /panel and the panel takes links f
   const client = readFileSync(new URL('../../client/src/extension.ts', import.meta.url), 'utf8');
   assert.match(client, new RegExp(`EXTENSION_ORIGIN = 'chrome-extension://${id}'`));
 });
+
+test('the manifest fits the Chrome Web Store limits', () => {
+  // the store refuses a longer description (132) or name (75), and refuses "key": tools/extension-store.mjs drops it
+  assert.ok(manifest.description.length <= 132, `description is ${manifest.description.length} characters`);
+  assert.ok(manifest.name.length <= 75, `name is ${manifest.name.length} characters`);
+  assert.ok(manifest.short_name.length <= 12);
+});
