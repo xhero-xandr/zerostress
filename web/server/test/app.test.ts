@@ -919,3 +919,59 @@ test('the examples under the address field: label|url, or label|url|deep for one
   const d = parseDemos(DEFAULT_DEMOS);
   assert.ok(d.some((x) => x.deep && x.url === 'https://zerostress.space/demo/shared-file'), 'the file to approve is one of the examples');
 });
+
+// ---- an email: its links in one microVM ----------------------------------------------------------------------------
+
+const postEmail = (app: Rig['app'], body: unknown, headers: Record<string, string> = {}) =>
+  app.request('/api/email-checks', { method: 'POST', headers: { ...JSONH, ...headers }, body: JSON.stringify(body) });
+
+test('an email check: the links through the gate, once each, at most ten; one run in one session, from our list page', async () => {
+  const r = rig();
+  const many = Array.from({ length: 14 }, (_, i) => `https://s${i}.example/`);
+  const res = await postEmail(r.app, { links: ['https://a.example/x', 'https://a.example/x', 'http://169.254.169.254/latest/', 'javascript:alert(1)', 'b.example', ...many] });
+  assert.equal(res.status, 202);
+  const j = (await res.json()) as { id: string; key: string; links: number; skipped: number };
+  assert.equal(j.links, 10);
+  assert.equal(j.skipped, 6);
+  assert.equal(r.calls.inputs.length, 1, 'one run for the whole email');
+  const input = r.calls.inputs[0]!;
+  assert.equal(input.url, `https://zerostress.space/x/${j.id}`);
+  assert.deepEqual(input.session, { idle_s: 30, max_s: 120 });
+  assert.deepEqual(input.links!.slice(0, 3), ['https://a.example/x', 'https://b.example/', 'https://s0.example/']);
+  assert.ok(!input.links!.some((u) => u.includes('169.254') || u.startsWith('javascript')), 'the gate refused them');
+  // the list page: the links, escaped, and nothing else; while the check runs only
+  const page = await r.app.request(`/x/${j.id}`);
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(page.headers.get('x-robots-tag'), 'noindex');
+  assert.doesNotMatch(page.headers.get('content-security-policy') ?? '', /script-src/);
+  const html = await page.text();
+  assert.equal((html.match(/<a href=/g) ?? []).length, 10);
+  assert.doesNotMatch(html, /<script/i);
+  r.finish();
+  await tick();
+  assert.equal((await r.app.request(`/x/${j.id}`)).status, 404, 'gone with the run');
+  assert.equal((await r.app.request(`/x/${'0'.repeat(32)}`)).status, 404);
+});
+
+test('an email check: nothing that passes the gate, or a body of another shape, starts nothing; it counts as one check', async () => {
+  const r = rig({ limits: { perHour: 1 } });
+  assert.equal((await postEmail(r.app, { links: ['http://127.0.0.1/', 'ftp://x.example/'] })).status, 400);
+  assert.equal((await postEmail(r.app, { links: [] })).status, 400);
+  assert.equal((await postEmail(r.app, { links: ['https://a.example/'], email: 'the whole text' })).status, 400, 'never the email itself');
+  assert.equal((await postEmail(r.app, { links: 'https://a.example/' })).status, 400);
+  assert.equal(r.calls.inputs.length, 0);
+  assert.equal((await postEmail(r.app, { links: ['https://a.example/', 'https://b.example/', 'https://c.example/'] })).status, 202);
+  assert.equal((await postEmail(r.app, { links: ['https://d.example/'] })).status, 429, 'the hour\'s one check is used');
+});
+
+test('an email check: each link\'s own screenshot is served by its number, and only an image the run saved', async () => {
+  const result = { ...hostile(), email: { links: [{ url: 'https://a.example/', final_url: 'https://a.example/', verdict: 'benign', by: 'vision', signals: [], password: false, downloads: 0, redirects: 0, error: null, shot: 'link-1.png' }] } } as never;
+  const r = rig({ result });
+  const j = (await (await postEmail(r.app, { links: ['https://a.example/'] })).json()) as { id: string };
+  r.finish();
+  await tick();
+  assert.equal((await r.app.request(`/r/${j.id}/screenshot.png?link=0`)).status, 200);
+  assert.deepEqual(r.calls.shots, ['link-1.png']);
+  for (const bad of ['1', '-1', 'x', '0.5']) assert.equal((await r.app.request(`/r/${j.id}/screenshot.png?link=${bad}`)).status, 404, bad);
+});

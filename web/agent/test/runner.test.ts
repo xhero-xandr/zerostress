@@ -247,6 +247,68 @@ test('the last verdict, after the microVM is gone, proposes nothing in the log: 
   assert.deepEqual(answered, [[1, 'none'], [2, 'none']]);
 });
 
+test('an email: every link opened in this one microVM from our list, each judged on its own; the report is the worst', async () => {
+  const LIST = 'https://zerostress.test/x/0123';
+  const L = ['https://good.test/', 'https://phish.test/login', 'https://gone.test/'];
+  const { sup, deps } = await setup();
+  let snap = 1;
+  // the list page in front of the agent; the third link is not on it, so it can never be opened
+  const list = () => [
+    ev('page', { url: LIST, title: 'links', lang: 'en', text: 'Link 1 Link 2', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+    ev('forms', { forms: [], total: 0, loose_password_fields: 0 }),
+    ev('snapshot', { snap, text: '- list', lines: 1, truncated: false }),
+    ev('links', { snap, links: L.slice(0, 2).map((href, i) => ({ ref: `e${i + 1}`, text: `Link ${i + 1}`, href, origin_differs: true })) }),
+  ];
+  const ack = (cmd: any, evidence: any[]) => {
+    sup.emit('command', { command_id: cmd.id, cmd: cmd.cmd, status: 'sent', risk: 'safe', command_sha256: 'a'.repeat(64) });
+    for (const e of evidence) sup.evidence(e);
+    sup.evidence(ev('cmd_result', { id: cmd.id, ok: true, snap }));
+    sup.emit('command', { command_id: cmd.id, cmd: cmd.cmd, status: 'done', risk: 'safe', command_sha256: 'a'.repeat(64) });
+  };
+  let shots = 0;
+  sup.onCommand = (cmd) => {
+    if (cmd.cmd === 'open_link') {
+      const href = L[Number(String(cmd.ref).slice(1)) - 1]!;
+      const phish = href.includes('phish');
+      snap++;
+      ack(cmd, [
+        ev('nav', { via: 'commit', from: LIST, to: href }),
+        ev('page', { url: href, title: phish ? 'Sign in' : 'Hello', lang: 'en', text: phish ? 'Sign in to your bank' : 'A plain page', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+        ev('forms', { forms: phish ? [{ form: 0, action: 'https://collect.evil.test/p', has_password: true, cross_origin: true, fields: [{ type: 'password', name: 'pw' }] }] : [], total: phish ? 1 : 0, loose_password_fields: 0 }),
+        ev('snapshot', { snap, text: '- page', lines: 1, truncated: false }),
+        ev('links', { snap, links: [] }),
+      ]);
+    } else if (cmd.cmd === 'screenshot') {
+      sup.emit('artifact', { saved: true, name: `shot-${++shots}.png`, sha256: 'b'.repeat(64), bytes: 100, mime: 'image/png' });
+      ack(cmd, []);
+    } else if (cmd.cmd === 'back') {
+      snap++;
+      ack(cmd, list());
+    } else if (cmd.cmd === 'close') {
+      sup.evidence(ev('cmd_result', { id: cmd.id, ok: true }));
+      finish(sup);
+    }
+  };
+  begin(sup, [ev('nav', { via: 'requested', from: '', to: LIST }), ...list(), ev('summary', { final_url: LIST, nav_error: null })], true);
+  const r = await run(runTask({ url: LIST, session: {}, links: L }, deps));
+  // only safe commands, built by the code: open, look, come back; never a download or a form
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['open_link', 'screenshot', 'back', 'open_link', 'screenshot', 'back', 'close']);
+  for (const c of sup.commands) { const v = validateCommand(JSON.stringify(c)); assert.ok(v.ok && v.risk === 'safe'); }
+  assert.equal(sup.submits.length, 1, 'one microVM for the whole email');
+  const links = r.email!.links;
+  assert.deepEqual(links.map((l) => [l.url, l.final_url, l.error, l.shot]), [
+    [L[0], L[0], null, 'shot-1.png'], [L[1], L[1], null, 'shot-2.png'], [L[2], L[2], 'not_reached', null]]);
+  assert.equal(links[0]!.verdict, 'benign');
+  assert.notEqual(links[1]!.verdict, 'benign');
+  assert.equal(links[1]!.password, true);
+  assert.equal(links[2]!.verdict, 'unknown');
+  // the report above the list is the worst link, never our own list page
+  assert.equal(r.url, L[1]);
+  assert.equal(r.assessment.verdict, links[1]!.verdict);
+  assert.equal(r.shots.desktop, 'shot-2.png');
+  assert.deepEqual(r.log.filter((e) => e.code === 'email_link_verdict').map((e) => [e.d.n, e.d.verdict === 'benign']).sort(), [[1, true], [2, false], [3, false]]);
+});
+
 /** The command a person is asked about: the supervisor holds it until the web layer passes the decision on. */
 const held = (cmd: any) => ({ body: { command_id: cmd.id, status: 'awaiting_approval', command_sha256: 'b'.repeat(64) } });
 const download = () => chat(answer({ next: { action: 'download', ref: refOfPlain() } }));

@@ -129,6 +129,9 @@ export function logLine(e: LogEntry): string {
     case 'verdict': return L.verdict(str('verdict'), str('by'));
     case 'hooks_summary': return L.hooksSummary(num('inspected') ?? 0, num('findings') ?? 0);
     case 'second_opinion_asked': return L.secondAsked(d.auto === true);
+    case 'email_links': return L.emailLinks(num('count') ?? 0);
+    case 'email_link': return L.emailLink(num('n') ?? 0, str('host'));
+    case 'email_link_verdict': return L.emailLinkVerdict(num('n') ?? 0, str('host'), T.verdict[str('verdict') as keyof typeof T.verdict] ?? str('verdict'));
     case 'second_opinion': return L.second(str('source'), num('status'), typeof d.malicious === 'boolean' ? d.malicious : null, str('host'));
   }
 }

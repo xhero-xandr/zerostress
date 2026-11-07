@@ -13,6 +13,7 @@ export function hostile(over: Partial<PublicReport> = {}, facts: Partial<PublicR
     confidence: 0.9,
     status: { state: 'done', failure: null },
     second_opinion_state: null,
+    email: null,
     second_opinion: { source: 'found', scan_id: '11111111-2222-4333-8444-555555555555', scanned_at: '2026-11-04T12:08:00.000Z', final_host: `evil.example${EVIL}`, status: 200, title: `Title ${EVIL}`, title_withheld: false, malicious: true, screenshot: true },
     // a host of the wrong shape never passes the server; the page must hold even if one did
     log: [

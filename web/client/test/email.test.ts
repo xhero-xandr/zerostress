@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { isEmailSource, looksLikeEmail, readEmail } from '../src/email.ts';
+import { isEmailSource, linksToCheck, looksLikeEmail, readEmail } from '../src/email.ts';
 
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
 const ids = (raw: string) => readEmail(raw).warnings.map((w) => w.id);
@@ -151,4 +151,12 @@ test('pasted text is an email when it is a source, or has links and some length;
   expect(looksLikeEmail(PHISH)).toBe(true);
   expect(isEmailSource('Subject: hi\nFrom: a@b.example\n\nbody')).toBe(true);
   expect(isEmailSource('Note: this is not\nan email: really')).toBe(false);
+});
+
+test('the links for the whole email: unsubscribe and preference links are left out, at most ten', () => {
+  const links = readEmail(['https://a.example/x', 'https://news.example/api/mailings/unsubscribe/abc', 'https://b.example/opt-out?u=1', 'https://c.example/email-preferences', ...Array.from({ length: 12 }, (_, i) => `https://s${i}.example/`)].join('\n')).links;
+  const picked = linksToCheck(links);
+  expect(picked[0]).toBe('https://a.example/x');
+  expect(picked.some((u) => /unsubscribe|opt-out|preferences/.test(u))).toBe(false);
+  expect(picked).toHaveLength(10);
 });

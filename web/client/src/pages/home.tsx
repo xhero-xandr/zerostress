@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Copy, Download, Monitor, PanelRight, ScanSearch, ShieldHalf } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ApiError, getDemos, startTask } from '../api.ts';
+import { ApiError, getDemos, startEmailCheck, startTask } from '../api.ts';
 import { asLink, isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
-import { readEmail, type EmailCheck } from '../email.ts';
+import { linksToCheck, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
 import { T } from '../text.ts';
 import { extensionZip, RELEASE, releasePage } from '../version.ts';
@@ -24,6 +24,19 @@ export function Home() {
   const [error, setError] = useState('');
   const demos = useQuery({ queryKey: ['demos'], queryFn: getDemos, staleTime: Infinity });
 
+  // the whole email in one microVM: only its links are sent, never the email
+  const startAll = async (urls: string[]) => {
+    setError('');
+    setBusy(true);
+    try {
+      const { id, key } = await startEmailCheck(urls);
+      if (!isTaskId(id) || !/^[A-Za-z0-9_-]{20,100}$/.test(key)) throw new ApiError(500, 'server', T.serverError);
+      navigate({ pathname: `/r/${id}`, hash: `k=${key}` });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : T.serverError);
+      setBusy(false);
+    }
+  };
   const start = async (typed: string) => {
     setError('');
     const target = asLink(typed);
@@ -79,6 +92,12 @@ export function Home() {
               {mail !== null && <EmailFindings mail={mail} />}
               {mail !== null && (mail.links.length === 0 ? <p className="text-muted">{mail.source ? T.mail.noLinks : T.emailNone}</p> : (
                 <div className="flex flex-col gap-2">
+                  {linksToCheck(mail.links).length > 1 && (
+                    <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-3">
+                      <button type="button" className={`${btnPrimary} self-start`} disabled={busy} onClick={() => void startAll(linksToCheck(mail.links))}>{busy ? T.checking : T.mail.checkAll(linksToCheck(mail.links).length)}</button>
+                      <p className="text-sm text-faint">{T.mail.checkAllHint}</p>
+                    </div>
+                  )}
                   <p className="text-[15px] text-muted">{T.emailFound(mail.links.length)}</p>
                   <ul aria-label={T.emailFound(mail.links.length)} className="flex flex-col gap-2">
                     {mail.links.map((l) => (

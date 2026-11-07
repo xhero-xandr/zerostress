@@ -10,6 +10,8 @@ export type SecondOpinion = ScanOpinion & { title_withheld: boolean; screenshot:
 import { taskHooks } from './task-hooks.ts';
 import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
+import { validateCommand } from './commands.ts';
+import type { Verdict } from './signals.ts';
 import type { Budget } from './budget.ts';
 import type { AgentConfig } from './config.ts';
 import { pickShots, type Shots } from './devices.ts';
@@ -35,6 +37,26 @@ export interface TaskInput {
   url: string;
   /** keep the page open and let the agent act (needs session slots at the supervisor) */
   session?: { idle_s?: number; max_s?: number };
+  /**
+   * An email's links, already through the gate: `url` is then our page that lists them, and in its session the agent
+   * opens each one from that page, in this one microVM, looks at it, and comes back for the next.
+   */
+  links?: string[];
+}
+
+/** One link of an email, as the agent found it. Only our shapes: the page's own words stay in the evidence. */
+export interface EmailLinkResult {
+  url: string;
+  final_url: string;
+  verdict: Verdict;
+  by: Assessment['mode'];
+  signals: string[];
+  password: boolean;
+  downloads: number;
+  redirects: number;
+  /** why it could not be opened, when it could not */
+  error: string | null;
+  shot: string | null;
 }
 
 export interface Step {
@@ -74,6 +96,8 @@ export interface TaskResult {
   second_opinion?: SecondOpinion;
   /** why it could not be had, when it could not (the owner may ask again) */
   second_opinion_error?: 'not_found' | 'refused' | 'unavailable' | 'quota' | 'pending';
+  /** an email's links, each looked at in the same microVM (TaskInput.links); the report above is the worst of them */
+  email?: { links: EmailLinkResult[] };
   notes: string[];
 }
 
@@ -269,6 +293,109 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     }
   }
 
+  // ---- an email: every link opened in this one microVM, from our page that lists them ----
+  // The code decides here, not a model: which links (the gated list), in which order, and only safe commands. Each link's
+  // evidence is the stretch between its click and the way back, read afterwards as a visit of its own.
+  interface Stretch { url: string; start: number; end: number; error: string | null; shot: boolean }
+  const stretches: Stretch[] = [];
+  let shotBase = 0;
+  let cmdNo = 0;
+  async function send(cmd: Record<string, unknown>): Promise<Step | null> {
+    const id = `e${++cmdNo}`;
+    const line = JSON.stringify({ ...cmd, id });
+    const v = validateCommand(line);
+    if (!v.ok || v.risk !== 'safe') return null; // never anything risky without a person
+    const step: Step = { id, action: String(cmd.cmd), line, risk: 'safe', status: 'sending' };
+    steps.push(step);
+    const done = new Promise<void>((resolve) => { waiters.set(id, resolve); });
+    try {
+      const receipt = await deps.sup.command(runId, line);
+      if (!COMMAND_END.has(step.status)) step.status = receipt.status;
+    } catch (e) {
+      step.status = 'error';
+      step.error = e instanceof SupervisorError ? e.code : 'unreachable';
+      return step;
+    }
+    await Promise.race([done, new Promise<void>((r) => setTimeout(r, commandWaitMs).unref())]);
+    return step;
+  }
+  /** the reference of `url` among the links of the page in front of the agent now */
+  const refOf = (url: string): string | null => {
+    const g = gate.state();
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (!isObj(e) || e.kind !== 'links' || e.snap !== g.snap || !Array.isArray(e.links)) continue;
+      for (const l of e.links) if (isObj(l) && typeof l.ref === 'string' && typeof l.href === 'string' && parseUrl(l.href)?.href === url) return l.ref;
+      return null;
+    }
+    return null;
+  };
+  async function driveEmail(links: string[]): Promise<void> {
+    note('email_links', { count: links.length });
+    shotBase = artifacts.length;
+    for (const [i, url] of links.entries()) {
+      if (finished || total.signal.aborted) break;
+      const ref = refOf(url);
+      const snap = gate.state().snap;
+      if (ref === null || snap === null) { stretches.push({ url, start: events.length, end: events.length, error: 'not_reached', shot: false }); continue; }
+      note('email_link', { n: i + 1, host: hostOf(url) });
+      const start = events.length;
+      const opened = await send({ cmd: 'open_link', snap, ref });
+      const ok = opened?.status === 'done';
+      const shot = ok ? (await send({ cmd: 'screenshot' }))?.status === 'done' : false;
+      stretches.push({ url, start, end: events.length, error: ok ? null : (opened?.error ?? opened?.status ?? 'refused'), shot });
+      if (ok && (await send({ cmd: 'back' }))?.status !== 'done') {
+        notes.push('the agent could not come back to the list of links');
+        break;
+      }
+    }
+    if (!finished) {
+      try { await deps.sup.command(runId, '{"cmd":"close","id":"close-1"}'); } catch { notes.push('the session could not be closed by the agent; the supervisor will close it'); }
+    }
+  }
+
+  /** Each link's stretch as a visit of its own, judged like any other: by the rules, and by the model with its image. */
+  async function judgeEmail(links: string[]): Promise<{ results: EmailLinkResult[]; worst: { assessment: Assessment; events: unknown[]; shot: string | null; url: string; final: string } | null }> {
+    const pngs = artifacts.slice(shotBase).filter((a) => a.mime === 'image/png').map((a) => a.name);
+    let k = 0;
+    const visits = stretches.map((st) => {
+      const own = events.slice(st.start, st.end).filter((e) => !(isObj(e) && (e.kind === 'cmd_result' || e.kind === 'snapshot')));
+      const pages = own.filter((e): e is Ev => isObj(e) && e.kind === 'page');
+      const final = typeof pages.at(-1)?.url === 'string' ? String(pages.at(-1)!.url) : st.url;
+      const evs: unknown[] = [{ kind: 'nav', via: 'requested', from: '', to: st.url }, ...own, { kind: 'summary', final_url: final, nav_error: st.error === null ? null : 'not_opened' }];
+      const shot = st.shot ? (pngs[k++] ?? null) : null;
+      return { st, evs, final, shot };
+    });
+    const RANK: Record<Verdict, number> = { benign: 0, unknown: 1, suspicious: 2, malicious: 3 };
+    const judged = await Promise.all(visits.map(async (v, i) => {
+      let png: Buffer | null = null;
+      if (v.shot && deps.cfg.vision) { try { png = await deps.sup.artifact(runId, v.shot, SHOT_MAX); } catch { png = null; } }
+      const age = (await Promise.race([domainFor(parseUrl(v.final)?.hostname ?? ''), new Promise<null>((r) => setTimeout(() => r(null), 6000).unref())]))?.age_days ?? null;
+      const a = v.st.error === null
+        ? await assess({ events: v.evs, hooks: task, screenshot: png, domainAgeDays: age }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget })
+        : null;
+      const verdict: Verdict = a ? a.verdict : 'unknown';
+      note('email_link_verdict', { n: i + 1, verdict, by: a?.mode ?? 'rules_only', host: hostOf(v.final) });
+      const own = v.evs.filter(isObj);
+      const result: EmailLinkResult = {
+        url: v.st.url,
+        final_url: v.final,
+        verdict,
+        by: a?.mode ?? 'rules_only',
+        signals: a ? a.rules.signals.map((x) => x.id) : [],
+        password: own.some((e) => e.kind === 'forms' && Array.isArray(e.forms) && e.forms.some((f) => isObj(f) && f.has_password === true)),
+        downloads: own.filter((e) => e.kind === 'download').length,
+        redirects: own.filter((e) => e.kind === 'nav' && e.via === 'http').length,
+        error: v.st.error,
+        shot: v.shot,
+      };
+      return { result, a, v };
+    }));
+    const results = [...judged.map((j) => j.result), ...links.slice(stretches.length).map((url): EmailLinkResult => ({ url, final_url: url, verdict: 'unknown', by: 'rules_only', signals: [], password: false, downloads: 0, redirects: 0, error: 'not_reached', shot: null }))];
+    const worst = judged.filter((j) => j.a !== null).sort((x, y) => RANK[y.a!.verdict] - RANK[x.a!.verdict])[0];
+    return { results, worst: worst ? { assessment: worst.a!, events: worst.v.evs, shot: worst.v.shot, url: worst.v.st.url, final: worst.v.final } : null };
+  }
+
   let driving: Promise<void> | null = null;
 
   // what the collector did, in the log: hosts and counts only, never the page's words
@@ -323,7 +450,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       const e = r.event as Ev;
       if (e.kind === 'session_ready') {
         ready = true;
-        if (input.session && !driving) driving = drive();
+        if (input.session && !driving) driving = input.links ? driveEmail(input.links) : drive();
       }
       if (e.kind === 'cmd_result' && typeof e.id === 'string') {
         const step = steps.find((x) => x.id === e.id);
@@ -380,25 +507,29 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     finished = true;
     for (const id of [...waiters.keys()]) wake(id);
     if (driving) await driving.catch(() => notes.push('the session driver failed'));
-    const assessment = await assessNow(false);
+    const email = input.links ? await judgeEmail(input.links) : null;
+    // an email with no link that could be opened is "could not check", never a verdict on our own list page
+    const assessment = !email ? await assessNow(false) : email.worst ? email.worst.assessment
+      : await assess({ events: [{ kind: 'summary', final_url: input.links![0] ?? input.url, nav_error: 'not_opened' }], hooks: task, screenshot: null, domainAgeDays: null }, { cfg: deps.cfg, prompt: deps.prompt, client: undefined, budget: deps.budget });
     const hs = { triggered: task.triggered, findings: task.findings(), ruleset: hooks.state().ruleset };
     note('verdict', { verdict: assessment.verdict, by: assessment.mode });
     note('hooks_summary', { inspected, findings: hs.findings.length });
     return {
       schema: 1,
       run_id: runId,
-      url: input.url,
+      url: email?.worst?.url ?? input.url,
       state,
       failure,
       assessment,
       evidence_events: events.length,
-      facts: buildFacts(events, { geo: deps.geo, domain: await domainNow() }),
+      facts: email?.worst ? buildFacts(email.worst.events, { geo: deps.geo, domain: await domainFor(parseUrl(email.worst.final)?.hostname ?? '') }) : buildFacts(events, { geo: deps.geo, domain: await domainNow() }),
       hooks: { triggered: hs.triggered, findings: hs.findings.map((f) => ({ rule: f.rule, category: String(f.category), strength: f.strength, place: f.place, layer: f.layer })), ruleset: hs.ruleset },
       steps,
       refused,
       pending_approval: pending,
       artifacts,
-      shots: pickShots(events, artifacts),
+      shots: email ? { desktop: email.worst?.shot ?? null, mobile: null, tablet: null } : pickShots(events, artifacts),
+      ...(email ? { email: { links: email.results } } : {}),
       timeline,
       log: log.entries,
       notes: [...notes, ...(ready ? [] : input.session ? ['the session never became ready'] : [])],

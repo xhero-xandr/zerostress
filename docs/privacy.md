@@ -9,7 +9,7 @@ Last updated: 7 November 2026.
 - No accounts, no advertising, no analytics, no tracking cookies. We do not sell or share data for marketing.
 - What you send is the link you want checked, and any question you ask about the result.
 - A report lives for 24 hours, then it is deleted.
-- An email you paste into the extension stays in your browser; only a link you choose from it is sent.
+- An email you paste stays in your browser: it is read there. Only its links are sent, one you pick or all of them when you ask to check the whole email, never its text.
 
 ## What we receive
 
@@ -42,7 +42,7 @@ We do not send your data anywhere else.
 - **contextMenus**: adds "Check this link in a sandbox" to the right-click menu of a link, and "Check this page's address in a sandbox" to the menu of a page. Only that one address is taken, and only when you choose the item.
 - **sidePanel**: shows the ZeroStress agent (https://zerostress.space/panel) in the browser's side panel.
 - **storage**: keeps the link you right-clicked in the browser's session storage for the moment it takes the side panel to open, then removes it. Nothing is stored after you close the browser.
-- An email you paste into the panel is read in your browser to find its links. The email is not sent to us; only a link you pick from it is checked.
+- An email you paste into the panel is read in your browser to find its links. The email is not sent to us; only the link you pick, or its links when you check the whole email, are sent. Unsubscribe links are left out.
 - Its code is open: https://github.com/xhero-xandr/zerostress
 
 ## In your browser

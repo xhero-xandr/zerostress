@@ -66,3 +66,16 @@ test('an example that needs the agent to act ticks the box for it; another one d
   fireEvent.click(screen.getByRole('button', { name: 'A harmless page' }));
   expect(box().checked).toBe(false);
 });
+
+test('a whole email in one sandbox: one request with its links only, never the email', async () => {
+  const { sent, router } = show();
+  fireEvent.click(screen.getByRole('tab', { name: 'An email' }));
+  fireEvent.change(screen.getByLabelText(/Paste the email/), { target: { value: EMAIL } });
+  fireEvent.click(screen.getByRole('button', { name: 'Find the links' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check all 2 links in one sandbox' }));
+  await waitFor(() => expect(router.state.location.pathname).toBe(`/r/${ID}`));
+  const posts = sent.filter((x) => x.url === '/api/email-checks');
+  expect(posts.map((x) => JSON.parse(x.body))).toEqual([{ links: ['https://paypa1-secure.test/login', 'https://help.example.org/'] }]);
+  expect(sent.filter((x) => x.url === '/api/tasks')).toEqual([]);
+  for (const x of sent) expect(x.body).not.toMatch(/Secret order|99812/);
+});

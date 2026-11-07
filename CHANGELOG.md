@@ -13,6 +13,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 ## [Unreleased]
 
 ### Added
+- "Check all links in one sandbox" for an email: one microVM opens our page that lists the email's links (each through the gate; unsubscribe links left out; at most ten), the agent opens each in turn with safe commands only, takes a screenshot, comes back for the next, and each link is judged on its own by the rules and the vision model. The report is the worst link, with every link listed (verdict, where it led, password forms, downloads, redirects, its screenshot). Only the links are sent, never the email.
 - Examples under the address field include Google's phishing test page and "A file to approve", which ticks "Let the agent act on the page" so the Allow / Don't allow step can be seen (`WEB_DEMOS` takes `label|url|deep`).
 - A page behind a bot wall gets Cloudflare's second opinion on its own, with nothing to press: a recent public scan of the same address, or else a new unlisted scan (not in Cloudflare's public search, so nobody's consent is needed). The report and the side panel update when it answers.
 - A bare address (`google.com`, `vk.com/id1`) is taken as a link in the side panel and on the home page.

@@ -33,6 +33,9 @@ export const UNTRUSTED: readonly string[] = [
   'owner.steps[].error',
   'owner.hook_findings[].place',
   'owner.notes[]',
+  // an email's links, as the email gave them, and the hosts they led to
+  'email.links[].url',
+  'email.links[].final_host',
   // Cloudflare's scanner read these off the page
   'second_opinion.final_host',
   'second_opinion.title',
@@ -171,6 +174,31 @@ function secondOpinion(x: unknown): PublicReport['second_opinion'] {
   };
 }
 
+const VERDICTS = new Set(['benign', 'suspicious', 'malicious', 'unknown']);
+const TOKEN = /^[a-z][a-z0-9_]{0,39}$/;
+function emailLinks(x: unknown): PublicReport['email'] {
+  const links = list<Record<string, unknown>>(o(x).links, 30);
+  if (links.length === 0) return null;
+  return {
+    links: links.map((l) => {
+      let host = '';
+      try { host = typeof l.final_url === 'string' ? new URL(l.final_url).host : ''; } catch { /* none */ }
+      return {
+        url: s(l.url, 2048),
+        final_host: s(host, 253),
+        verdict: (VERDICTS.has(l.verdict as string) ? l.verdict : 'unknown') as PublicVerdict,
+        by: typeof l.by === 'string' && TOKEN.test(l.by) ? l.by : 'rules_only',
+        signals: list<unknown>(l.signals, 30).filter((v): v is string => typeof v === 'string' && TOKEN.test(v)),
+        password: l.password === true,
+        downloads: Math.max(0, Math.min(100, Math.floor(n(l.downloads)))),
+        redirects: Math.max(0, Math.min(100, Math.floor(n(l.redirects)))),
+        error: typeof l.error === 'string' && TOKEN.test(l.error) ? l.error : null,
+        shot: typeof l.shot === 'string' && l.shot !== '',
+      };
+    }),
+  };
+}
+
 export function publicReport(r: TaskResult): PublicReport {
   const a = o(r.assessment);
   const reason = typeof a.mode_reason === 'string' && Object.hasOwn(MODE_TEXT, a.mode_reason) ? a.mode_reason : null;
@@ -187,6 +215,7 @@ export function publicReport(r: TaskResult): PublicReport {
     mode_reason: reason,
     log: cleanLog(r.log),
     second_opinion: secondOpinion(r.second_opinion),
+    email: emailLinks(r.email),
     second_opinion_state: secondOpinion(r.second_opinion) !== null || a.verdict !== 'unknown' || r.state !== 'done' ? null : r.second_opinion_error ? 'failed' : 'asking',
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,

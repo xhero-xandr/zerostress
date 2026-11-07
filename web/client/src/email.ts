@@ -216,6 +216,14 @@ function warningsOf(c: Omit<EmailCheck, 'warnings'>): EmailWarning[] {
   return out;
 }
 
+/**
+ * The links worth opening for the whole email: not an unsubscribe or a preferences link, which would act on the
+ * person's mailing list just by being opened, and at most ten.
+ */
+export function linksToCheck(links: readonly EmailLink[]): string[] {
+  return links.map((l) => l.url).filter((u) => !/unsubscri|opt[-_]?out|optout|manage[-_]?preferences|email[-_]?preferences/i.test(u)).slice(0, 10);
+}
+
 /** Read an email (its text or its source) in the browser. Nothing is sent anywhere. */
 export function readEmail(input: string): EmailCheck {
   const raw = input.slice(0, MAX_EMAIL).replace(/\r\n?/g, '\n');

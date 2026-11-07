@@ -5,11 +5,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
-import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startTask, type Pending, type TaskStatus } from '../api.ts';
+import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startEmailCheck, startTask, type Pending, type TaskStatus } from '../api.ts';
 import { EXTENSION_ORIGIN } from '../extension.ts';
 import { asLink, asLogEntry, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
-import { looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
+import { linksToCheck, looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
+import { EmailLinks } from '../email-links.tsx';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary } from '../ui.tsx';
@@ -104,6 +105,26 @@ export function Panel() {
     });
     es.addEventListener('final', () => { es.close(); void finish(id, key); });
     es.onerror = () => { if (es.readyState === EventSource.CLOSED) { say(P.lost); busy.current = false; } };
+  }
+
+  // the whole email in one microVM: its links only, never the email
+  async function checkAll(urls: string[]) {
+    if (busy.current) { say(P.oneAtATime); return; }
+    queued.current = [];
+    push({ kind: 'you', text: T.mail.checkAll(urls.length) });
+    task.current?.es?.close();
+    busy.current = true;
+    try {
+      const { id, key } = await startEmailCheck(urls);
+      if (!isTaskId(id) || !/^[A-Za-z0-9_-]{20,100}$/.test(key)) throw new ApiError(500, 'server', T.serverError);
+      task.current = { id, key, report: false, es: null };
+      asked.current = new Set();
+      say(P.starting);
+      follow(id, key);
+    } catch (e) {
+      say(errText(e));
+      busy.current = false;
+    }
   }
 
   async function check(raw: string) {
@@ -216,6 +237,7 @@ export function Panel() {
             <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
               <EmailFindings mail={it.mail} compact />
               <p className="mt-3">{it.mail.links.length ? P.emailFound(it.mail.links.length) : `${P.emailRead} ${T.mail.noLinks}`}</p>
+              {linksToCheck(it.mail.links).length > 1 && <button type="button" className={`${btnPrimary} mt-2`} onClick={() => void checkAll(linksToCheck(it.mail.links))}>{T.mail.checkAll(linksToCheck(it.mail.links).length)}</button>}
               <ul className="mt-2 flex flex-col gap-2">
                 {it.mail.links.map((l, j) => (
                   <li key={j} className="flex flex-col gap-1 rounded-lg border border-line p-2">
@@ -235,6 +257,7 @@ export function Panel() {
               <p className={`font-bold ${r.verdict === 'malicious' ? 'text-danger' : r.verdict === 'benign' ? 'text-accent' : ''}`}>{P.verdictLead} {T.verdict[r.verdict]}</p>
               <p>{verdictLine(r)}</p>
               {serious.length > 0 && <ul className="mt-1.5 list-disc pl-5 text-[13px] text-muted">{serious.map((s) => <li key={s.id}>{s.text}</li>)}</ul>}
+              {r.email && <div className="mt-2 text-[13px]"><p className="mb-1.5 text-faint">{T.mail.linksIntro(r.email.links.length)}</p><EmailLinks r={r} id={it.id} compact /></div>}
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12.5px]">
                 {panelFacts(r).map(([k, v]) => [<dt key={`${k}-t`} className="text-faint">{k}</dt>, <dd key={`${k}-d`} className="[overflow-wrap:anywhere]">{v}</dd>])}
               </dl>

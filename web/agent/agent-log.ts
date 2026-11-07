@@ -30,6 +30,9 @@ export const LOG_CODES = [
   'hooks_summary', // how many inspections and findings
   'second_opinion_asked', // Cloudflare's URL Scanner was asked, on its own after a wall or again by the owner
   'second_opinion', // its answer (source: found or submitted; status; malicious; host)
+  'email_links', // an email's links, all opened in this one microVM (count)
+  'email_link', // the agent opens one of them (n, host)
+  'email_link_verdict', // what that link led to (n, verdict, by, host)
 ] as const;
 export type LogCode = (typeof LOG_CODES)[number];
 
@@ -37,7 +40,7 @@ type Shape = 'host' | 'token' | 'int' | 'bool' | 'hex' | 'model';
 const KEYS: Readonly<Record<string, Shape>> = {
   host: 'host', from: 'host', to: 'host',
   position: 'int', slot: 'int', vcpu: 'int', mem_mib: 'int', delay_s: 'int', status: 'int', count: 'int', requests: 'int',
-  hosts: 'int', blocked: 'int', ms: 'int', tokens: 'int', step: 'int', inspected: 'int', findings: 'int',
+  hosts: 'int', n: 'int', blocked: 'int', ms: 'int', tokens: 'int', step: 'int', inspected: 'int', findings: 'int',
   password: 'bool', saved: 'bool', by_session: 'bool', malicious: 'bool', publish: 'bool', auto: 'bool',
   state: 'token', reason: 'token', mode: 'token', verdict: 'token', next: 'token', action: 'token', risk: 'token',
   device: 'token', result: 'token', by: 'token', source: 'token',

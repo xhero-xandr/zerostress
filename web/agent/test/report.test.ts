@@ -218,6 +218,10 @@ const SAFE: Record<string, RegExp> = {
   mode_text: /^[A-Z][^<>]{1,300}$/,
   injection_source: /^(page|answer)$/,
   second_opinion_state: /^(asking|failed)$/,
+  'email.links[].verdict': /^(benign|suspicious|malicious|unknown)$/,
+  'email.links[].by': /^[a-z_]{1,40}$/,
+  'email.links[].signals[]': /^[a-z_]{1,40}$/,
+  'email.links[].error': /^[a-z_]{1,40}$/,
   'signals[].id': /^[a-z_]{1,40}$/,
   'signals[].level': /^(info|low|medium|high)$/,
   'facts.forms[].asks[]': /^(password|card_number|card_security|card_expiry|one_time_code|id_number|birth_date|email|phone|address|name)$/,
@@ -266,7 +270,11 @@ const withNetwork = async (): Promise<TaskResult> => {
 
 test('every text in the public report is either listed as untrusted or has a strict shape of our own', async () => {
   const withOpinion = async (): Promise<TaskResult> => ({ ...(await login()), second_opinion: { uuid: '11111111-2222-4333-8444-555555555555', source: 'found', scanned_at: '2026-11-04T12:08:00.000Z', final_url: 'https://evil.example/x', status: 200, title: '"><script>alert(1)</script>', malicious: true, title_withheld: false, screenshot: true } } as TaskResult);
-  for (const make of [withOpinion, injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
+  const withEmail = async (): Promise<TaskResult> => ({ ...(await login()), email: { links: [
+    { url: 'https://x.example/"><script>', final_url: 'https://evil.example/a', verdict: 'malicious', by: 'vision', signals: ['password_form_cross_origin', '<b>'], password: true, downloads: 1, redirects: 2, error: null, shot: 's.png' },
+    { url: 'https://y.example/', final_url: 'javascript:alert(1)', verdict: '<x>', by: 'Evil By', signals: [], password: 'yes', downloads: 'many', redirects: -4, error: '<oops>', shot: '' },
+  ] } } as never);
+  for (const make of [withEmail, withOpinion, injection, login, withNetwork, () => realResult(lines('./fixtures/plain.ndjson'), false), () => realResult(lines('./fixtures/unreachable.ndjson'), false)]) {
     const pub: PublicReport = publicReport(await make());
     for (const [path, value] of leaves(pub)) {
       if (UNTRUSTED.includes(path)) continue;
@@ -321,4 +329,13 @@ test('devices are cut to the two known ones, with our own codes only', async () 
   assert.equal(d.length, 2, 'at most two, and only mobile and tablet');
   assert.deepEqual(d[0], { device: 'mobile', nav_error: null, final_host: 'h', title: 't', forms: 99, has_password: false, action_hosts: ['a', 'b', 'c', 'd', 'e'], differs: ['other_site', 'password_only_here'], image: false });
   assert.deepEqual(publicReport({ ...r, facts: { ...(r.facts as object), devices: 'x' } } as never).facts.devices, []);
+});
+
+test('an email\'s links in the report: cut to our shapes, the page never decides a field', async () => {
+  const r = await login();
+  const pub = publicReport({ ...r, email: { links: [
+    { url: 'https://y.example/', final_url: 'javascript:alert(1)', verdict: '<x>', by: 'Evil By', signals: ['ok_id', '<b>', 5], password: 'yes', downloads: 'many', redirects: 1e9, error: '<oops>', shot: '' },
+  ] } } as never);
+  assert.deepEqual(pub.email?.links[0], { url: 'https://y.example/', final_host: '', verdict: 'unknown', by: 'rules_only', signals: ['ok_id'], password: false, downloads: 0, redirects: 100, error: null, shot: false });
+  assert.equal(publicReport(r).email, null);
 });

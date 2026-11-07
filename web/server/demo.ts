@@ -55,3 +55,16 @@ export const DEMO_PAGE = `<!doctype html>
 </body>
 </html>
 `;
+
+const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** The page the sandbox opens for an email check: one plain link per address, numbered; no text of the email. */
+export function emailListPage(links: readonly string[]): string {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>ZeroStress: the links of an email</title></head>
+<body><p>ZeroStress opens each of these links in turn, inside this sandbox.</p>
+<ol>
+${links.map((u, i) => `<li><a href="${esc(u)}">Link ${i + 1}</a></li>`).join('\n')}
+</ol></body></html>
+`;
+}

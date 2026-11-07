@@ -4,6 +4,7 @@
 import { cleanEntry, MAX_LOG } from '../agent/agent-log.ts';
 import { DEMO_CSP, DEMO_FILE, DEMO_FILE_NAME, DEMO_PAGE } from './demo.ts';
 import { LEGAL_CSP, loadLegal } from './legal.ts';
+import { emailListPage } from './demo.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanText } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -38,6 +39,8 @@ export interface AppDeps {
   clientIp?: (c: Context) => string;
   /** the built client (spec 012): index.html and assets/; the default is build/client at the project root (spec 010) */
   clientDir?: string;
+  /** this site's public address: the sandbox opens an email's list of links there (the default: zerostress.space) */
+  publicUrl?: string;
   /** Cloudflare's URL Scanner for a second opinion on a page we could not read; without it the endpoint is absent */
   urlscan?: Pick<UrlScanClient, 'opinion'>;
 }
@@ -211,6 +214,43 @@ export function createApp(deps: AppDeps): Hono {
     return json(c, 202, { id: task.id, key });
   });
 
+  // ---- an email: its links, each through the gate, all opened in one microVM (runner.ts, TaskInput.links) ----
+  // Only the links come here, never the email: it was read in the browser.
+  const MAX_EMAIL_LINKS = 10;
+  const publicUrl = (deps.publicUrl ?? 'https://zerostress.space').replace(/\/+$/, '');
+  app.post('/api/email-checks', async (c) => {
+    const read = await readJsonBody(c);
+    if (!read.ok) return read.res;
+    const body = read.body;
+    if (Object.keys(body).some((k) => k !== 'links') || !Array.isArray(body.links) || body.links.length === 0 || body.links.length > 30) return fail(c, 400, 'bad_request');
+    const links: string[] = [];
+    for (const raw of body.links) {
+      const g = checkAddress(raw);
+      if (g.ok && !links.includes(g.url)) links.push(g.url);
+    }
+    if (links.length === 0) return fail(c, 400, 'bad_url');
+    const slot = deps.limiter.start(ip(c));
+    if (!slot.ok) return fail(c, slot.reason === 'daily_cap' ? 503 : 429, slot.reason, { 'retry-after': String(slot.retryAfterS) });
+    const { task, key } = deps.store.create(links[0]!, true);
+    task.links = links.slice(0, MAX_EMAIL_LINKS);
+    try {
+      await begin(task, true, slot.release);
+    } catch (e) {
+      slot.cancel();
+      deps.store.drop(task.id);
+      if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
+      return fail(c, 503, 'supervisor_unavailable');
+    }
+    return json(c, 202, { id: task.id, key, links: task.links.length, skipped: links.length - task.links.length });
+  });
+
+  // the page the sandbox opens for an email: the gated links and nothing else, while the check runs
+  app.get('/x/:id', (c) => {
+    const t = deps.store.get(c.req.param('id'));
+    if (!t?.links) return c.text('not found', 404);
+    return c.html(emailListPage(t.links), 200, { 'content-security-policy': LEGAL_CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex', 'cache-control': 'no-store' });
+  });
+
   /** Start the run and return once the supervisor has taken it (or refused it). The rest happens in the background. */
   function begin(task: Task, deep: boolean, release: () => void): Promise<void> {
     return new Promise<void>((resolve, reject) => {
@@ -243,8 +283,12 @@ export function createApp(deps: AppDeps): Hono {
         const s = stageOf(p.state);
         if (s && s !== task.stage || (s === 'queued' && p.position !== task.position)) setStage(s!, p.position);
       };
-      deps.run({ url: task.url, ...(deep ? { session: deps.session } : {}) }, onProgress).then((result) => {
+      const input = task.links
+        ? { url: `${publicUrl}/x/${task.id}`, session: deps.session, links: task.links }
+        : { url: task.url, ...(deep ? { session: deps.session } : {}) };
+      deps.run(input, onProgress).then((result) => {
         task.pending = [];
+        delete task.links;
         task.result = result;
         task.runId = result.run_id;
         task.stage = result.state === 'done' ? 'done' : 'failed';
@@ -254,6 +298,7 @@ export function createApp(deps: AppDeps): Hono {
         if (walled(task)) void askCloudflare(task, true);
       }).catch((e) => {
         task.pending = [];
+        delete task.links;
         if (!taken) { taken = true; reject(e); return; }
         task.stage = 'failed';
         deps.store.emit(task, 'final', {});
@@ -293,7 +338,10 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/r/:id/screenshot.png', async (c) => {
     const task = deps.store.get(c.req.param('id'));
     const asked = c.req.query('device');
-    const name = task?.result ? shotName(task.result, asked === 'mobile' || asked === 'tablet' ? asked : 'desktop') : null;
+    const link = Number(c.req.query('link'));
+    const name = !task?.result ? null
+      : c.req.query('link') !== undefined ? (Number.isInteger(link) && link >= 0 ? task.result.email?.links[link]?.shot ?? null : null)
+      : shotName(task.result, asked === 'mobile' || asked === 'tablet' ? asked : 'desktop');
     if (!task?.result || name === null) return c.text('not found', 404);
     try {
       const png = await deps.fetchShot(task.result.run_id, name);

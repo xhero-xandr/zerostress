@@ -54,6 +54,9 @@ export const getDemos = (): Promise<{ demos: Demo[] }> => fetch('/api/demos').th
 export const startTask = (url: string, deep: boolean): Promise<{ id: string; key: string }> =>
   fetch('/api/tasks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ url, deep }) }).then((r) => read<{ id: string; key: string }>(r));
 
+export const startEmailCheck = (links: string[]): Promise<{ id: string; key: string; links: number; skipped: number }> =>
+  fetch('/api/email-checks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ links }) }).then((r) => read<{ id: string; key: string; links: number; skipped: number }>(r));
+
 export interface ChatAnswer { text: string; source: 'model' | 'rules'; note: string | null }
 export const askChat = (id: string, payload: { kind: 'explain' } | { kind: 'ask'; message: string }): Promise<ChatAnswer> =>
   fetch(`/api/reports/${id}/chat`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) }).then((r) => read<ChatAnswer>(r));

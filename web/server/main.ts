@@ -81,6 +81,7 @@ const app = createApp({
   limiter,
   demos,
   session: { idle_s: 90, max_s: 240 },
+  publicUrl: env.WEB_PUBLIC_URL ?? 'https://zerostress.space',
 });
 
 setInterval(() => { store.sweep(); }, 10 * 60_000).unref();

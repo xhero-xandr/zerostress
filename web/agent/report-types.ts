@@ -43,6 +43,10 @@ import type { LogEntry } from './agent-log.ts';
 export interface PublicReport {
   /** what happened, step by step (agent-log.ts): our codes, numbers, tokens, the model's id, hosts */
   log: LogEntry[];
+  /** an email's links, each opened in the same microVM; the rest of the report is the worst of them */
+  email: null | {
+    links: Array<{ url: string; final_host: string; verdict: PublicVerdict; by: string; signals: string[]; password: boolean; downloads: number; redirects: number; error: string | null; shot: boolean }>;
+  };
   /** asked on its own when the verdict is unknown: 'asking' until Cloudflare answers, 'failed' when it could not */
   second_opinion_state: 'asking' | 'failed' | null;
   /** Cloudflare's URL Scanner, asked afterwards about a page we could not read; its verdict may only raise ours */

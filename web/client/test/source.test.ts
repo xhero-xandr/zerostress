@@ -26,6 +26,6 @@ test('the task key is read only from the fragment and sent only in its header', 
   expect(api).toMatch(/'x-task-key': key/);
   for (const f of files(SRC)) {
     const text = readFileSync(f, 'utf8');
-    expect(/[?&]k=|key=\$\{|\$\{key\}/.test(text.replace(/hash: `k=\$\{key\}`/, '')), `${f.slice(SRC.length)} puts the key in an address`).toBe(false);
+    expect(/[?&]k=|key=\$\{|\$\{key\}/.test(text.replace(/hash: `k=\$\{key\}`/g, '')), `${f.slice(SRC.length)} puts the key in an address`).toBe(false);
   }
 });

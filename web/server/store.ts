@@ -32,6 +32,8 @@ export interface Task {
   events: TaskEvent[];
   listeners: Set<(e: TaskEvent) => void>;
   cancel: (() => void) | null;
+  /** an email's links, through the gate, while they are being checked (kept in memory only, never on disk) */
+  links?: string[];
 }
 
 export interface Store {
