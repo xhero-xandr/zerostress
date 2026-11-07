@@ -58,7 +58,7 @@ The extension (`web/extension/`) is a thin frame: a right-click menu, an icon an
 ## Versions and releases
 One version for the whole project (the site, the supervisor, the guest's collector, the browser extension), kept in
 `VERSION`; `./zs version` shows it, this checkout's build and the running supervisor's. A build between two releases is
-`X.Y.Z+N.gHASH` (N commits after release X.Y.Z): the site shows it in its footer, the supervisor in `/v1/health`, and
+`X.Y.Z+N.gHASH` (N commits after release X.Y.Z), and one on the way to a version not yet tagged is `X.Y.Z-dev+N.gHASH`: the site shows it in its footer, the supervisor in `/v1/health`, and
 `./zs verify` checks that the running supervisor belongs to the release in `VERSION`.
 
 The project stays below 1.0.0 until it is stable: fixes raise the last number (0.9.1), new capabilities the middle one

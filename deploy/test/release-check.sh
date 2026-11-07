@@ -8,7 +8,7 @@ pass=0 fail=0
 ok() { echo "  ok    $*"; pass=$((pass + 1)); }
 no() { echo "  FAIL  $*"; fail=$((fail + 1)); }
 fresh() {
-  rm -rf "$T/r"; git clone -q "$S" "$T/r" 2>/dev/null
+  rm -rf "$T/r"; git clone -q --no-tags "$S" "$T/r" 2>/dev/null
   git -C "$T/r" config user.name test; git -C "$T/r" config user.email test@test.invalid
   # the files of this working tree that carry the version, as they are now (committed or not)
   local f
@@ -57,7 +57,10 @@ refuses "set with a version that is not X.Y.Z" bash "$T/r/deploy/release.sh" set
 
 # describe: the build's version
 fresh
-[[ $(bash "$T/r/deploy/release.sh" describe) =~ ^$v\+g[0-9a-f]{7}$ ]] && ok "describe before any tag: X.Y.Z+gHASH" || no "describe before any tag: $(bash "$T/r/deploy/release.sh" describe)"
+[[ $(bash "$T/r/deploy/release.sh" describe) =~ ^$v-dev\+g[0-9a-f]{7}$ ]] && ok "describe before any tag: X.Y.Z-dev+gHASH" || no "describe before any tag: $(bash "$T/r/deploy/release.sh" describe)"
+git -C "$T/r" -c user.name=t -c user.email=t@t tag -a "v0.0.1" -m t
+[[ $(bash "$T/r/deploy/release.sh" describe) =~ ^$v-dev\+0\.g[0-9a-f]{7}$ ]] && ok "describe after an older release only: X.Y.Z-dev+N.gHASH" || no "describe after an older tag: $(bash "$T/r/deploy/release.sh" describe)"
+git -C "$T/r" -c user.name=t -c user.email=t@t commit -qm release --allow-empty
 git -C "$T/r" -c user.name=t -c user.email=t@t tag -a "v$v" -m t
 [[ $(bash "$T/r/deploy/release.sh" describe) == "$v" ]] && ok "describe on its release tag: X.Y.Z" || no "describe on the tag: $(bash "$T/r/deploy/release.sh" describe)"
 git -C "$T/r" -c user.name=t -c user.email=t@t commit -qm later --allow-empty

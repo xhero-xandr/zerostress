@@ -8,7 +8,7 @@ const VERSION = readFileSync(resolve(process.cwd(), '../../VERSION'), 'utf8').tr
 
 test('the build is VERSION, on its release or after it', () => {
   expect(RELEASE).toBe(VERSION);
-  expect(BUILD).toMatch(new RegExp(`^${VERSION.replace(/\./g, '\\.')}(\\+[0-9A-Za-z.]+)?$`));
+  expect(BUILD).toMatch(new RegExp(`^${VERSION.replace(/\./g, '\\.')}(-dev)?(\\+[0-9A-Za-z.]+)?$`));
 });
 
 test('the extension and the notes are those of this release, by name', () => {

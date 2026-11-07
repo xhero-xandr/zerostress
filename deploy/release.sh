@@ -7,8 +7,9 @@
 #                                   has a dated, non-empty section for it (the release workflow runs this too)
 #   deploy/release.sh tag X.Y.Z     check, plus a clean tree on main, then the annotated tag vX.Y.Z (not pushed)
 #   deploy/release.sh notes X.Y.Z   print the section of CHANGELOG.md for X.Y.Z (the release's notes)
-#   deploy/release.sh describe      the version of this build: X.Y.Z on its own tag, X.Y.Z+N.gHASH after it (N commits
-#                                   later), with .dirty for uncommitted changes; what the site and the supervisor report
+#   deploy/release.sh describe      the version of this build: X.Y.Z on its own tag, X.Y.Z+N.gHASH N commits after it,
+#                                   X.Y.Z-dev+N.gHASH before X.Y.Z is tagged (N commits after the previous release), with
+#                                   .dirty for uncommitted changes; what the site and the supervisor report
 set -euo pipefail
 S=$(cd "$(dirname "$0")/.." && pwd)
 cmd=${1:-}; v=${2:-}
@@ -59,10 +60,13 @@ describe() {
   [[ $base =~ $SEMVER ]] || die "VERSION does not hold X.Y.Z"
   # the nearest release tag; without one (before the first release) the commit alone
   if d=$(git -C "$S" describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --long --dirty=.dirty --abbrev=7 2>/dev/null) && [[ $d =~ ^v(.+)-([0-9]+)-(g[0-9a-f]+)(\.dirty)?$ ]]; then
-    if [[ ${BASH_REMATCH[2]} == 0 && -z ${BASH_REMATCH[4]} && ${BASH_REMATCH[1]} == "$base" ]]; then echo "$base"
-    else echo "$base+${BASH_REMATCH[2]}.${BASH_REMATCH[3]}${BASH_REMATCH[4]}"; fi
-  elif d=$(git -C "$S" describe --always --dirty=.dirty --abbrev=7 2>/dev/null); then echo "$base+g$d"
-  else echo "$base+unknown"; fi
+    local tag=${BASH_REMATCH[1]} n=${BASH_REMATCH[2]} hash=${BASH_REMATCH[3]} dirty=${BASH_REMATCH[4]}
+    # VERSION ahead of the last tag: a build on the way to that release
+    local pre=''; [[ $tag == "$base" ]] || pre='-dev'
+    if [[ $n == 0 && -z $dirty && -z $pre ]]; then echo "$base"
+    else echo "$base$pre+$n.$hash$dirty"; fi
+  elif d=$(git -C "$S" describe --always --dirty=.dirty --abbrev=7 2>/dev/null); then echo "$base-dev+g$d"
+  else echo "$base-dev+unknown"; fi
 }
 
 case $cmd in
