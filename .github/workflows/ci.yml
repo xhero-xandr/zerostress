@@ -81,6 +81,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm test
+      # the browser extension: how a link is handed over, and that it asks for no access to pages
+      - run: node --test extension/test/*.mjs
 
   client:
     name: client (spec 012)
