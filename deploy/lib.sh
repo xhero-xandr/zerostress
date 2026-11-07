@@ -19,10 +19,29 @@ F=$S/deploy/files                                  # the few files that must liv
 source "$S/deploy/versions.env"
 export PATH=$S/runtime/node/bin:$S/runtime/go/bin:$PATH
 
-# Builds run as the owner of the checkout, never as root: root-owned files in build/ would block the next build.
-BUILD_USER=${BUILD_USER:-$(stat -c %U "$S")}
+# The code (the checkout) belongs to CODE_USER, a system account with no sudo and no login: builds run third-party
+# tools (npm packages, vite, go), and they must not run as root or as an administrator with sudo. Builds run as the
+# owner of the checkout, never as root: root-owned files in build/ would block the next build.
+CODE_USER=zerostress
+# the git-ignored places that keep their own owners (root, a service): own_code leaves them alone
+OWN_PLACES=(bin runtime images data logs run config/web.env config/supervisor.env config/Caddyfile)
+
+# code_find FIND-ACTION...: the files of the checkout that are not CODE_USER's, outside OWN_PLACES
+code_find() {
+  local prune=() p
+  for p in "${OWN_PLACES[@]}"; do prune+=(-o -path "$S/$p"); done
+  find "$S" \( "${prune[@]:1}" \) -prune -o ! -user "$CODE_USER" "$@"
+}
+# own_code: give the checkout back to CODE_USER, whatever a person or a tool did as root (git as root, an editor, a
+# test run). No-op until the account exists (`./zs install host` makes it).
+own_code() {
+  id "$CODE_USER" >/dev/null 2>&1 || return 0
+  code_find -exec chown -h "$CODE_USER:$CODE_USER" {} +
+}
+
 as_builder() {
-  if [[ $(id -un) == "$BUILD_USER" ]]; then "$@"; else runuser -u "$BUILD_USER" -- env PATH="$PATH" HOME="$(getent passwd "$BUILD_USER" | cut -d: -f6)" "$@"; fi
+  local u=${BUILD_USER:-$(stat -c %U "$S")}
+  if [[ $(id -un) == "$u" ]]; then "$@"; else runuser -u "$u" -- env PATH="$PATH" HOME="$(getent passwd "$u" | cut -d: -f6)" "$@"; fi
 }
 
 need_root() { [[ $EUID -eq 0 ]] || { echo "run as root (sudo)" >&2; exit 1; }; }

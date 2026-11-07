@@ -28,6 +28,11 @@ check "firecracker is $FC_VERSION" bash -c "'$S/bin/firecracker' --version | gre
 check "caddy is v$CADDY_VERSION" bash -c "'$S/bin/caddy' version | grep -q v$CADDY_VERSION"
 check "config/Caddyfile validates" "$S/bin/caddy" validate --config "$S/config/Caddyfile"
 for b in zsvm zsnet zerostress-supervisor firecracker caddy; do check "bin/$b is root's and nobody else may change it" bash -c "[[ \$(stat -c '%U %a' '$S/bin/$b') =~ ^root\ 7[0-5][0-5]$ ]]"; done
+check "the code is $CODE_USER's" test "$(stat -c %U "$S")" = "$CODE_USER"
+check "$CODE_USER has no sudo and no login" bash -c "! sudo -l -U '$CODE_USER' 2>/dev/null | grep -q 'may run' && [[ \$(getent passwd '$CODE_USER' | cut -d: -f7) == */nologin ]]"
+no_foreign_code() { [[ -z $(code_find -print -quit) ]]; }
+check "every file of the code is $CODE_USER's (./zs install and update give them back)" no_foreign_code
+check "the logs are root's only (they hold visitors' addresses)" bash -c "[[ -z \$(find '$S/logs' -name '*.log*' ! -perm 0600 -print -quit) ]]"
 if command -v getenforce >/dev/null && [[ $(getenforce) == Enforcing ]]; then
   for pair in bin:bin_t runtime/node/bin:bin_t config:etc_t data:var_lib_t run:var_lib_t logs:var_log_t; do
     check "SELinux: ${pair%%:*} is ${pair#*:}" test "$(type_of "$S/${pair%%:*}")" = "${pair#*:}"

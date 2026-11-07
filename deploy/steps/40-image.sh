@@ -6,6 +6,7 @@ source "$(dirname "$0")/../lib.sh"
 need_root
 need_root_dir
 
+own_code
 as_builder bash "$S/guest/agent/build.sh" | tail -1
 bash "$S/guest/image/build.sh"
 bash "$S/guest/image/install.sh"

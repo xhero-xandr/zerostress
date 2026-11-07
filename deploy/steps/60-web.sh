@@ -10,6 +10,7 @@ need_root_dir
 DOMAIN=${DOMAIN:-zerostress.space}
 
 # the code's dependencies and the client, from their lock files, by the owner of the checkout
+own_code
 as_builder bash -c "cd '$S/web' && npm ci --ignore-scripts --no-audit --no-fund >/dev/null"
 as_builder bash -c "cd '$S/web/client' && npm ci --ignore-scripts --no-audit --no-fund >/dev/null && npx vite build >/dev/null"
 [[ -f $S/build/client/index.html ]] || { echo "client: the build made no index.html" >&2; exit 1; }

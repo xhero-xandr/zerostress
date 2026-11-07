@@ -11,6 +11,8 @@ getent group kvm >/dev/null || groupadd -r kvm
 getent group zerostress-ipc >/dev/null || groupadd -r zerostress-ipc
 id zerostress-sup >/dev/null 2>&1 || useradd -r -M -d /nonexistent -s /sbin/nologin -G kvm zerostress-sup
 id zerostress-web >/dev/null 2>&1 || useradd -r -M -d /nonexistent -s /sbin/nologin zerostress-web
+# the owner of the code and of every build: no sudo, no login, a home of its own for the npm and go caches
+id "$CODE_USER" >/dev/null 2>&1 || useradd -r -m -d /var/lib/zerostress-build -s /sbin/nologin "$CODE_USER"
 getent group caddy >/dev/null || groupadd --system caddy
 id caddy >/dev/null 2>&1 || useradd --system --gid caddy -M -d /nonexistent --shell /usr/sbin/nologin caddy
 usermod -aG zerostress-ipc zerostress-sup
@@ -23,6 +25,10 @@ install -d -m 0700 -o zerostress-sup -g zerostress-sup "$S/data/supervisor" "$S/
 install -d -m 0700 -o zerostress-web -g zerostress-web "$S/data/web" "$S/data/web/tasks"
 install -d -m 0755 -o zerostress-web -g zerostress-web "$S/data/geo"
 install -d -m 0750 -o caddy -g caddy "$S/data/caddy"
+# the logs hold visitors' addresses: root's only (the services write them through systemd, as root)
+for n in web supervisor caddy; do [[ -e $S/logs/$n.log ]] || install -m 0600 -o root -g root /dev/null "$S/logs/$n.log"; done
+chmod 0600 "$S"/logs/*.log*
+own_code
 selinux_rules "$S"
 restorecon -R "$S"
 
@@ -46,4 +52,4 @@ if ! grep -qw 'spec_store_bypass_disable=seccomp' /proc/cmdline; then
     say "kernel: add spec_store_bypass_disable=seccomp to the kernel command line by hand (no grubby here)"
   fi
 fi
-say "$(ls -ld "$S" | awk '{print $1, $3, $NF}'), /dev/kvm $(stat -c '%A %G' /dev/kvm)"
+say "$(ls -ld "$S" | awk '{print $1, $3, $NF}') (the code is $CODE_USER's), /dev/kvm $(stat -c '%A %G' /dev/kvm)"

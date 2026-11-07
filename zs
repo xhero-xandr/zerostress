@@ -45,6 +45,8 @@ case $cmd in
     ;;
   update)
     sudo_self update "$@"
+    # shellcheck source=deploy/lib.sh
+    (source "$S/deploy/lib.sh" && own_code)
     owner=$(stat -c %U "$S")
     runuser -u "$owner" -- git -C "$S" pull --ff-only
     step supervisor
