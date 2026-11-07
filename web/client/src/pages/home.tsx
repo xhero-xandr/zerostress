@@ -3,7 +3,7 @@ import { Copy, Download, Monitor, PanelRight, ScanSearch, ShieldHalf } from 'luc
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startTask } from '../api.ts';
-import { isTaskId, linkFromQuery, linksFromEmail, type EmailLink } from '../logic.ts';
+import { isTaskId, linkFromQuery, linksFromEmail, mailboxOf, type EmailLink } from '../logic.ts';
 import { T } from '../text.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
 
@@ -23,6 +23,8 @@ export function Home() {
 
   const start = async (target: string) => {
     setError('');
+    const mailbox = mailboxOf(target.trim());
+    if (mailbox) { setError(T.panel.mailbox(mailbox)); return; }
     setBusy(true);
     try {
       const { id, key } = await startTask(target, deep);

@@ -239,3 +239,45 @@ export function linkFromQuery(search: string): string {
 export function injectionText(r: Pick<PublicReport, 'injection_source'>): string {
   return r.injection_source === 'answer' ? T.injectionAnswer : T.injection;
 }
+
+/** Webmail inboxes: a link into one opens only for its signed-in owner, so a sandbox would see a sign-in page. */
+const MAILBOXES: Array<{ host: RegExp; path?: RegExp; name: string }> = [
+  { host: /^mail\.google\.com$/, name: 'Gmail' },
+  { host: /^(outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com)$/, path: /^\/(mail|owa)(\/|$)/, name: 'Outlook' },
+  { host: /^mail\.yahoo\.com$/, name: 'Yahoo Mail' },
+  { host: /^mail\.proton\.me$/, name: 'Proton Mail' },
+  { host: /^(www\.)?icloud\.com$/, path: /^\/mail(\/|$)/, name: 'iCloud Mail' },
+  { host: /^(e\.)?mail\.ru$/, name: 'Mail.ru' },
+  { host: /^mail\.yandex\.(ru|com)$/, name: 'Yandex Mail' },
+];
+
+/** The name of the webmail this link leads into (its own inbox, behind a sign-in), or null. */
+export function mailboxOf(link: string): string | null {
+  let u: URL;
+  try { u = new URL(link); } catch { return null; }
+  const h = u.hostname.toLowerCase();
+  return MAILBOXES.find((m) => m.host.test(h) && (!m.path || m.path.test(u.pathname)))?.name ?? null;
+}
+
+/** Text pasted into the chat that reads as an email (or its source), not as a question: it has links and some length. */
+export function looksLikeEmail(text: string): boolean {
+  const t = text.trim();
+  if (linksFromEmail(t).length === 0) return false;
+  return t.length > 200 || /\n/.test(t) || /<a\s|<html|^(from|subject|received|content-type):/im.test(t) || linksFromEmail(t).length > 1;
+}
+
+/** The few facts the side panel shows under its verdict, in plain words; the full report has the rest. */
+export function panelFacts(r: PublicReport): Array<[string, string]> {
+  const f = r.facts;
+  const out: Array<[string, string]> = [];
+  if (f.final_host) out.push([T.rows.host, f.final_host]);
+  const hops = redirects(r);
+  if (hops > 0) out.push([T.rows.redirects, String(hops)]);
+  if (f.domain?.age_days != null) out.push([T.rows.registered, ageWords(f.domain.age_days)]);
+  const asks = [...new Set(f.forms.flatMap((x) => x.asks))].map((a) => T.ask[a] ?? a);
+  if (asks.length) out.push([T.panel.asksFor, asks.join(', ')]);
+  if (f.forms.some((x) => x.cross_origin)) out.push([T.rows.forms, T.otherSite]);
+  out.push([T.rows.otherSites, String(f.third_party_hosts)]);
+  if (f.servers_total > 0) out.push([T.panel.servers, serversLine(r)]);
+  return out;
+}

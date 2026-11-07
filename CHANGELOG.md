@@ -25,6 +25,9 @@ The first tagged release: everything built for the Vultr: Agent Rush hackathon u
 - A browser extension: right-click a link and the agent opens in the side panel; the agent itself is the page `/panel` of the site, so it updates with the site.
 - The home page says how to get the browser agent: the latest release's zip and three steps to install it.
 - An "Explain" chat over the finished report.
+- Screenshots open over the report in a dialog (Esc or a click outside closes it) instead of taking the page away.
+- The side panel shows the main facts under its verdict, the screenshots of every device (opened over the panel) and a download of the report as JSON.
+- An email pasted into the side panel is read there, as on the home page: its links are offered to check, the email is never sent. A link into one's own webmail inbox (Gmail, Outlook, …) is explained instead of checked: the sandbox would only see a sign-in page.
 - One command, `./zs`, to install, update, configure and verify a host; all versions and checksums pinned in `deploy/versions.env`.
 
 ### Security

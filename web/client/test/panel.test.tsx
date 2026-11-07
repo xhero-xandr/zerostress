@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { EXTENSION_ORIGIN } from '../src/extension.ts';
 import { Panel } from '../src/pages/panel.tsx';
-import { EVIL, hostile, unread } from './fixtures.ts';
+import { EVIL, hostile, status, unread } from './fixtures.ts';
 
 const ID = '0123456789abcdef0123456789abcdef';
 const KEY = 'k'.repeat(43);
@@ -30,8 +30,12 @@ beforeEach(() => {
     if (url.endsWith('/approvals')) return new Response(JSON.stringify({ message: 'ok' }), { status: 202 });
     if (url.endsWith('/report.json')) return new Response(JSON.stringify(hostile()));
     if (url.endsWith('/chat')) return new Response(JSON.stringify({ text: `Explained ${EVIL}`, source: 'model', note: null }));
+    if (url === `/api/tasks/${ID}`) return new Response(JSON.stringify(status({ id: ID, shots: { desktop: true, tablet: false, mobile: true } })));
     return new Response('{}', { status: 404 });
   }));
+  // jsdom has no modal dialogs
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.setAttribute('open', ''); };
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.removeAttribute('open'); };
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); FakeSource.last = null; });
 
@@ -121,4 +125,49 @@ test('the second opinion is told as Cloudflare gave it: a new scan, its answer a
   act(() => FakeSource.last!.fire('final', {}));
   fireEvent.click(await screen.findByRole('button', { name: /Cloudflare/ }));
   await waitFor(() => expect(document.body.textContent).toContain('Cloudflare’s scanner scanned it now: shop.test answered HTTP 403, flagged as malicious'));
+});
+
+async function checked() {
+  render(<Panel />);
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: 'https://paypa1-secure.test/login' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+  await waitFor(() => expect(FakeSource.last?.url).toBe(`/api/tasks/${ID}/events`));
+  act(() => FakeSource.last!.fire('final', {}));
+  await waitFor(() => expect(document.body.textContent).toContain(`Explained ${EVIL}`));
+}
+
+test('under the verdict: the main facts, the screenshots (opened over the panel) and the report as JSON', async () => {
+  await checked();
+  expect(document.body.textContent).toMatch(/Final site/);
+  const json = screen.getByRole('link', { name: 'Download the report (JSON)' });
+  expect(json.getAttribute('href')).toBe(`/r/${ID}/report.json`);
+  expect(json.hasAttribute('download')).toBe(true);
+  const open = screen.getAllByRole('button', { name: /open larger/ });
+  expect(open).toHaveLength(2);
+  fireEvent.click(open[1]!);
+  const shown = document.querySelectorAll('dialog[open]');
+  expect(shown).toHaveLength(1);
+  expect(shown[0]!.querySelector('img')!.getAttribute('src')).toBe(`/r/${ID}/screenshot.png?device=mobile`);
+  expect(document.querySelectorAll('a[href*="screenshot.png"]:not([target="_blank"])')).toHaveLength(0);
+});
+
+test('an email pasted after a check is read here: its links are offered, nothing is sent, and it is not taken for a question', async () => {
+  await checked();
+  const before = sent.length;
+  const mail = 'From: Bank <no-reply@bank.example>\nSubject: Verify now\n\nDear customer, please verify your account:\n<a href="https://paypa1-verify.test/x">https://www.paypal.com/</a>\nThanks';
+  fireEvent.change(screen.getByLabelText('Message to the agent'), { target: { value: mail } });
+  fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
+  await waitFor(() => expect(document.body.textContent).toMatch(/I found 1 link in this email/));
+  expect(sent.slice(before)).toEqual([]);
+  expect(document.body.textContent).not.toContain('Dear customer');
+  expect(document.body.textContent).toMatch(/The email shows “https:\/\/www.paypal.com\/”, but the link goes somewhere else/);
+  fireEvent.click(screen.getByRole('button', { name: 'Check this link' }));
+  await waitFor(() => expect(sent.filter((x) => x.url === '/api/tasks').map((x) => JSON.parse(x.body).url)).toEqual(['https://paypa1-secure.test/login', 'https://paypa1-verify.test/x']));
+});
+
+test('a link into one\'s own mailbox is explained, not checked', async () => {
+  render(<Panel />);
+  fromParent(EXTENSION_ORIGIN, { type: 'zs-check', link: 'https://mail.google.com/mail/u/0/#inbox/FMfcgz' });
+  await waitFor(() => expect(document.body.textContent).toMatch(/your own Gmail inbox/));
+  expect(sent.filter((x) => x.url === '/api/tasks')).toEqual([]);
 });

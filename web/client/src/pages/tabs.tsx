@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { shotUrl, type TaskStatus } from '../api.ts';
 import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, injectionText, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
+import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { SecondOpinion } from './second-opinion.tsx';
 import { Card, Fact, Facts, LevelPill, Notice, TableWrap, Td, Th, VERDICT_STYLE } from '../ui.tsx';
@@ -77,9 +78,9 @@ function Screenshot({ id, shots }: { id: string; shots: TaskStatus['shots'] }) {
       </div>
       {have.length ? (
         <div className="flex justify-center rounded-xl border border-dashed border-line-strong bg-sunken p-3">
-          <a href={shotUrl(id, device)} className={SHOT_SIZE[device]}>
+          <ShotViewer src={shotUrl(id, device)} alt={T.screenshotAlt(T.device[device]!)} className={SHOT_SIZE[device]}>
             <img src={shotUrl(id, device)} alt={T.screenshotAlt(T.device[device]!)} className="h-full w-full rounded-lg border border-line bg-surface object-cover object-top" />
-          </a>
+          </ShotViewer>
         </div>
       ) : <p className="text-muted">{T.noScreenshot}</p>}
       <span className="text-[13px] text-faint">{T.screenshotNote}</span>

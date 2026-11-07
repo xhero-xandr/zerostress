@@ -174,7 +174,17 @@ try {
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Phone' }).click();
-  check((await page.locator('img[src*="screenshot.png?device=mobile"]').count()) === 1, 'the phone screenshot is shown on demand');
+  check((await page.locator('img[src*="screenshot.png?device=mobile"]').count()) >= 1, 'the phone screenshot is shown on demand');
+  {
+    const before = page.url();
+    await page.getByRole('button', { name: /Phone.*open larger/ }).click();
+    await page.locator('dialog[open] img[src*="device=mobile"]').waitFor();
+    check(page.url() === before, 'a screenshot opens over the report, the page stays');
+    await shot(page, 'e2e-06b-screenshot-viewer', false);
+    await clean(page, 'Screenshot viewer');
+    await page.keyboard.press('Escape');
+    check((await page.locator('dialog[open]').count()) === 0, 'Escape closes the screenshot');
+  }
 
   await page.getByRole('button', { name: 'Dark' }).click();
   check((await page.evaluate(() => document.documentElement.getAttribute('data-theme'))) === 'dark', 'the dark theme is chosen');

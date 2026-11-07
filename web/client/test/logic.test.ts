@@ -1,7 +1,7 @@
 // What the report says, decided from its data (carried over from web/server/test/app.test.ts with views.ts).
 import { describe, expect, test } from 'vitest';
 import { LOG_CODES } from '../../agent/agent-log.ts';
-import { agentLines, asLogEntry, injectionText, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
+import { agentLines, asLogEntry, injectionText, looksLikeEmail, mailboxOf, panelFacts, linkFromQuery, linksFromEmail, logLine, logTime, ageWords, countryName, deadLinks, devicesSummary, findings, keyFromHash, serversLine, verdictLine } from '../src/logic.ts';
 import { hostile, unread } from './fixtures.ts';
 import { T } from '../src/text.ts';
 
@@ -165,4 +165,30 @@ test('injection notice: the page is blamed only when the detectors fired on it',
   expect(injectionText({ injection_source: 'answer' })).toBe(T.injectionAnswer);
   expect(T.injectionAnswer).not.toBe(T.injection);
   expect(T.injectionAnswer).toMatch(/Nothing like it was found on the page itself/);
+});
+
+test('a link into a webmail inbox is known by its host (and path), never by a lookalike', () => {
+  expect(mailboxOf('https://mail.google.com/mail/u/0/?tab=rm&ogbl')).toBe('Gmail');
+  expect(mailboxOf('https://outlook.live.com/mail/0/inbox/id/AQMk')).toBe('Outlook');
+  expect(mailboxOf('https://outlook.office.com/owa/?path=/mail')).toBe('Outlook');
+  expect(mailboxOf('https://www.icloud.com/mail/')).toBe('iCloud Mail');
+  for (const no of ['https://mail.google.com.evil.test/mail', 'https://google.com/', 'https://www.icloud.com/photos', 'https://outlook.live.com/owa-fake', 'https://evil.test/?u=mail.google.com', 'not a url']) expect(mailboxOf(no), no).toBeNull();
+});
+
+test('pasted text is an email when it has links and some length, not a short question', () => {
+  expect(looksLikeEmail('Is it safe to enter my card here?')).toBe(false);
+  expect(looksLikeEmail('https://a.example/')).toBe(false);
+  expect(looksLikeEmail('Is https://a.example/ safe?')).toBe(false);
+  expect(looksLikeEmail('Hello,\nplease pay: https://a.example/pay')).toBe(true);
+  expect(looksLikeEmail('see https://a.example/ and https://b.example/')).toBe(true);
+  expect(looksLikeEmail(`${'Dear customer, '.repeat(20)} https://a.example/`)).toBe(true);
+  expect(looksLikeEmail('Hello,\nno links at all\nin this one')).toBe(false);
+});
+
+test('the panel\'s facts: where it ended, what forms ask for, where they send it', () => {
+  const f = panelFacts(hostile());
+  const m = Object.fromEntries(f);
+  expect(m['Final site']).toBeTruthy();
+  expect(f.length).toBeGreaterThan(2);
+  expect(f.every(([k, v]) => typeof k === 'string' && typeof v === 'string')).toBe(true);
 });

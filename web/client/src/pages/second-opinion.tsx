@@ -6,6 +6,7 @@ import { useLocation } from 'react-router';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { ApiError, askSecondOpinion, secondOpinionShotUrl, type SecondOpinion as Opinion } from '../api.ts';
 import { fmtTime, keyFromHash } from '../logic.ts';
+import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary, Card, Fact, Facts, LevelPill, Notice } from '../ui.tsx';
 
@@ -66,7 +67,7 @@ export function SecondOpinion({ r, id }: { r: PublicReport; id: string }) {
             <Fact term={T.second.rows.title}>{so.title_withheld ? T.second.withheld : so.title || '—'}</Fact>
             <Fact term={T.second.rows.scan} mono>{so.scan_id}</Fact>
           </Facts>
-          {so.screenshot && <img src={secondOpinionShotUrl(id)} alt={T.second.shotAlt} className="w-full rounded-lg border border-line" loading="lazy" />}
+          {so.screenshot && <ShotViewer src={secondOpinionShotUrl(id)} alt={T.second.shotAlt} className="block w-full"><img src={secondOpinionShotUrl(id)} alt={T.second.shotAlt} className="w-full rounded-lg border border-line" loading="lazy" /></ShotViewer>}
         </div>
       )}
     </Card>

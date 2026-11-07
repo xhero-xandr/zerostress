@@ -5,9 +5,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
-import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, startTask, type Pending } from '../api.ts';
+import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startTask, type Pending, type TaskStatus } from '../api.ts';
 import { EXTENSION_ORIGIN } from '../extension.ts';
-import { asLogEntry, isTaskId, linkFromQuery, logLine, logTime, verdictLine } from '../logic.ts';
+import { asLogEntry, isTaskId, linkFromQuery, linksFromEmail, logLine, logTime, looksLikeEmail, mailboxOf, panelFacts, verdictLine, type EmailLink } from '../logic.ts';
+import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary } from '../ui.tsx';
 
@@ -16,7 +17,8 @@ type Item =
   | { kind: 'agent'; text: string }
   | { kind: 'steps'; entries: LogEntry[] }
   | { kind: 'approval'; p: Pending; done: string | null }
-  | { kind: 'verdict'; r: PublicReport; id: string; key: string }
+  | { kind: 'verdict'; r: PublicReport; id: string; key: string; shots: TaskStatus['shots'] | null }
+  | { kind: 'email'; links: EmailLink[] }
   | { kind: 'consent'; id: string; key: string };
 
 const P = T.panel;
@@ -59,7 +61,8 @@ export function Panel() {
     let r: PublicReport;
     try { r = await getReport(id); } catch (e) { say(errText(e)); busy.current = false; return; }
     if (task.current?.id === id) task.current.report = true;
-    push({ kind: 'verdict', r, id, key });
+    const shots = await getStatus(id).then((st) => st.shots, () => null);
+    push({ kind: 'verdict', r, id, key, shots });
     busy.current = false;
     await answer(id, { kind: 'explain' });
   }
@@ -97,6 +100,8 @@ export function Panel() {
     push({ kind: 'you', text: P.checkThis(raw.trim()) });
     const link = webLink(raw);
     if (!link) { say(P.notALink); return; }
+    const mailbox = mailboxOf(link);
+    if (mailbox) { say(P.mailbox(mailbox)); return; }
     task.current?.es?.close();
     busy.current = true;
     try {
@@ -130,6 +135,13 @@ export function Panel() {
     const t = text.trim();
     if (!t) return;
     setText('');
+    // a pasted email is read here and never sent: its links are offered, as on the home page
+    if (!webLink(t) && looksLikeEmail(t)) {
+      push({ kind: 'you', text: P.pastedEmail(t.length) });
+      const links = linksFromEmail(t);
+      if (links.length) push({ kind: 'email', links }); else say(P.emailNone);
+      return;
+    }
     if (webLink(t) || !task.current?.report) { void check(t); return; }
     push({ kind: 'you', text: t });
     void answer(task.current.id, { kind: 'ask', message: t.slice(0, 300) });
@@ -183,6 +195,21 @@ export function Panel() {
                 : <p className="mt-2 text-muted">{it.done}</p>}
             </div>
           );
+          if (it.kind === 'email') return (
+            <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
+              <p>{P.emailFound(it.links.length)}</p>
+              <ul className="mt-2 flex flex-col gap-2">
+                {it.links.map((l, j) => (
+                  <li key={j} className="flex flex-col gap-1 rounded-lg border border-line p-2">
+                    <span className="font-mono text-[12.5px] [overflow-wrap:anywhere]">{l.url}</span>
+                    {l.shown && <span className="text-[12.5px] font-semibold text-danger">{T.emailShown(l.shown)}</span>}
+                    {l.wrapper && <span className="text-[12.5px] text-muted">{T.emailWrapped(l.wrapper)}</span>}
+                    <button type="button" className={`${btnSecondary} self-start`} onClick={() => void check(l.url)}>{T.emailCheck}</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
           if (it.kind === 'consent') return (
             <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
               <p>{T.second.consentText}</p>
@@ -196,8 +223,24 @@ export function Panel() {
               <p className={`font-bold ${r.verdict === 'malicious' ? 'text-danger' : r.verdict === 'benign' ? 'text-accent' : ''}`}>{P.verdictLead} {T.verdict[r.verdict]}</p>
               <p>{verdictLine(r)}</p>
               {serious.length > 0 && <ul className="mt-1.5 list-disc pl-5 text-[13px] text-muted">{serious.map((s) => <li key={s.id}>{s.text}</li>)}</ul>}
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12.5px]">
+                {panelFacts(r).map(([k, v]) => [<dt key={`${k}-t`} className="text-faint">{k}</dt>, <dd key={`${k}-d`} className="[overflow-wrap:anywhere]">{v}</dd>])}
+              </dl>
+              {it.shots && (it.shots.desktop || it.shots.tablet || it.shots.mobile) && (
+                <div className="mt-2.5">
+                  <p className="text-[12px] text-faint">{P.shotsTitle}</p>
+                  <div className="mt-1 flex items-start gap-2">
+                    {(['desktop', 'tablet', 'mobile'] as const).filter((d) => it.shots![d]).map((d) => (
+                      <ShotViewer key={d} src={shotUrl(it.id, d)} alt={T.screenshotAlt(T.device[d]!)} className={d === 'desktop' ? 'w-[150px]' : 'w-[62px]'}>
+                        <img src={shotUrl(it.id, d)} alt={T.screenshotAlt(T.device[d]!)} loading="lazy" className="w-full rounded-md border border-line object-cover object-top" />
+                      </ShotViewer>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 <a className={`${btnSecondary} no-underline`} href={`/r/${it.id}#k=${it.key}`} target="_blank" rel="noopener noreferrer">{P.openReport}</a>
+                <a className={`${btnSecondary} no-underline`} href={reportJsonUrl(it.id)} download={`report-${it.id.slice(0, 8)}.json`}>{P.downloadJson}</a>
                 {r.verdict === 'unknown' && !r.second_opinion && <button type="button" className={btnPrimary} onClick={() => void second(it.id, it.key, false)}>{T.second.ask}</button>}
               </div>
             </div>
