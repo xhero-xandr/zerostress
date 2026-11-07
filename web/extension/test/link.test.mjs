@@ -20,7 +20,8 @@ test('a link to ZeroStress itself needs no check', () => {
 const manifest = JSON.parse(readFileSync(new URL('../public/manifest.json', import.meta.url), 'utf8'));
 
 test('the extension frames ZeroStress only, and reads no page', () => {
-  assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'contextMenus', 'sidePanel', 'storage']);
+  // no activeTab either: the menu hands over the link it was clicked on, and opening the panel needs only the click
+  assert.deepEqual([...manifest.permissions].sort(), ['contextMenus', 'sidePanel', 'storage']);
   assert.equal(manifest.host_permissions, undefined, 'no access to any site: the panel is a frame, not a client');
   assert.equal(manifest.content_scripts, undefined);
   assert.equal(manifest.manifest_version, 3);

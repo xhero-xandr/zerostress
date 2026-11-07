@@ -7,7 +7,6 @@
   "permissions": [
     "contextMenus",
     "sidePanel",
-    "activeTab",
     "storage"
   ],
   "background": {

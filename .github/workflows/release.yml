@@ -20,6 +20,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: the tag is on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "the tag $GITHUB_REF_NAME is not on main" >&2; exit 1; }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -30,6 +36,8 @@ jobs:
           bash deploy/release.sh check "$version"
           bash deploy/release.sh notes "$version" > release-notes.md
       - run: npm ci --ignore-scripts
+        working-directory: web/client
+      - run: npm test && npm run typecheck
         working-directory: web/client
       - run: node --test extension/test/*.mjs
         working-directory: web
