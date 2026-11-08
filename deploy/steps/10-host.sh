@@ -7,6 +7,14 @@ need_root_dir
 
 [[ -e /dev/kvm ]] || { echo "no /dev/kvm: Firecracker needs a machine with KVM (nested virtualisation on a VM)" >&2; exit 1; }
 
+# unsquashfs (guest/image/build.sh, step 2) is not part of a minimal Rocky install; everything else the build needs
+# (mkfs.ext4, unshare, zip, zstd) was already there on a plain Rocky 10 Vultr instance (checked on a fresh one, 8 Nov 2026).
+command -v unsquashfs >/dev/null || { command -v dnf >/dev/null && dnf install -y squashfs-tools || { echo "need unsquashfs (package squashfs-tools): guest/image/build.sh unpacks the CI root filesystem with it" >&2; exit 1; }; }
+
+# guest/image/build.sh runs as root over a checkout owned by $CODE_USER; git refuses that ("dubious ownership") unless
+# told it is fine, root's repo_commit in the image manifest would silently read "unknown" otherwise.
+git config --global --get-all safe.directory 2>/dev/null | grep -qx "$ROOT" || git config --global --add safe.directory "$ROOT"
+
 getent group kvm >/dev/null || groupadd -r kvm
 getent group zerostress-ipc >/dev/null || groupadd -r zerostress-ipc
 id zerostress-sup >/dev/null 2>&1 || useradd -r -M -d /nonexistent -s /sbin/nologin -G kvm zerostress-sup

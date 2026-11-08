@@ -41,7 +41,9 @@ Code changes go through git, settings through `./zs config`; the rest is filled 
 4. `sudo ./zs install` (about 15 minutes, most of it the guest image).
 5. `./zs verify --live`, then point DNS at the host.
 
-Every step is idempotent, and every download is checked against a pinned checksum in `deploy/versions.env`. To move to another server: the same, plus `config/` and, if you want the reports, `data/` from the old one. An install on a clean machine has not been verified end to end yet.
+Every step is idempotent, and every download is checked against a pinned checksum in `deploy/versions.env`. To move to another server: the same, plus `config/` and, if you want the reports, `data/` from the old one.
+
+Verified end to end on a clean Vultr instance (8 November 2026): every step through `verify`, then a real check submitted straight to the API (no domain, no Cloudflare there) came back *benign*. The `host` step now also installs `squashfs-tools` (needed to unpack the guest image's base, not part of a minimal Rocky install) and adds the project directory to git's `safe.directory`, so the image manifest's commit is recorded rather than `"unknown"` — both were missing before and had only ever been fixed by hand on the long-lived server.
 
 ## Updating
 | What changed | Command |
