@@ -8,7 +8,7 @@ import { hidesText } from './hiding.ts';
 import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } from './lists.ts';
 import { domainToUnicode } from 'node:url';
 import type { Reputation } from './reputation.ts';
-import { isIpHost, mixedScripts, parseUrl, registrable, sld, skeleton } from './domain.ts';
+import { isIpHost, mixedScripts, onSharedHost, parseUrl, registrable, sld, skeleton } from './domain.ts';
 
 export type Level = 'info' | 'low' | 'medium' | 'high';
 export type Verdict = 'benign' | 'suspicious' | 'malicious' | 'unknown';
@@ -50,17 +50,23 @@ const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !A
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const origin = (u: unknown): string => parseUrl(u)?.origin ?? '';
+const pathOf = (u: string): string => parseUrl(u)?.pathname ?? '';
 const hostOf = (u: unknown): string => parseUrl(u)?.hostname ?? '';
 
 /** Titles of the pages that stand between a visitor and the site: Cloudflare's wait page and block page, other bot walls. */
 /** Addresses that belong to bot walls and captchas (Cloudflare, DataDome, hCaptcha, reCAPTCHA, PerimeterX, Imperva). */
 const CHALLENGE_INFRA = /\/cdn-cgi\/challenge-platform\/|[?&]__cf_chl_|challenges\.cloudflare\.com|captcha-delivery\.com|hcaptcha\.com\/|recaptcha\/|px-cdn\.net|perimeterx|_Incapsula_Resource|geetest/i;
-const CHALLENGE_TITLE = /^\s*(just a moment|attention required!? ?\|? ?cloudflare|checking your browser|verifying you are human|verify you are human|ddos protection by|one more step|please wait while|security check|are you a robot|pardon our interruption|access denied)\b/i;
+const CHALLENGE_TITLE = /^\s*(just a moment|attention required!? ?\|? ?cloudflare|checking your browser|verifying you are human|verify you are human|ddos protection by|one more step|please wait while|security check|security verification|are you a robot|pardon our interruption|access denied)\b/i;
 
 /** The warning page Cloudflare puts in front of a site it has itself flagged: its own verdict, not the site's content. */
 /** The same walls in other languages: Cloudflare's own "Just a moment" as it is translated, and "you are not a robot". */
 const CHALLENGE_TITLE_INTL = /^\s*(один момент|einen moment|nur einen moment|un instant|un momento|um momento|solo un momento|chwileczkę|bir dakika|しばらくお待ちください|请稍候|잠시만 기다리십시오)|не робот|что вы человек|kein roboter|pas un robot|no eres un robot|não é um robô|non sei un robot|nie jesteś robotem|robot değil/i;
 
+// a wall that moved the visitor to a page of its own: /bgn_verification.html, /captcha/, /challenge (temu.com). Only the
+// path counts, and only on a page with nothing else on it: a sign-in or "verify your email" page has a form and text.
+const CHALLENGE_PATH = /\/[\w-]*(?:verification|captcha|challenge)[\w-]*(?:\.html?)?(?:\/|$)/i;
+// characters that take room in the text but show nothing: a wall that pads its page with them is still an empty page
+const INVISIBLE = /[\u00ad\u200b-\u200f\u2060-\u2064\ufeff]/g;
 const PROVIDER_WARNING_TITLE = /^\s*suspected (phishing|malware)\s*\|\s*cloudflare\b/i;
 
 export function analyze(events: readonly unknown[], opts: Options = {}): Analysis {
@@ -115,6 +121,20 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
     const spoof = /\P{ASCII}/u.test(shown) &&BRANDS.some((b) => b.slds.includes(sld(skeleton(shown))) && !b.slds.includes(sld(shown)));
     if (mixedScripts(shown) || spoof || isIpHost(name) || (port !== '' && port !== '80' && port !== '443')) odd.push(ref);
   }
+  // a brand's name in a name of one's own on a hosting service (instagram-clone.vercel.app, paypal-verify.netlify.app):
+  // the brand does not live there, and the name is chosen to look like it. One name alone on a code host
+  // (microsoft.github.io) is how an organisation's own project pages are named, so it does not count.
+  const onHost: number[] = [];
+  let hostBrand = '';
+  for (const [host, ref] of hosts) {
+    const name = host.replace(/:\d+$/, '').toLowerCase();
+    if (!onSharedHost(name)) continue;
+    const parts = sld(name).split(/[-_]+/).filter(Boolean);
+    const codeHost = /\.(?:github|gitlab)\.io$/.test(name);
+    const b = BRANDS.find((x) => x.slds.some((s) => s.length >= 3 && parts.includes(s)) || x.words.some((w) => !w.includes(' ') && w.length >= 3 && parts.includes(w)));
+    if (b && (parts.length > 1 || !codeHost)) { onHost.push(ref); hostBrand ||= b.words[0]!; }
+  }
+  if (onHost.length) add('brand_on_shared_host', 'medium', `The address puts the name ${hostBrand} on a free hosting service, where anyone can pick any name; ${hostBrand} does not run its site there.`, onHost);
   if (odd.length) add('lookalike_host', 'medium', 'A site in the chain has an address of the kind used to imitate another (encoded or mixed-alphabet name, a bare number address, an unusual port).', odd);
 
   if (finalParsed?.protocol === 'http:') add('no_tls', 'low', 'The final page was loaded without encryption.', page ? [page[1]] : []);
@@ -265,7 +285,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   // with instead of its page, or a page with nothing on it. A verdict of "no threat found" on such a visit would be a lie.
   // A real page that merely carries a captcha widget has content, so the widget alone does not count.
   const title = str(page?.[0].title);
-  const textLen = str(page?.[0].text).trim().length;
+  const textLen = str(page?.[0].text).replace(INVISIBLE, '').trim().length;
   const linkCount = (land?.links?.links as unknown[] | undefined)?.length ?? 0;
   const formCount = (forms?.[0].forms as unknown[] | undefined)?.length ?? 0;
   const thin = textLen < 300 && linkCount < 3;
@@ -275,7 +295,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const challengeInfra = reqs.some(([e]) => CHALLENGE_INFRA.test(str(e.url)));
   const warned = PROVIDER_WARNING_TITLE.test(title);
   if (warned) add('provider_warning', 'medium', 'Cloudflare shows a warning that this site is suspected of phishing or malware, and does not let a visitor reach the page. The real page was not seen.', page ? [page[1]] : []);
-  const challenged = !warned && (CHALLENGE_TITLE.test(title) || CHALLENGE_TITLE_INTL.test(title) || (challengeInfra && (refusedStatus || thin)));
+  const challenged = !warned && (CHALLENGE_TITLE.test(title) || CHALLENGE_TITLE_INTL.test(title) || (challengeInfra && (refusedStatus || thin)) || (thin && formCount === 0 && CHALLENGE_PATH.test(pathOf(str(page?.[0].url)))));
   if (challenged) add('bot_challenge', 'info', 'The site showed a bot-check page instead of its own content, so the real page was not seen.', page ? [page[1]] : []);
   const httpError = !challenged && !warned && refusedStatus && page !== undefined;
   if (httpError) add('http_error', 'info', `The site answered with an error (HTTP ${asked}) instead of its page, so the real page was not seen.`, page ? [page[1]] : []);

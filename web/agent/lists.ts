@@ -1,6 +1,6 @@
 // Small lists the rules use. They are data, short on purpose and mostly English (spec 008, 9).
 
-import { sld } from './domain.ts';
+import { onSharedHost, sld } from './domain.ts';
 
 export interface Brand {
   /** names as they appear in a title or text */
@@ -36,7 +36,8 @@ export const BRANDS: readonly Brand[] = [
 ];
 
 export function belongsTo(brand: Brand, host: string): boolean {
-  return brand.slds.includes(sld(host));
+  // paypal.vercel.app is anyone's: a name on a hosting service belongs to no brand
+  return !onSharedHost(host) && brand.slds.includes(sld(host));
 }
 
 /** Link shortening services: the first hop of a chain on one of them hides where it leads. */

@@ -60,6 +60,7 @@ async function check(item, ip) {
     cf: so ? `${so.source}:${so.status ?? '-'}:${so.malicious === true ? 'malicious' : so.malicious === false ? 'clean' : 'none'}` : rep.second_opinion_state ?? '',
     signals: ids.filter((s) => !['many_third_parties', 'blocked_requests', 'young_certificate'].includes(s)).join(','),
     age_days: rep.facts.domain?.age_days ?? null,
+    rep: rep.reputation ? `g=${rep.reputation.google === null ? '-' : rep.reputation.google.length ? 'LISTED' : 'ok'} s=${rep.reputation.spamhaus ?? '-'} vt=${rep.reputation.virustotal ? rep.reputation.virustotal.malicious + rep.reputation.virustotal.suspicious : '-'} u=${rep.reputation.urlscan === null ? '-' : rep.reputation.urlscan ? 'BAD' : 'ok'}` : '',
   };
 }
 
@@ -70,7 +71,7 @@ await Promise.all(Array.from({ length: jobs }, async (_, w) => {
     if (!item) return;
     const r = await check(item, ipFor(w, i)).catch((e) => ({ ...item, outcome: `error_${e.name}` }));
     results.push(r);
-    console.log(`${String(results.length).padStart(3)} ${r.set.padEnd(5)} ${(r.verdict ?? r.outcome).padEnd(10)} ${String(r.wall ? 'WALL' : '').padEnd(4)} cf=${(r.cf ?? '').padEnd(22)} ${Math.round((r.ms ?? 0) / 1000)}s ${r.url.slice(0, 70)}`);
+    console.log(`${String(results.length).padStart(3)} ${r.set.padEnd(5)} ${(r.verdict ?? r.outcome).padEnd(10)} ${String(r.wall ? 'WALL' : '').padEnd(4)} cf=${(r.cf ?? '').padEnd(22)} ${(r.rep ?? '').padEnd(34)} ${Math.round((r.ms ?? 0) / 1000)}s ${r.url.slice(0, 70)}`);
   }
 }));
 

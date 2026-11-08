@@ -1,10 +1,24 @@
 // Host helpers for the rules. There is no public-suffix list here (no outside data): the registrable part is the last
-// two labels, three for the suffixes in TWO_PART. Unusual suffixes are therefore judged less exactly (spec 008, 3).
+// two labels; three for the suffixes in TWO_PART and a country's usual second levels (com.et, co.th, org.ng); one more
+// than the service for the hosting services in SHARED_HOSTS. Unusual suffixes are judged less exactly (spec 008, 3).
 
 const TWO_PART = new Set([
   'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'com.au', 'net.au', 'org.au', 'edu.au', 'co.nz', 'co.jp', 'ne.jp', 'or.jp',
   'co.in', 'net.in', 'org.in', 'com.br', 'net.br', 'com.cn', 'net.cn', 'org.cn', 'com.tr', 'com.mx', 'co.za', 'com.ar',
   'com.sg', 'com.hk', 'com.tw', 'co.kr', 'or.kr', 'com.ua', 'com.ru', 'co.id', 'co.il', 'com.pl', 'com.pt', 'com.es',
+]);
+const COUNTRY_SECOND = /^(?:com|net|org|co|gov|edu|ac|or|ne|go|mil|gob|nic|biz|info)\.[a-z]{2}$/;
+
+/** Services where anyone gets a name of their own (alice.github.io, shop-x.vercel.app): each name is a site of its own,
+ * and what is known about the service says nothing about it. */
+export const SHARED_HOSTS: ReadonlySet<string> = new Set([
+  'github.io', 'gitlab.io', 'vercel.app', 'now.sh', 'netlify.app', 'pages.dev', 'workers.dev', 'r2.dev', 'trycloudflare.com',
+  'web.app', 'firebaseapp.com', 'appspot.com', 'herokuapp.com', 'onrender.com', 'fly.dev', 'railway.app', 'replit.app', 'repl.co',
+  'glitch.me', 'surge.sh', 'azurewebsites.net', 'azurestaticapps.net', 'cloudfront.net', 'amplifyapp.com', 'blogspot.com',
+  'wordpress.com', 'wixsite.com', 'weebly.com', 'weeblysite.com', 'webflow.io', 'framer.app', 'framer.website', 'gitbook.io',
+  'notion.site', 'carrd.co', 'square.site', 'godaddysites.com', 'mystrikingly.com', 'tumblr.com', 'ngrok-free.app', 'ngrok.io',
+  'ngrok.app', '000webhostapp.com', 'canva.site', 'my.canva.site', 'webcindario.com', 'meusitehostgator.com.br', 'site123.me',
+  'jimdosite.com', 'myshopify.com', 'typedream.app', 'lovable.app', 'deno.dev', 'pythonanywhere.com', 'ipfs.io', 'dweb.link',
 ]);
 
 const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
@@ -13,22 +27,29 @@ export function isIpHost(host: string): boolean {
   return IPV4.test(host) || host.startsWith('[') || host.includes(':');
 }
 
-/** "login.paypal.co.uk" gives "paypal.co.uk"; an address stays as it is. */
+/** "login.paypal.co.uk" gives "paypal.co.uk", "x.alice.github.io" gives "alice.github.io"; an address stays as it is. */
 export function registrable(host: string): string {
   const h = host.toLowerCase().replace(/\.$/, '');
   if (isIpHost(h)) return h;
   const labels = h.split('.');
+  for (let n = Math.min(3, labels.length - 1); n >= 2; n--) {
+    if (SHARED_HOSTS.has(labels.slice(-n).join('.'))) return labels.slice(-n - 1).join('.');
+  }
   if (labels.length <= 2) return h;
   const last2 = labels.slice(-2).join('.');
-  return TWO_PART.has(last2) ? labels.slice(-3).join('.') : last2;
+  return TWO_PART.has(last2) || COUNTRY_SECOND.test(last2) ? labels.slice(-3).join('.') : last2;
 }
 
-/** The label in front of the suffix: "login.paypal.co.uk" gives "paypal". */
+/** The first label of the registrable part: "login.paypal.co.uk" gives "paypal", "alice.github.io" gives "alice". */
 export function sld(host: string): string {
   const r = registrable(host);
-  if (isIpHost(r)) return r;
-  const labels = r.split('.');
-  return TWO_PART.has(labels.slice(-2).join('.')) ? (labels.at(-3) ?? '') : (labels.at(-2) ?? labels[0] ?? '');
+  return isIpHost(r) ? r : (r.split('.')[0] ?? '');
+}
+
+/** the address is a name of its own on a service where anyone gets one */
+export function onSharedHost(host: string): boolean {
+  const r = registrable(host);
+  return [...SHARED_HOSTS].some((s) => r.endsWith(`.${s}`));
 }
 
 export function parseUrl(raw: unknown): URL | null {

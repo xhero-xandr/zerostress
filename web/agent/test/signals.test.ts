@@ -367,6 +367,12 @@ test('the registrable part of an address', () => {
     ['www.example.com', 'example.com', 'example'], ['login.paypal.co.uk', 'paypal.co.uk', 'paypal'], ['example.com.', 'example.com', 'example'],
     ['a.b.c.example.org', 'example.org', 'example'], ['localhost', 'localhost', 'localhost'], ['203.0.113.9', '203.0.113.9', '203.0.113.9'],
     ['shop.com.au', 'shop.com.au', 'shop'],
+    // a name of one's own on a hosting service is a site of its own, not the service
+    ['prasadmhetre2005.github.io', 'prasadmhetre2005.github.io', 'prasadmhetre2005'], ['a.b.pages.dev', 'b.pages.dev', 'b'],
+    ['instagram-clone-x.vercel.app', 'instagram-clone-x.vercel.app', 'instagram-clone-x'], ['vercel.app', 'vercel.app', 'vercel'],
+    ['n1790.2090313.meusitehostgator.com.br', '2090313.meusitehostgator.com.br', '2090313'], ['x.my.canva.site', 'x.my.canva.site', 'x'],
+    // a country's own second level
+    ['www.roblox.com.et', 'roblox.com.et', 'roblox'], ['shop.co.th', 'shop.co.th', 'shop'], ['www.example.co', 'example.co', 'example'],
   ];
   for (const [host, reg, label] of cases) {
     assert.equal(registrable(host), reg, host);
@@ -375,6 +381,27 @@ test('the registrable part of an address', () => {
   assert.equal(mixedScripts('pаypal.com'), true);
   assert.equal(mixedScripts('paypal.com'), false);
   assert.equal(mixedScripts('пример.рф'), false);
+});
+
+test("a brand's name on a free hosting service is a reason (instagram-clone on vercel.app)", () => {
+  for (const url of ['http://instagram-clone-konstantindev1.vercel.app/', 'https://paypal-verify.netlify.app/', 'https://paypal.vercel.app/', 'https://netflix-login.github.io/']) {
+    const s = has(visit(url, 'Home', 'A feed of posts. '.repeat(30)), 'brand_on_shared_host');
+    assert.equal(s?.level, 'medium', url);
+  }
+  assert.equal(analyze(visit('http://instagram-clone-konstantindev1.vercel.app/', 'Home', 'A feed. '.repeat(40))).verdict, 'suspicious', 'whatever the page shows this time');
+});
+
+test('a hosting name with no brand in it, or a brand only inside a longer word, is no reason', () => {
+  for (const url of ['https://myblog.vercel.app/', 'https://microsoft.github.io/', 'https://chasewilson.netlify.app/', 'https://www.paypal.com/', 'https://appleseed-farm.pages.dev/']) {
+    assert.equal(has(visit(url), 'brand_on_shared_host'), undefined, url);
+  }
+});
+
+test("a page that names a brand on a hosting name made of it is no brand's own site", () => {
+  const url = 'https://paypal.vercel.app/signin';
+  const e = [nav(url, 'requested'), nav(url), page(url, 'PayPal: Log in', 'Log in to your PayPal account'), forms(form(url)), summary(url)];
+  assert.ok(has(e, 'brand_domain_mismatch'), 'paypal.vercel.app is not PayPal');
+  assert.equal(analyze(e).verdict, 'malicious');
 });
 
 // ---- a bot-check page is not the site -----------------------------------------------------------------------------
@@ -457,6 +484,36 @@ test('only the status tells: a roomy page that the site refused, with a captcha 
   const a = analyze(e);
   assert.equal(a.verdict, 'unknown');
   assert.ok(a.signals.some((s) => s.id === 'bot_challenge'), 'the first document decides, not the captcha frame that follows');
+});
+
+// temu.com on 8 November 2026: the home page sent the visitor on to its own verification page, whose text was nothing
+// but zero-width spaces and whose captcha was drawn later by a script, with no title and no wall script we know
+test('a site that moves the visitor to its own verification page (temu.com) is a wall', () => {
+  const wall = 'https://www.temu.com/bgn_verification.html?verifyCode=L6Nr&from=https%3A%2F%2Fwww.temu.com%2F';
+  const e = [nav('https://www.temu.com/', 'requested'), req('https://www.temu.com/', 200), nav(wall), req(wall, 200), page(wall, '', '\u200b'.repeat(400)),
+    ev('links', { links: [] }), forms(), summary(wall)];
+  const a = analyze(e);
+  assert.equal(a.verdict, 'unknown');
+  assert.ok(a.signals.some((s) => s.id === 'bot_challenge'));
+});
+
+test('invisible characters are not text: a page of zero-width spaces is empty', () => {
+  const e = [nav('https://x.example/', 'requested'), nav('https://x.example/'), page('https://x.example/', '', '\u200b\u200c\ufeff'.repeat(50)), summary('https://x.example/')];
+  assert.ok(has(e, 'empty_page'));
+  assert.equal(analyze(e).verdict, 'unknown');
+});
+
+test('"Security verification" as the title is a wall', () => {
+  assert.ok(has(visit('https://x.example/', 'Security verification'), 'bot_challenge'));
+});
+
+test('a real page with "verification" or "captcha" in its address is read as usual', () => {
+  const article = live('https://blog.example/why-captcha-fails/', { status: 200, title: 'Why captcha fails', text: 'Captchas cost people time and stop few bots. '.repeat(10), links: 6 });
+  assert.equal(has(article, 'bot_challenge'), undefined, 'an article has text and links');
+  const verifyEmail = live('https://shop.example/account/verification', { status: 200, title: 'Verify your email', text: 'Enter the code we sent you.', forms: 1 });
+  assert.equal(has(verifyEmail, 'bot_challenge'), undefined, 'a page with a form is a page');
+  const query = live('https://shop.example/?step=verification', { status: 200, title: '', text: 'Hi', links: 0 });
+  assert.equal(has(query, 'bot_challenge'), undefined, 'only the path counts, not the query');
 });
 
 test('a small real landing page with links and a captcha widget, answered 200, is read as usual', () => {
