@@ -17,7 +17,7 @@ func TestHandToSlot(t *testing.T) {
 		t.Fatal("slot 7 was accepted")
 	}
 	dir := t.TempDir()
-	disk := filepath.Join(dir, "rootfs.ext4")
+	disk := filepath.Join(dir, "scratch.ext4")
 	if err := os.WriteFile(disk, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}

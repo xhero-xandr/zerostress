@@ -30,3 +30,24 @@ host_clean() { # name
   u=$(systemctl list-units --all --no-legend --plain 'zsvm-*.service' | wc -l)
   [[ $p == 0 && $q == 0 && $d == 0 && $u == 0 ]] && ok "host clean after: $1" || bad "host clean after: $1" "firecracker=$p zstap=$q rundirs=$d vm-units=$u"
 }
+
+# ---- the test collector over the installed image -------------------------------------------------------------------
+# Every microVM reads the installed image as it is, read-only (review D3): it is swapped by a rename within images/,
+# never changed in place, so a VM that starts meanwhile gets one image or the other whole, and a running one keeps its.
+IMG=/zerostress/images/guest-rootfs.ext4
+BACKUP=/var/tmp/zs-image-backup.ext4
+swap_in() { # file -> becomes the installed image
+  cp --sparse=always "$1" "$IMG.swap" && mv -f "$IMG.swap" "$IMG"
+}
+lay_collector() { # collector entry -> a copy of the installed image with it, swapped in; restore_image undoes it
+  local work
+  work=$(mktemp -d)
+  cp --sparse=always "$IMG" "$BACKUP"
+  cp --sparse=always "$IMG" "$work/test.ext4"
+  bash "$SRC/guest/image/apply-overlay.sh" "$work/test.ext4" "$SRC/build/guest-agent/zerostress-agent" "$1" | tail -1
+  swap_in "$work/test.ext4"
+  rm -rf "$work"
+}
+restore_image() {
+  if [[ -f $BACKUP ]]; then swap_in "$BACKUP" && rm -f "$BACKUP" && echo "installed image restored"; fi
+}

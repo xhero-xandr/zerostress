@@ -91,6 +91,7 @@ The supervisor refuses to start with a value out of range (`supervisor/config.go
 | `SUP_HARD_TIMEOUT_S` | 90 | total time limit of a plain check |
 | `SUP_VCPU` | 2 (1–4) | vCPUs per microVM |
 | `SUP_MEM_MIB` | 1024 (256–4096) | memory per microVM |
+| `SUP_SCRATCH_MIB` | 1024 (256–4096) | the disk a microVM writes to (the guest image is read-only); the most one run can write to the host |
 | `SUP_MIN_FREE_GB` | 20 | below this much free disk, new runs are refused |
 | `SUP_RESULT_TTL_H` | 24 | how long run results are kept |
 | `SUP_SESSION_SLOTS` | 1 (0–4) | live sessions (deep checks) at once; 0 turns them off |

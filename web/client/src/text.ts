@@ -415,7 +415,7 @@ export const T = {
     submitted: (ahead: number) => (ahead > 0 ? `Accepted: ${plural(ahead, 'check', 'checks')} ahead in the queue` : 'Accepted by the supervisor'),
     state: {
       queued: 'Waiting for a free sandbox',
-      preparing: 'Copying a clean disk image for this check only',
+      preparing: 'Preparing an empty disk for this check only (the system image itself is read-only)',
       booting: 'Booting a fresh microVM',
       running: 'The browser inside the microVM is at work',
       session: 'The microVM stays up for the agent’s next steps',

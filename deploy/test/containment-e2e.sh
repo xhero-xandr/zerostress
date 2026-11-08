@@ -14,8 +14,6 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
 
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-IMG=/zerostress/images/guest-rootfs.ext4
-BACKUP=/var/tmp/zs-image-backup.ext4
 MEM_MIB=${SUP_MEM_MIB:-1024}
 WORK=$(mktemp -d)
 
@@ -23,10 +21,9 @@ WORK=$(mktemp -d)
 [[ $(pgrep -c firecracker) == 0 ]] || { echo "a microVM is running; wait until the service is idle"; exit 1; }
 [[ -x $SRC/build/guest-agent/zerostress-agent ]] || { echo "build the agent first (guest/agent/build.sh)"; exit 1; }
 
-restore() { [[ -f $BACKUP ]] && mv -f "$BACKUP" "$IMG" && echo "installed image restored"; rm -rf "$WORK"; }
+restore() { restore_image; rm -rf "$WORK"; }
 trap restore EXIT
-cp --sparse=always "$IMG" "$BACKUP"
-bash "$SRC/guest/image/apply-overlay.sh" "$IMG" "$SRC/build/guest-agent/zerostress-agent" "$SRC/deploy/test/stub-collector.mjs" | tail -1
+lay_collector "$SRC/deploy/test/stub-collector.mjs"
 echo "test collector laid over the installed image (temporarily)"
 
 HOST_IP=$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)
@@ -133,13 +130,19 @@ ev=$(api "http://localhost/v1/runs/$RUN/events")
 check "the scratch space is bounded: the write was stopped by the guest (no space left)" "$(grep -c 'ENOSPC' <<<"$ev")" '^[1-9]'
 check "the scratch write did not finish" "$(grep -c '"kind":"diskfill_done"' <<<"$ev")" '^0$'
 host_clean "scratch fill"
-# the real disk: written data lands in the VM's own copy of the image, which cannot grow past its size
+# the real disk: the image is read-only, and what the guest writes lands on its own scratch disk (review D3)
 run_stub "diskfill&mb=512&to=home"
 ev=$(api "http://localhost/v1/runs/$RUN/events")
 check "512 MiB written to the guest's disk" "$(grep -c '"kind":"diskfill_done"' <<<"$ev")" '^1$'
 check "the run ended" "$(state "$RUN")" '^(done|failed)$'
 host_clean "disk fill"
-echo "     (a guest that fills the whole disk is bounded by the image size, 5 GiB, by construction: not run here, it takes minutes)"
+# more than the scratch disk holds (SUP_SCRATCH_MIB, 1024 by default): the guest runs out of space, the host's disk
+# takes no more than the scratch disk's size
+run_stub "diskfill&mb=1600&to=home"
+ev=$(api "http://localhost/v1/runs/$RUN/events")
+check "the whole disk is bounded: the guest ran out of space on its scratch disk" "$(grep -c 'ENOSPC' <<<"$ev")" '^[1-9]'
+check "the 1.6 GiB write did not finish" "$(grep -c '"kind":"diskfill_done"' <<<"$ev")" '^0$'
+host_clean "full disk"
 
 echo "== 6. the run is cancelled in the middle: nothing is left"
 RUN=$(post 'https://example.com/?stub=sleep&ms=60000' | rid)

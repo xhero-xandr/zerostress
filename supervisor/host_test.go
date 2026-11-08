@@ -744,10 +744,10 @@ func TestHost_FcPut_TimeoutIsAnFcAPIError(t *testing.T) {
 
 func TestHost_BootArgsAndMACFollowTheSlot(t *testing.T) {
 	bootWant := []string{
-		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.0.2::172.16.0.1:255.255.255.252::eth0:off:1.1.1.1",
-		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.1.2::172.16.1.1:255.255.255.252::eth0:off:1.1.1.1",
-		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.2.2::172.16.2.1:255.255.255.252::eth0:off:1.1.1.1",
-		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.3.2::172.16.3.1:255.255.255.252::eth0:off:1.1.1.1",
+		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda ro init=/usr/local/sbin/zerostress-init ip=172.16.0.2::172.16.0.1:255.255.255.252::eth0:off:1.1.1.1",
+		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda ro init=/usr/local/sbin/zerostress-init ip=172.16.1.2::172.16.1.1:255.255.255.252::eth0:off:1.1.1.1",
+		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda ro init=/usr/local/sbin/zerostress-init ip=172.16.2.2::172.16.2.1:255.255.255.252::eth0:off:1.1.1.1",
+		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda ro init=/usr/local/sbin/zerostress-init ip=172.16.3.2::172.16.3.1:255.255.255.252::eth0:off:1.1.1.1",
 	}
 	macWant := []string{"06:00:AC:10:00:02", "06:00:AC:10:01:02", "06:00:AC:10:02:02", "06:00:AC:10:03:02"}
 	for slot := 0; slot <= 3; slot++ {
@@ -911,18 +911,13 @@ func TestHost_RunUsesACleanEnvironmentAndReportsStderr(t *testing.T) {
 	}
 }
 
-func TestHost_PrepareDiskCopiesTheImageAndRemoveRunDirDeletesIt(t *testing.T) {
-	if _, err := os.Stat("/usr/bin/cp"); err != nil {
-		t.Skip("/usr/bin/cp not available")
-	}
+func TestHost_PrepareDiskMakesAnEmptyScratchDiskAndRemoveRunDirDeletesIt(t *testing.T) {
 	dir := t.TempDir()
 	image := filepath.Join(dir, "guest-rootfs.ext4")
-	content := append([]byte("ext4-image-"), make([]byte, 1<<20)...)
-	content = append(content, []byte("-end")...)
-	if err := os.WriteFile(image, content, 0o644); err != nil {
+	if err := os.WriteFile(image, []byte("ext4-image"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := makeConfig(t, dir, func(c *Config) { c.ImagePath = image })
+	cfg := makeConfig(t, dir, func(c *Config) { c.ImagePath = image; c.ScratchMiB = 300 })
 	b := NewLinuxBackend(cfg, nil)
 	runDir := filepath.Join(dir, "runs", "r1")
 	ctx := hostTCtx(t, 30*time.Second)
@@ -930,14 +925,20 @@ func TestHost_PrepareDiskCopiesTheImageAndRemoveRunDirDeletesIt(t *testing.T) {
 	if err := b.PrepareDisk(ctx, runDir); err != nil {
 		t.Fatal(err)
 	}
-	disk := filepath.Join(runDir, "rootfs.ext4")
-	got, err := os.ReadFile(disk)
-	if err != nil || string(got) != string(content) {
-		t.Fatalf("the copy differs from the image (err %v, %d bytes)", err, len(got))
+	// the image is not copied (review D3): the run gets an empty sparse disk of its own, of exactly the set size
+	if _, err := os.Stat(filepath.Join(runDir, "rootfs.ext4")); !os.IsNotExist(err) {
+		t.Errorf("a copy of the image was made: %v", err)
 	}
-	st, _ := os.Stat(disk)
-	if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Blocks*512 > st.Size()/2 {
-		t.Errorf("the copy is not sparse: %d bytes allocated for %d", sys.Blocks*512, st.Size())
+	disk := filepath.Join(runDir, "scratch.ext4")
+	st, err := os.Stat(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != 300<<20 {
+		t.Errorf("scratch size = %d, want %d", st.Size(), 300<<20)
+	}
+	if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Blocks*512 > 1<<20 {
+		t.Errorf("the scratch disk is not sparse: %d bytes allocated", sys.Blocks*512)
 	}
 	if st.Mode().Perm() != 0o600 {
 		t.Errorf("disk mode = %v, want 0600", st.Mode().Perm())
@@ -945,12 +946,8 @@ func TestHost_PrepareDiskCopiesTheImageAndRemoveRunDirDeletesIt(t *testing.T) {
 	if rst, _ := os.Stat(runDir); rst.Mode().Perm() != 0o700 {
 		t.Errorf("run dir mode = %v, want 0700", rst.Mode().Perm())
 	}
-	// the run owns its copy: writing to it leaves the image alone
-	if err := os.WriteFile(disk, []byte("scribble"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if after, _ := os.ReadFile(image); string(after) != string(content) {
-		t.Error("the image was changed through the copy")
+	if err := b.PrepareDisk(ctx, runDir); err == nil {
+		t.Error("a second PrepareDisk reused an existing scratch disk")
 	}
 
 	if err := b.RemoveRunDir(runDir); err != nil {
@@ -965,9 +962,6 @@ func TestHost_PrepareDiskCopiesTheImageAndRemoveRunDirDeletesIt(t *testing.T) {
 }
 
 func TestHost_PrepareDiskFailsWithDiskCopyWhenTheImageIsMissing(t *testing.T) {
-	if _, err := os.Stat("/usr/bin/cp"); err != nil {
-		t.Skip("/usr/bin/cp not available")
-	}
 	dir := t.TempDir()
 	cfg := makeConfig(t, dir, func(c *Config) { c.ImagePath = filepath.Join(dir, "absent.ext4") })
 	err := NewLinuxBackend(cfg, nil).PrepareDisk(hostTCtx(t, 30*time.Second), filepath.Join(dir, "runs", "r2"))

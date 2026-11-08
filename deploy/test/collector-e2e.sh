@@ -7,18 +7,12 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
 
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-IMG=/zerostress/images/guest-rootfs.ext4
-BACKUP=/var/tmp/zs-image-backup.ext4
 JSON=(-H 'content-type: application/json')
 
-restore() {
-  if [[ -f $BACKUP ]]; then mv -f "$BACKUP" "$IMG"; echo "installed image restored"; fi
-}
-trap restore EXIT
+trap restore_image EXIT
 
 [[ -x $SRC/build/guest-agent/zerostress-agent ]] || { echo "build the agent first (guest/agent/build.sh)"; exit 1; }
-cp --sparse=always "$IMG" "$BACKUP"
-bash "$SRC/guest/image/apply-overlay.sh" "$IMG" "$SRC/build/guest-agent/zerostress-agent" "$SRC/guest/collector/collect.mjs" | tail -1
+lay_collector "$SRC/guest/collector/collect.mjs"
 echo "real collector laid over the installed image (temporarily)"
 
 post_session() { api -X POST "${JSON[@]}" -d "{\"kind\":\"url\",\"url\":\"$1\",\"session\":$2}" http://localhost/v1/runs; }

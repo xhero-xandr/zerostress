@@ -63,15 +63,26 @@ func NewLinuxBackend(cfg Config, log Logger) *LinuxBackend {
 	return &LinuxBackend{cfg: cfg, log: log}
 }
 
-func (b *LinuxBackend) PrepareDisk(ctx context.Context, runDir string) error {
+// scratchName is the run's own disk: empty and sparse, formatted by the guest at boot (zerostress-init), the upper
+// layer over the read-only image (review D3).
+const scratchName = "scratch.ext4"
+
+func (b *LinuxBackend) PrepareDisk(_ context.Context, runDir string) error {
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return newRunError(ReasonDiskCopy, err.Error())
 	}
-	disk := filepath.Join(runDir, "rootfs.ext4")
-	if _, err := run(ctx, 60*time.Second, "/usr/bin/cp", "--sparse=always", b.cfg.ImagePath, disk); err != nil {
+	if _, err := os.Stat(b.cfg.ImagePath); err != nil {
+		return newRunError(ReasonDiskCopy, "the guest image: "+err.Error())
+	}
+	f, err := os.OpenFile(filepath.Join(runDir, scratchName), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
 		return newRunError(ReasonDiskCopy, err.Error())
 	}
-	if err := os.Chmod(disk, 0o600); err != nil {
+	err = f.Truncate(int64(b.cfg.ScratchMiB) << 20)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		return newRunError(ReasonDiskCopy, err.Error())
 	}
 	return nil
@@ -129,7 +140,7 @@ func handToSlot(runDir string, slot int) error {
 	for _, f := range []struct {
 		path string
 		mode os.FileMode
-	}{{runDir, 0o770}, {filepath.Join(runDir, "rootfs.ext4"), 0o660}} {
+	}{{runDir, 0o770}, {filepath.Join(runDir, scratchName), 0o660}} {
 		if err := os.Lchown(f.path, -1, gid); err != nil {
 			return fmt.Errorf("handing %s to %s: %w", filepath.Base(f.path), g.Name, err)
 		}

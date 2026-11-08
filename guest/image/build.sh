@@ -24,7 +24,8 @@ ROOTFS_NAME=$GUEST_ROOTFS_NAME
 ROOTFS_SHA256=$GUEST_ROOTFS_SHA256
 KERNEL_VERSION=$GUEST_KERNEL_VERSION
 KERNEL_SHA256=$GUEST_KERNEL_SHA256
-IMG_SIZE=5G
+# the image is read-only in every microVM (review D3): its size is what it holds plus a little room for the build
+IMG_SIZE=2560M
 # ---------------------------------------------------------------------------------------------------------
 
 AGENT_BIN=${AGENT_BIN:-$REPO/build/guest-agent/zerostress-agent}
@@ -47,7 +48,7 @@ die() { echo "build: $*" >&2; exit 1; }
 [[ -x $AGENT_BIN ]] || die "AGENT_BIN is not an executable file"
 
 umount_all() {
-  for m in dev/pts dev sys proc ""; do
+  for m in dev/pts dev ""; do
     mountpoint -q "$R/$m" 2>/dev/null && umount -l "$R/$m" || true
   done
 }
@@ -79,23 +80,37 @@ rm -rf "$W/tree"
 echo "== 3. mount and prepare chroot"
 mkdir -p "$R"
 mount -o loop "$IMG" "$R"
-mount -t proc proc "$R/proc"
-mount -t sysfs sysfs "$R/sys"
-mount --bind /dev "$R/dev"
-mount -t devpts devpts "$R/dev/pts"
+# a /dev of its own with the few devices package scripts use, never the host's (review C3): no disk of the host is in
+# reach of a maintainer script
+mount -t tmpfs -o mode=0755,size=1M,nosuid,noexec zsdev "$R/dev"
+for d in null:1:3 zero:1:5 full:1:7 random:1:8 urandom:1:9 tty:5:0; do
+  IFS=: read -r name major minor <<<"$d"
+  mknod -m 0666 "$R/dev/$name" c "$major" "$minor"
+done
+mkdir -p "$R/dev/pts" "$R/dev/shm"
+mount -t devpts -o newinstance,ptmxmode=0666 devpts "$R/dev/pts"
+ln -sf pts/ptmx "$R/dev/ptmx"
 mkdir -p "$R/tmp" "$R/var/tmp"
 chmod 1777 "$R/tmp" "$R/var/tmp"
 mkdir -p "$R/var/cache/apt/archives/partial" "$R/var/lib/apt/lists/partial" "$R/var/log/apt"
 rm -f "$R/etc/resolv.conf"
 printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\n' >"$R/etc/resolv.conf"   # build time only; overlay rewrites it
 
+# Every command of the build runs in namespaces of its own (review C3): its own processes (it sees and signals none of
+# the host's; /proc is that of its namespace), mounts, IPC and host name. The network is the host's (apt, npm).
 inchroot() {
-  chroot "$R" /usr/bin/env -i HOME=/root LC_ALL=C DEBIAN_FRONTEND=noninteractive \
+  unshare --mount --propagation private --pid --fork --kill-child --ipc --uts -- \
+    /bin/sh -c 'r=$1; shift; mount -t proc -o nosuid,nodev,noexec proc "$r/proc" && exec chroot "$r" "$@"' inchroot "$R" \
+    /usr/bin/env -i HOME=/root LC_ALL=C DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers "$@"
 }
 
-echo "== 4. apt packages"
+echo "== 4. apt packages, from the pinned snapshot of the archive"
+rm -f "$R/etc/apt/sources.list"
+printf '%s\n' 'Types: deb' "URIs: http://snapshot.ubuntu.com/ubuntu/$GUEST_UBUNTU_SNAPSHOT" \
+  'Suites: noble noble-updates noble-security' 'Components: main universe' \
+  'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' >"$R/etc/apt/sources.list.d/ubuntu.sources"
 inchroot apt-get update -qq
 # shellcheck disable=SC2086
 inchroot apt-get install -y -qq --no-install-recommends $APT_PACKAGES
@@ -113,6 +128,12 @@ install -m 0644 "$REPO/guest/collector/package.json" "$REPO/guest/collector/pack
 inchroot sh -c 'cd /opt/collector && npm ci --ignore-scripts --no-audit --no-fund'
 inchroot sh -c 'cd /opt/collector && npx playwright install --only-shell chromium'
 PW_VERSION=$(inchroot node -p "require('/opt/collector/node_modules/playwright/package.json').version")
+mapfile -t SHELLS < <(find "$R/opt/pw-browsers" -path '*chrome-headless-shell-linux64/chrome-headless-shell' -type f)
+[[ ${#SHELLS[@]} -eq 1 ]] || die "expected one Chrome Headless Shell, found ${#SHELLS[@]}"
+SHELL_SHA256=$(sha256sum "${SHELLS[0]}" | awk '{print $1}')
+[[ $SHELL_SHA256 == "$GUEST_HEADLESS_SHELL_SHA256" ]] || die "Chrome Headless Shell is $SHELL_SHA256, pinned $GUEST_HEADLESS_SHELL_SHA256 (deploy/versions.env)"
+# what the image holds, package by package, kept next to it
+inchroot dpkg-query -W -f '${Package} ${Version} ${Architecture}\n' | LC_ALL=C sort >"$OUT/packages.txt"
 
 echo "== 7. unprivileged user"
 inchroot useradd -m -u 1001 -s /usr/sbin/nologin pw
@@ -139,6 +160,9 @@ cat >"$OUT/manifest.json" <<EOF
   "kernel": {"file": "vmlinux-$KERNEL_VERSION", "sha256": "$KERNEL_SHA256"},
   "node": {"version": "$NODE_VERSION", "sha256": "$NODE_SHA256"},
   "playwright": "$PW_VERSION",
+  "headless_shell_sha256": "$SHELL_SHA256",
+  "ubuntu_snapshot": "$GUEST_UBUNTU_SNAPSHOT",
+  "packages_sha256": "$(sha256sum "$OUT/packages.txt" | awk '{print $1}')",
   "agent_sha256": "$(sha256sum "$AGENT_BIN" | awk '{print $1}')",
   "collector_entry_sha256": "$(cat "$COLLECTOR_ENTRY" "$(dirname "$COLLECTOR_ENTRY")"/lib/*.mjs 2>/dev/null | sha256sum | awk '{print $1}')",
   "image": {"file": "guest-rootfs.ext4", "sha256": "$IMG_SHA256"}

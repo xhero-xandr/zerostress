@@ -68,7 +68,7 @@ case $cmd in
     [[ $(stat -c %U "$dir") == "$SUPUSER" ]] || die "run directory has the wrong owner"
     # the supervisor hands the directory and the disk to the slot's group, and to nobody else
     [[ $(stat -c '%G %a' "$dir") == "$VMUSER$slot 770" ]] || die "run directory is not the slot's (group $VMUSER$slot, mode 770)"
-    disk=$dir/rootfs.ext4
+    disk=$dir/scratch.ext4
     [[ -f $disk && ! -L $disk && $(stat -c '%U %G %a %h' "$disk") == "$SUPUSER $VMUSER$slot 660 1" ]] || die "the disk is not the slot's"
 
     unit_props "$slot" "$id" "$dir" "$mem" "$vcpu"

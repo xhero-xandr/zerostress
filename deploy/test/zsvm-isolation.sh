@@ -29,8 +29,8 @@ cleanup
 # the group a slot's files belong to (from C1 on); before it, the supervisor's own
 grp() { getent group "zerostress-vm$1" >/dev/null && echo "zerostress-vm$1" || echo "$SUPUSER"; }
 install -d -m 0770 -o "$SUPUSER" -g "$(grp "$SLOT")" "$DIR"
-install -m 0660 -o "$SUPUSER" -g "$(grp "$SLOT")" /dev/null "$DIR/rootfs.ext4"
-truncate -s 1M "$DIR/rootfs.ext4"
+install -m 0660 -o "$SUPUSER" -g "$(grp "$SLOT")" /dev/null "$DIR/scratch.ext4"
+truncate -s 1M "$DIR/scratch.ext4"
 # another VM's run directory, as the supervisor leaves it for the VM of another slot
 install -d -m 0770 -o "$SUPUSER" -g "$(grp "$OTHER")" "$SIBDIR"
 install -m 0660 -o "$SUPUSER" -g "$(grp "$OTHER")" /dev/null "$SIBDIR/secret"
@@ -64,10 +64,12 @@ echo "sup_root $(r ls "/proc/$1/root/")"
 echo "logs $(r ls /zerostress/logs)"
 echo "code $(r ls /zerostress/web)"
 echo "own_write $(r touch "$2/probe")"
-echo "own_rootfs $(r bash -c "exec 3<>\"$2/rootfs.ext4\"")"
+echo "own_scratch $(r bash -c "exec 3<>\"$2/scratch.ext4\"")"
 echo "kvm $(r bash -c "exec 3<>/dev/kvm")"
 echo "tun $(r bash -c "exec 3<>/dev/net/tun")"
 echo "kernel $(r head -c1 "$4")"
+echo "image $(r head -c1 /zerostress/images/guest-rootfs.ext4)"
+echo "image_write $(r bash -c "exec 3<>/zerostress/images/guest-rootfs.ext4")"
 echo "firecracker $(r test -x /zerostress/bin/firecracker)"
 '
 out=$(systemd-run --quiet --pipe --wait --collect --unit=$UNIT "${props[@]}" /usr/bin/bash -c "$probe" probe "$SUPPID" "$DIR" "$SIBDIR" "$KERNEL" 2>&1)
@@ -76,10 +78,10 @@ get() { awk -v k="$1" '$1 == k { print $2 }' <<<"$out"; }
 
 want=zerostress-vm$SLOT
 [[ $(get user) == "$want" ]] && ok "Firecracker runs as $want, not as the supervisor" || bad "Firecracker's user" "$(get user), wanted $want"
-for k in sup_api other_run other_run_list sup_state sup_db sup_config web_config sup_proc sup_signal sup_root logs code; do
+for k in sup_api other_run other_run_list sup_state sup_db sup_config web_config sup_proc sup_signal sup_root logs code image_write; do
   [[ $(get $k) == no ]] && ok "out of reach: $k" || bad "reachable from Firecracker's sandbox: $k" "$(get $k)"
 done
-for k in own_write own_rootfs kvm tun kernel firecracker; do
+for k in own_write own_scratch image kvm tun kernel firecracker; do
   [[ $(get $k) == yes ]] && ok "still works: $k" || bad "Firecracker needs it and lost it: $k" "$(get $k)"
 done
 echo

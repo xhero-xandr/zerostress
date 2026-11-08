@@ -1,0 +1,23 @@
+#!/bin/sh
+# The guest's first process (kernel command line: init=/usr/local/sbin/zerostress-init; review D3, spec 004).
+# The image is attached read-only and shared by every microVM. This lays the run's own empty scratch disk (/dev/vdb)
+# over it with overlayfs and hands over to systemd: whatever the guest writes lands on the scratch disk, which the host
+# made of a fixed size and deletes after the run. There is no fallback: without its scratch disk the guest does not
+# start (the run fails at boot), it never runs on a writable image.
+set -eu
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+mount -t proc proc /proc
+[ -b /dev/vdb ] || mount -t devtmpfs devtmpfs /dev
+# the disk comes empty: format it now (no journal, it lives for one run; lazy init keeps this to a fraction of a second)
+mkfs.ext4 -q -F -L scratch -O ^has_journal -E lazy_itable_init=1,lazy_journal_init=1,nodiscard -m 0 /dev/vdb
+mount -t ext4 /dev/vdb /overlay
+mkdir -p /overlay/upper /overlay/work
+mount -t overlay overlay -o lowerdir=/,upperdir=/overlay/upper,workdir=/overlay/work /mnt
+umount /proc
+cd /mnt
+mkdir -p rom
+pivot_root . rom
+# the devices go along with the root (systemd would mount a devtmpfs of its own otherwise, and keep this one hidden)
+if mountpoint -q /rom/dev; then mount --move /rom/dev /dev; fi
+exec /sbin/init "$@"

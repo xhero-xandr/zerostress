@@ -54,7 +54,8 @@ func fcPut(ctx context.Context, apiSock, path string, body string) error {
 }
 
 func bootArgs(slot int) string {
-	return fmt.Sprintf("console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=172.16.%d.2::172.16.%d.1:255.255.255.252::eth0:off:1.1.1.1", slot, slot)
+	// the image is read-only (review D3): zerostress-init lays the scratch disk over it before systemd starts
+	return fmt.Sprintf("console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda ro init=/usr/local/sbin/zerostress-init ip=172.16.%d.2::172.16.%d.1:255.255.255.252::eth0:off:1.1.1.1", slot, slot)
 }
 
 func guestMAC(slot int) string { return fmt.Sprintf("06:00:AC:10:0%d:02", slot) }
@@ -203,7 +204,8 @@ func vmConfig(cfg Config, o StartOptions, vsockUDS string) []fcStep {
 	return []fcStep{
 		{"/machine-config", fmt.Sprintf(`{"vcpu_count":%d,"mem_size_mib":%d}`, o.VCPU, o.MemMiB)},
 		{"/boot-source", fmt.Sprintf(`{"kernel_image_path":%q,"boot_args":%q}`, cfg.KernelPath, bootArgs(o.Slot))},
-		{"/drives/rootfs", fmt.Sprintf(`{"drive_id":"rootfs","path_on_host":%q,"is_root_device":true,"is_read_only":false}`, filepath.Join(o.RunDir, "rootfs.ext4"))},
+		{"/drives/rootfs", fmt.Sprintf(`{"drive_id":"rootfs","path_on_host":%q,"is_root_device":true,"is_read_only":true}`, cfg.ImagePath)},
+		{"/drives/scratch", fmt.Sprintf(`{"drive_id":"scratch","path_on_host":%q,"is_root_device":false,"is_read_only":false}`, filepath.Join(o.RunDir, scratchName))},
 		{"/network-interfaces/net1", fmt.Sprintf(`{"iface_id":"net1","guest_mac":%q,"host_dev_name":"zstap%d","tx_rate_limiter":%s}`, guestMAC(o.Slot), o.Slot, netTxLimit)},
 		{"/vsock", fmt.Sprintf(`{"guest_cid":3,"uds_path":%q}`, vsockUDS)},
 		{"/actions", `{"action_type":"InstanceStart"}`},

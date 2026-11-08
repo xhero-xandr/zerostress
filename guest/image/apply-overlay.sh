@@ -14,6 +14,11 @@ trap cleanup EXIT
 e2fsck -fp "$IMG" >/dev/null || [[ $? -le 1 ]]
 mount -o loop "$IMG" "$M"
 
+# the first process: lays the run's scratch disk over the read-only image (review D3); its mount points, since the image
+# cannot be written at boot
+install -m 0755 -o root -g root "$HERE/overlay/zerostress-init" "$M/usr/local/sbin/zerostress-init"
+install -d -m 0755 -o root -g root "$M/overlay" "$M/mnt"
+
 # agent + unit, enabled by symlink (no chroot needed)
 install -m 0755 -o root -g root "$AGENT" "$M/usr/local/bin/zerostress-agent"
 install -m 0644 -o root -g root "$HERE/overlay/zerostress-agent.service" "$M/etc/systemd/system/zerostress-agent.service"

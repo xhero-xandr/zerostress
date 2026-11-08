@@ -41,10 +41,13 @@ type Config struct {
 	ArtifactFetchTimeout time.Duration
 	RecordsDir           string
 	ImageDir             string
-	ImagePath            string
-	KernelPath           string
-	ZsnetPath            string
-	ZsvmPath             string
+	// ImagePath is the guest's root, read-only and shared by every VM; what a guest writes goes to its own scratch disk
+	// of ScratchMiB (review D3), so a run can write no more than that to the host.
+	ImagePath  string
+	ScratchMiB int
+	KernelPath string
+	ZsnetPath  string
+	ZsvmPath   string
 }
 
 var digitsRe = regexp.MustCompile(`^\d+$`)
@@ -93,6 +96,7 @@ func LoadConfig(env map[string]string) (Config, error) {
 		HardTimeout:      sec(get("SUP_HARD_TIMEOUT_S", 90, 5, 600)),
 		VCPU:             get("SUP_VCPU", 2, 1, 4),
 		MemMiB:           get("SUP_MEM_MIB", 1024, 256, 4096),
+		ScratchMiB:       get("SUP_SCRATCH_MIB", 1024, 256, 4096),
 		MinFreeGB:        get("SUP_MIN_FREE_GB", 20, 0, 1000),
 		ResultTTL:        time.Duration(get("SUP_RESULT_TTL_H", 24, 1, 24*30)) * time.Hour,
 		MaxEvidenceBytes: 2 * 1024 * 1024,
