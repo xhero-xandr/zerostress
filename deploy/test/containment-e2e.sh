@@ -15,6 +15,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
 
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MEM_MIB=${SUP_MEM_MIB:-1024}
+# vCPUs per microVM as the running supervisor has them: the environment, else config/supervisor.env, else the default 1
+VCPU=${SUP_VCPU:-$(sed -n 's/^SUP_VCPU=//p' "$SRC/config/supervisor.env" 2>/dev/null | tail -1)}
+VCPU=${VCPU:-1}
 WORK=$(mktemp -d)
 
 [[ -e $BACKUP ]] && { echo "$BACKUP exists: an earlier run was interrupted. Put it back first (mv -f $BACKUP $IMG) after checking which image is the real one."; exit 1; }
@@ -97,7 +100,7 @@ last=$(tail -1 "$SAMPLES")
 memmax=$(prop "$last" MemoryMax); want=$(( (MEM_MIB + 640) * 1024 * 1024 ))
 check "MemoryMax is the VM's memory plus 640 MiB" "$memmax" "^$want$"
 check "swap is off for the VM" "$(prop "$last" MemorySwapMax)" '^0$'
-check "CPU is capped at the number of vCPUs" "$(prop "$last" CPUQuotaPerSecUSec)" '^2s$'
+check "CPU is capped at the number of vCPUs" "$(prop "$last" CPUQuotaPerSecUSec)" "^${VCPU}s$"
 check "tasks are capped" "$(prop "$last" TasksMax)" '^128$'
 
 echo "== 3. memory: the guest holds more than its VM has"
@@ -119,8 +122,8 @@ read -r first_t first_c <<<"$(awk 'NR>1 && /CPUUsageNSec=[0-9]+/ {for(i=1;i<=NF;
 read -r last_t last_c <<<"$(awk '/CPUUsageNSec=[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^CPUUsageNSec=/){split($i,a,"=");t=$1;c=a[2]}} END{print t, c}' "$SAMPLES")"
 ratio=$(awk -v a="$first_c" -v b="$last_c" -v t0="$first_t" -v t1="$last_t" 'BEGIN{ if (t1>t0) printf "%.2f", (b-a)/1e9/(t1-t0); else print 0 }')
 echo "     host unit used $ratio CPUs on average while burning"
-check "the burn really used the CPU (more than 1.2 CPUs)" "$(awk -v r="$ratio" 'BEGIN{print (r>1.2)?"yes":"no"}')" '^yes$'
-check "the unit never used more than its 2 CPUs (with a small margin)" "$(awk -v r="$ratio" 'BEGIN{print (r<=2.2)?"yes":"no"}')" '^yes$'
+check "the burn really used the CPU (more than 80% of its $VCPU CPUs)" "$(awk -v r="$ratio" -v v="$VCPU" 'BEGIN{print (r>0.8*v)?"yes":"no"}')" '^yes$'
+check "the unit never used more than its $VCPU CPUs (with a small margin)" "$(awk -v r="$ratio" -v v="$VCPU" 'BEGIN{print (r<=v+0.2)?"yes":"no"}')" '^yes$'
 host_clean "CPU burn"
 
 echo "== 5. disk and scratch space: the guest writes a lot"

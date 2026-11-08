@@ -77,6 +77,8 @@ n=0; for _ in $(seq 20); do n=$(grep -c '^event: artifact' <<<"$(live_events "$i
 check "a second artifact reached the host during the session (two published)" "$n" '^[2-9]$'
 dref=$(grep '"kind":"links"' <<<"$(live_events "$id" 2)" | tail -1 | grep -o '"ref":"[a-z0-9]*"' | head -1 | cut -d'"' -f4)
 check "a link ref on the second page" "$dref" '^(f[0-9]+)?e[0-9]+$'
+names() { art_event "$(live_events "$id" 2)" | grep -o '"name":"[^"]*"' | sort -u | wc -l; }
+before=$(names)
 r=$(cmd "$id" "{\"cmd\":\"download\",\"id\":\"d1\",\"snap\":2,\"ref\":\"$dref\"}")
 check "download is held for a human (202, awaiting_approval)" "$r" '"status":"awaiting_approval".* 202$'
 sleep 1
@@ -84,15 +86,12 @@ check "nothing was fetched before the approval" "$(grep -c '"kind":"download"' <
 sha=$(field "${r% *}" command_sha256)
 check "the approval is accepted" "$(api -X POST "${JSON[@]}" -w ' %{http_code}' -d "{\"command_id\":\"d1\",\"command_sha256\":\"$sha\"}" "http://localhost/v1/runs/$id/approvals" | awk '{print $NF}')" '^202$'
 check "the download ran in the guest" "$(wait_event "$id" '"command_id":"d1".*"status":"done"' 40 && echo yes)" '^yes$'
-n=0; for _ in $(seq 20); do n=$(grep -c '^event: artifact' <<<"$(live_events "$id" 1)"); ((n >= 3)) && break; done
-check "the downloaded file reached the host (three published)" "$n" '^[3-9]$'
-bin=$(art_event "$(live_events "$id" 2)" | grep '\.bin"' | head -1)
-check "published as a .bin the host measured" "$bin" '"saved":true.*"mime":"application/octet-stream"|"mime":"application/octet-stream".*"saved":true'
-binname=$(field "$bin" name)
-fetch_art "$id" "$binname" /var/tmp/zs-art.hdr /var/tmp/zs-art.bin
-check "a download is served as an opaque octet-stream" "$(tr -d '\r' </var/tmp/zs-art.hdr)" 'Content-Type: application/octet-stream'
-check "its hash matches the event" "$(sha256sum /var/tmp/zs-art.bin | cut -d' ' -f1)" "^$(field "$bin" sha256)$"
-rm -f /var/tmp/zs-art.hdr /var/tmp/zs-art.bin
+# The downloaded bytes never leave the guest (guest/collector/lib/session.mjs): the host gets the findings, not a file.
+ev=$(live_events "$id" 2)
+check "the guest reports the download as saved inside the VM" "$(grep -c '"kind":"download".*"saved":true' <<<"$ev")" '^[1-9]'
+check "and what it found in the file (a file event)" "$(grep -c '"kind":"file"' <<<"$ev")" '^[1-9]'
+check "no new artifact: the downloaded bytes were not published (was $before)" "$(names)" "^$before$"
+check "and nothing is served under a .bin name" "$(art_event "$ev" | grep -c '\.bin"')" '^0$'
 r=$(cmd "$id" '{"cmd":"close","id":"bye"}')
 check "close accepted" "${r##* }" '^202$'
 check "run finishes done" "$(wait_state "$id" '^(done|failed)$' 60)" '^done$'
