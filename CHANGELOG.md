@@ -22,6 +22,10 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 
 ### Changed
 - One vCPU per microVM by default (`SUP_VCPU=1`, was 2). Measured with the real collector on heavy sites: with three checks at once on the 2-vCPU host a check finishes 3 to 7 seconds sooner and boots faster, a single check on an idle host is 5 to 15% slower, and one guest can no longer take both host CPUs from the site and the other microVMs.
+- The Chrome Web Store's own id frames the panel too, alongside the one the manifest's public key fixes: the store strips that key, so it assigns the extension an id of its own.
+
+### Fixed
+- `./zs install host` now installs `squashfs-tools` (its `unsquashfs` is not part of a minimal Rocky 10 install, and the guest image build needs it) and adds the project directory to git's `safe.directory`, so the image manifest's `repo_commit` is a real commit instead of `"unknown"` when the build runs as root. Verified end to end on a clean Vultr instance; both had only ever been fixed by hand on the long-lived server.
 
 ## [0.9.1] - 2026-11-08
 
