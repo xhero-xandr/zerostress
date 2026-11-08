@@ -29,13 +29,16 @@ test('the extension frames ZeroStress only, and reads no page', () => {
   assert.doesNotMatch(manifest.content_security_policy.extension_pages, /connect-src|unsafe/);
 });
 
-test('its id is the one the server lets frame /panel and the panel takes links from (derived from the public key)', () => {
+test('the id from the public key is one the server lets frame /panel and the panel takes links from; the Chrome Web Store\'s own id (which the store assigns itself, not derivable here) is the other', () => {
   const hex = createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex').slice(0, 32);
   const id = [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
   const server = readFileSync(new URL('../../server/app.ts', import.meta.url), 'utf8');
-  assert.match(server, new RegExp(`EXTENSION_ORIGIN = 'chrome-extension://${id}'`));
+  assert.match(server, new RegExp(`'chrome-extension://${id}'`));
+  const origins = [...server.matchAll(/'chrome-extension:\/\/([a-p]{32})'/g)].map((m) => m[1]);
+  assert.equal(origins.length, 2, 'exactly two origins: the store\'s own id and this one');
   const client = readFileSync(new URL('../../client/src/extension.ts', import.meta.url), 'utf8');
-  assert.match(client, new RegExp(`EXTENSION_ORIGIN = 'chrome-extension://${id}'`));
+  assert.match(client, new RegExp(`'chrome-extension://${id}'`));
+  assert.deepEqual([...client.matchAll(/'chrome-extension:\/\/([a-p]{32})'/g)].map((m) => m[1]).sort(), origins.sort(), 'the client and the server agree on both origins');
 });
 
 test('the manifest fits the Chrome Web Store limits', () => {

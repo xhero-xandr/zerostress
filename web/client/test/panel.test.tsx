@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { EXTENSION_ORIGIN } from '../src/extension.ts';
+import { EXTENSION_ORIGINS } from '../src/extension.ts';
 import { Panel } from '../src/pages/panel.tsx';
 import { EVIL, hostile, status, unread } from './fixtures.ts';
 
+const EXTENSION_ORIGIN = EXTENSION_ORIGINS[0];
 const ID = '0123456789abcdef0123456789abcdef';
 const KEY = 'k'.repeat(43);
 

@@ -880,7 +880,7 @@ test('the agent panel may be framed by our browser extension only, and nothing e
   const panel = await r.app.request('/panel');
   assert.equal(panel.status, 200);
   const csp = panel.headers.get('content-security-policy') ?? '';
-  assert.match(csp, /frame-ancestors chrome-extension:\/\/eanjmnmjjbbcpgnhdifdpmednecllbbc(;|$)/);
+  assert.match(csp, /frame-ancestors chrome-extension:\/\/jbfpfekapmgpjjbiigjkhahongcjdlpm chrome-extension:\/\/eanjmnmjjbbcpgnhdifdpmednecllbbc(;|$)/);
   assert.equal(csp.replace(/frame-ancestors [^;]+/, ''), (((await r.app.request('/')).headers.get('content-security-policy')) ?? '').replace(/frame-ancestors [^;]+/, ''), 'the rest of the policy is the same as everywhere');
   for (const path of ['/', '/r/0123456789abcdef0123456789abcdef', '/r/0123456789abcdef0123456789abcdef/agent']) {
     assert.match((await r.app.request(path)).headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/, path);
@@ -890,6 +890,7 @@ test('the agent panel may be framed by our browser extension only, and nothing e
 test('the API takes no request from an extension: the panel calls it from this site', async () => {
   const r = rig();
   assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: 'chrome-extension://eanjmnmjjbbcpgnhdifdpmednecllbbc' })).status, 403);
+  assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: 'chrome-extension://jbfpfekapmgpjjbiigjkhahongcjdlpm' })).status, 403);
   assert.equal((await post(r.app, { url: 'https://example.com/' }, { origin: `https://${HOST}` })).status, 202);
 });
 

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startEmailCheck, startFileCheck, startTask, type Pending, type TaskStatus } from '../api.ts';
-import { EXTENSION_ORIGIN } from '../extension.ts';
+import { EXTENSION_ORIGINS } from '../extension.ts';
 import { asLink, asLogEntry, headline, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
 import { linksToCheck, looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
@@ -190,12 +190,14 @@ export function Panel() {
   // a link chosen with a right-click: only from the extension that frames this page
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      if (e.source !== window.parent || e.origin !== EXTENSION_ORIGIN) return;
+      if (e.source !== window.parent || !EXTENSION_ORIGINS.includes(e.origin)) return;
       const d = e.data as { type?: unknown; link?: unknown };
       if (d?.type === 'zs-check' && typeof d.link === 'string') void check(d.link);
     };
     window.addEventListener('message', onMessage);
-    if (window.parent !== window) window.parent.postMessage({ type: 'zs-ready' }, EXTENSION_ORIGIN);
+    // postMessage delivers only to a matching targetOrigin, so one call per candidate is safe: the frame's real
+    // parent gets it, the other call is silently dropped.
+    if (window.parent !== window) for (const origin of EXTENSION_ORIGINS) window.parent.postMessage({ type: 'zs-ready' }, origin);
     return () => window.removeEventListener('message', onMessage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
