@@ -302,13 +302,16 @@ export function mailboxOf(link: string): string | null {
 export function panelFacts(r: PublicReport): Array<[string, string]> {
   const f = r.facts;
   const out: Array<[string, string]> = [];
-  if (f.final_host) out.push([T.rows.host, f.final_host]);
+  // a file was fetched from our own page: the site, its age and its servers would be ours, so only its forms are told
+  const isFile = r.file != null;
+  if (f.final_host && !isFile) out.push([T.rows.host, f.final_host]);
   const hops = redirects(r);
-  if (hops > 0) out.push([T.rows.redirects, String(hops)]);
-  if (f.domain?.age_days != null) out.push([T.rows.registered, ageWords(f.domain.age_days)]);
+  if (hops > 0 && !isFile) out.push([T.rows.redirects, String(hops)]);
+  if (f.domain?.age_days != null && !isFile) out.push([T.rows.registered, ageWords(f.domain.age_days)]);
   const asks = [...new Set(f.forms.flatMap((x) => x.asks))].map((a) => T.ask[a] ?? a);
   if (asks.length) out.push([T.panel.asksFor, asks.join(', ')]);
   if (f.forms.some((x) => x.cross_origin)) out.push([T.rows.forms, T.otherSite]);
+  if (isFile) return out;
   out.push([T.rows.otherSites, String(f.third_party_hosts)]);
   if (f.servers_total > 0) out.push([T.panel.servers, serversLine(r)]);
   return out;

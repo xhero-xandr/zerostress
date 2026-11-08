@@ -184,6 +184,15 @@ test('the panel\'s facts: where it ended, what forms ask for, where they send it
   expect(f.every(([k, v]) => typeof k === 'string' && typeof v === 'string')).toBe(true);
 });
 
+test('the panel\'s facts for a file leave out our own page\'s site, age and servers, and keep its forms', () => {
+  const file = { name: 'a.html', bytes: 1, sha256: 'c'.repeat(64), type: 'html', read: true, findings: [], links: [], entries: [], viewed: true, virustotal: null };
+  const m = Object.fromEntries(panelFacts(hostile({ file })));
+  for (const k of ['Final site', 'Redirects', 'Registered', 'Other sites']) expect(m[k], k).toBeUndefined();
+  expect(Object.keys(m).some((k) => /server/i.test(k))).toBe(false);
+  expect(m.Forms).toBeTruthy();
+  expect(Object.fromEntries(panelFacts(hostile()))['Other sites']).toBeTruthy();
+});
+
 test('the deep-check hint says what really waits for approval: a download, never a form', () => {
   expect(T.deepHint).toMatch(/download/);
   expect(T.deepHint).not.toMatch(/such as (sending|submitting) a form/);

@@ -12,6 +12,8 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-08
+
 ### Added
 - One field on the home page and in the side panel for a link, an email or a file (dropped, pasted or picked; an `.eml` is read as an email). What it is, is told in the browser by fixed rules and said ("Understood as: …") before anything is sent; the three tabs are gone. The home page's texts say what is checked now: emails, files, Cloudflare and the reputation sources.
 - Files: an email's attachment, or a file picked on the home page ("A file"), is checked. Its SHA-256 is computed in the browser and only the hash is sent first, to ask VirusTotal (one lookup a minute is kept for files). "Open in a sandbox" sends the file: the server holds it in memory only, under a one-time address, until the microVM fetches it (at most five minutes), and keeps no copy; the download into the sandbox is approved by that click and by nothing else. Inside the microVM the collector reads it: its real type by content, a name that hides it, macros and macros that start on opening, remote templates, DDE, embedded objects, PDF code, actions, launches, embedded files and forms, programs and locked archives, disk images, shortcuts, HTML smuggling, SVG code, and in an attached page a sign-in form, a form or redirect to another site, hidden code; the addresses written in it are asked of Google Safe Browsing. An attached web page is also opened in the sandbox as a page (served once, in a `sandbox` CSP without this site's origin), with every rule and the vision model. The report shows the file, what was found, the names inside an archive and the addresses in it as text. A file downloaded in a deep check is read the same way and no longer copied out of the sandbox.
@@ -27,6 +29,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 - A safe demo page, `/demo/shared-file`, that offers a harmless text file: a deep check of it has a download to ask the owner about (Pattern B on camera).
 
 ### Changed
+- The browser extension says what it checks now: its name and description name emails and files, which the side panel takes (pasted, dropped or picked) since the panel became one field.
 - The code and every build belong to a new account, `zerostress`, with no sudo and no login, instead of the server's administrator; `./zs install` and `./zs update` give back any file written as root, and `./zs verify` checks both. The logs are root's only. `web/tools/panel-check.mjs` runs a deep check through the extension.
 - In a deep check the model is asked to propose a download when a page offers a file (the person still decides), so that the file itself becomes evidence.
 

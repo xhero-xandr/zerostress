@@ -91,7 +91,7 @@ export const T = {
     nothingFound: 'Nothing of what we look for: no program, macros, code that runs on opening, hidden files or sign-in form. That is not a proof that it is safe.',
     entries: (n: number) => `Inside the archive (${n})`,
     links: (n: number) => `Addresses found in the file (${n})`,
-    linksHint: 'These are the file\'s own words, not links. To check one, copy it into the address field.',
+    linksHint: 'These are the file\'s own words, not links. To check one, paste it into the field.',
     finding: {
       executable: 'It is a program.',
       script_file: 'It is a script that runs when opened.',
