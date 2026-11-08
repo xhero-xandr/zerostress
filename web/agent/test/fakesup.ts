@@ -12,6 +12,10 @@ export interface FakeSup {
   url: string;
   submits: any[];
   commands: any[];
+  /** approvals the agent passed on: [command_id, sha256] */
+  approvals: string[][];
+  /** what to do once a command is approved */
+  onApprove: (commandId: string, sup: FakeSup) => void;
   cancelled: number;
   eventRequests: Array<{ lastEventId: string | undefined }>;
   artifactRequests: string[];
@@ -36,7 +40,7 @@ export async function startFakeSup(): Promise<FakeSup> {
   const open = new Set<ServerResponse>();
   let ended = false;
   const sup: FakeSup = {
-    url: '', submits: [], commands: [], cancelled: 0, eventRequests: [], artifactRequests: [], artifacts: new Map(),
+    url: '', submits: [], commands: [], approvals: [], onApprove: () => undefined, cancelled: 0, eventRequests: [], artifactRequests: [], artifacts: new Map(),
     emit(type, data) {
       const ev = { seq: log.length + 1, type, data: typeof data === 'string' ? data : JSON.stringify(data) };
       log.push(ev);
@@ -90,6 +94,12 @@ export async function startFakeSup(): Promise<FakeSup> {
       if (r?.delayMs) await new Promise((x) => setTimeout(x, r.delayMs));
       if (r) return send(res, r.status ?? 202, r.body ?? {});
       return send(res, 202, { command_id: cmd.id, status: 'accepted', command_sha256: 'a'.repeat(64) });
+    }
+    if (req.method === 'POST' && url.pathname === `/v1/runs/${RUN_ID}/approvals`) {
+      const a = JSON.parse(raw);
+      sup.approvals.push([a.command_id, a.command_sha256]);
+      setTimeout(() => sup.onApprove(a.command_id, sup), 10);
+      return send(res, 202, { command_id: a.command_id, status: 'approved' });
     }
     if (req.method === 'DELETE' && url.pathname === `/v1/runs/${RUN_ID}`) {
       sup.cancelled++;

@@ -3,6 +3,7 @@
 import type { EmailCheck } from './email.ts';
 import { T } from './text.ts';
 import { SenderFacts } from './email-sender.tsx';
+import { FileRow } from './file-check.tsx';
 
 const M = T.mail;
 
@@ -28,9 +29,12 @@ export function EmailFindings({ mail, compact = false }: { mail: EmailCheck; com
         ? <ul aria-label={M.warnings} className={`flex flex-col gap-1 ${small}`}>{mail.warnings.map((w) => <li key={w.id + w.text} className={w.level === 'high' ? 'font-semibold text-danger' : 'text-warn'}>{w.text}</li>)}</ul>
         : <p className={small}>{M.noWarnings}</p>}
       {mail.attachments.length > 0 && (
-        <div className={small}>
-          <p className="text-muted">{M.attachments}: {mail.attachments.map((a) => a.name).join(', ')}</p>
-          <p className="text-faint">{M.attachmentsNote}</p>
+        <div className={`flex flex-col gap-2 ${small}`}>
+          <p className="font-semibold">{M.attachments}</p>
+          <ul className="flex flex-col gap-2">
+            {mail.attachments.map((a, i) => <FileRow key={`${i}${a.name}`} name={a.name} mime={a.type} data={a.data} />)}
+          </ul>
+          <p className="text-faint">{T.file.privacy}</p>
         </div>
       )}
     </section>

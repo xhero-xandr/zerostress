@@ -17,6 +17,19 @@ export interface Reputation {
   urlscan?: { malicious: boolean; scanned_at: string } | null;
 }
 
+/** what VirusTotal knows about one file, by its SHA-256 */
+export interface FileVerdict {
+  /** VirusTotal has seen this very file before */
+  known: boolean;
+  malicious: number;
+  suspicious: number;
+  total: number;
+  /** VirusTotal's name for what it is ("trojan.agenttesla"), when the engines agree on one */
+  label: string | null;
+  /** when anyone first sent it there, ISO time */
+  first_seen: string | null;
+}
+
 export interface ReputationKeys { safeBrowsing?: string; virustotal?: string; spamhausDqs?: string; urlscan?: string }
 export interface ReputationDeps {
   fetch?: typeof fetch;
@@ -81,12 +94,17 @@ export function createReputation(keys: ReputationKeys, deps: ReputationDeps = {}
     }
   }
 
-  async function virustotal(domain: string): Promise<Reputation['virustotal']> {
-    if (!keys.virustotal) return null;
+  // one lookup a minute is kept for files: a file someone hands us matters more than another look at a domain
+  const vtSlot = (forFile: boolean): boolean => {
     const t = now();
     while (vtTimes.length && t - vtTimes[0]! > 60_000) vtTimes.shift();
-    if (vtTimes.length >= vtPerMinute) return null;
+    if (vtTimes.length >= (forFile ? vtPerMinute : Math.max(1, vtPerMinute - 1))) return false;
     vtTimes.push(t);
+    return true;
+  };
+
+  async function virustotal(domain: string): Promise<Reputation['virustotal']> {
+    if (!keys.virustotal || !vtSlot(false)) return null;
     const res = await f(`https://www.virustotal.com/api/v3/domains/${encodeURIComponent(domain)}`, { headers: { 'x-apikey': keys.virustotal }, redirect: 'error', signal: AbortSignal.timeout(limit) });
     if (!res.ok) return null;
     const body: unknown = await res.json();
@@ -94,6 +112,22 @@ export function createReputation(keys: ReputationKeys, deps: ReputationDeps = {}
     if (!stats) return null;
     const total = Object.values(stats).reduce<number>((s, v) => s + count(v), 0);
     return { malicious: count(stats.malicious), suspicious: count(stats.suspicious), total };
+  }
+
+  async function vtFile(sha256: string): Promise<FileVerdict | null> {
+    if (!keys.virustotal || !vtSlot(true)) return null;
+    const res = await f(`https://www.virustotal.com/api/v3/files/${sha256}`, { headers: { 'x-apikey': keys.virustotal }, redirect: 'error', signal: AbortSignal.timeout(limit) });
+    if (res.status === 404) return { known: false, malicious: 0, suspicious: 0, total: 0, label: null, first_seen: null };
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    const at = isObj(body) && isObj(body.data) && isObj(body.data.attributes) ? body.data.attributes : null;
+    const stats = at && isObj(at.last_analysis_stats) ? at.last_analysis_stats : null;
+    if (!at || !stats) return null;
+    const total = Object.values(stats).reduce<number>((n, v) => n + count(v), 0);
+    const cls = isObj(at.popular_threat_classification) ? at.popular_threat_classification.suggested_threat_label : null;
+    const label = typeof cls === 'string' && /^[\w.\/-]{1,80}$/.test(cls) ? cls : null;
+    const first = typeof at.first_submission_date === 'number' && Number.isFinite(at.first_submission_date) && at.first_submission_date > 0 ? new Date(at.first_submission_date * 1000).toISOString() : null;
+    return { known: true, malicious: count(stats.malicious), suspicious: count(stats.suspicious), total, label, first_seen: first };
   }
 
   async function urlscan(domain: string): Promise<Reputation['urlscan']> {
@@ -114,6 +148,12 @@ export function createReputation(keys: ReputationKeys, deps: ReputationDeps = {}
 
   return {
     enabled: Boolean(keys.safeBrowsing || keys.virustotal || keys.spamhausDqs || keys.urlscan),
+    /** what VirusTotal knows about a file by its SHA-256; only the hash is sent, never the file */
+    async file(sha256: string): Promise<FileVerdict | null> {
+      const h = sha256.toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(h)) return null;
+      return within(memo(`f:${h}`, 6 * 3_600_000, () => vtFile(h)), null);
+    },
     /** an address (and where it led) and its site's domain */
     async check(urls: string[], host: string): Promise<Reputation> {
       const domain = registrable(host.toLowerCase());

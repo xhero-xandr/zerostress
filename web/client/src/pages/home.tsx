@@ -6,6 +6,7 @@ import { ApiError, getDemos, startEmailCheck, startTask } from '../api.ts';
 import { asLink, isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
 import { linksToCheck, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
+import { FilePicker } from '../file-check.tsx';
 import { T } from '../text.ts';
 import { extensionZip, RELEASE, releasePage } from '../version.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
@@ -16,7 +17,7 @@ export function Home() {
   // "/?u=<link>" (the browser extension, a bookmark) fills the field; the person still presses the button
   const given = linkFromQuery(useLocation().search);
   const [url, setUrl] = useState(given);
-  const [mode, setMode] = useState<'link' | 'email'>('link');
+  const [mode, setMode] = useState<'link' | 'email' | 'file'>('link');
   const [email, setEmail] = useState('');
   const [mail, setMail] = useState<EmailCheck | null>(null);
   const [deep, setDeep] = useState(false);
@@ -73,13 +74,15 @@ export function Home() {
           <p className="max-w-2xl text-lg leading-relaxed text-muted">{T.heroText}</p>
 
           <div role="tablist" aria-label={T.modeLabel} className="mt-3 inline-flex rounded-xl border border-line bg-surface p-1">
-            {(['link', 'email'] as const).map((m) => (
+            {(['link', 'email', 'file'] as const).map((m) => (
               <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(''); }}
                 className={`h-9 rounded-lg px-4 text-[15px] ${mode === m ? 'bg-accent text-white' : 'text-muted hover:text-fg'}`}>
-                {m === 'link' ? T.modeLink : T.modeEmail}
+                {m === 'link' ? T.modeLink : m === 'email' ? T.modeEmail : T.modeFile}
               </button>
             ))}
           </div>
+
+          {mode === 'file' && <FilePicker />}
 
           {mode === 'email' && (
             <div className="flex w-full max-w-3xl flex-col gap-2.5 text-left">

@@ -36,6 +36,10 @@ export const UNTRUSTED: readonly string[] = [
   // an email's links, as the email gave them, and the hosts they led to
   'email.links[].url',
   'email.links[].final_host',
+  // a file's name was chosen by whoever sent it; the addresses and the names inside it are its content
+  'file.name',
+  'file.links[]',
+  'file.entries[]',
   // Cloudflare's scanner read these off the page
   'second_opinion.final_host',
   'second_opinion.title',
@@ -211,6 +215,29 @@ function emailLinks(x: unknown): PublicReport['email'] {
   };
 }
 
+function fileOf(x: unknown): PublicReport['file'] {
+  const f = o(x);
+  if (typeof f.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(f.sha256)) return null;
+  const vt = o(f.virustotal);
+  const num = (v: unknown) => Math.max(0, Math.min(1000, Math.floor(n(v))));
+  return {
+    name: s(f.name, 200),
+    bytes: Math.max(0, Math.min(1e9, Math.floor(n(f.bytes)))),
+    sha256: f.sha256,
+    type: typeof f.type === 'string' && /^[a-z0-9]{1,12}$/.test(f.type) ? f.type : null,
+    read: f.read === true,
+    findings: list<unknown>(f.findings, 30).filter((v): v is string => typeof v === 'string' && TOKEN.test(v)),
+    links: list<unknown>(f.links, 20).filter((v): v is string => typeof v === 'string' && /^https?:\/\//i.test(v)).map((v) => s(v, 2048)),
+    entries: list<unknown>(f.entries, 30).filter((v): v is string => typeof v === 'string').map((v) => s(v, 200)),
+    viewed: f.viewed === true,
+    virustotal: typeof f.virustotal === 'object' && f.virustotal !== null ? {
+      known: vt.known === true, malicious: num(vt.malicious), suspicious: num(vt.suspicious), total: num(vt.total),
+      label: typeof vt.label === 'string' && /^[\w.\/-]{1,80}$/.test(vt.label) ? vt.label : null,
+      first_seen: typeof vt.first_seen === 'string' && !Number.isNaN(Date.parse(vt.first_seen)) ? new Date(vt.first_seen).toISOString() : null,
+    } : null,
+  };
+}
+
 export function publicReport(r: TaskResult): PublicReport {
   const a = o(r.assessment);
   const reason = typeof a.mode_reason === 'string' && Object.hasOwn(MODE_TEXT, a.mode_reason) ? a.mode_reason : null;
@@ -228,8 +255,9 @@ export function publicReport(r: TaskResult): PublicReport {
     log: cleanLog(r.log),
     second_opinion: secondOpinion(r.second_opinion),
     email: emailLinks(r.email),
+    file: fileOf(r.file),
     reputation: reputationOf(r.reputation),
-    second_opinion_state: secondOpinion(r.second_opinion) !== null || a.verdict !== 'unknown' || r.state !== 'done' ? null : r.second_opinion_error ? 'failed' : 'asking',
+    second_opinion_state: r.file || secondOpinion(r.second_opinion) !== null || a.verdict !== 'unknown' || r.state !== 'done' ? null : r.second_opinion_error ? 'failed' : 'asking',
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
     injection_attempt: o(r.hooks).triggered === true,
     injection_source: injectionSource(r.hooks),

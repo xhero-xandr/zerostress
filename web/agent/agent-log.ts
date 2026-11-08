@@ -33,6 +33,10 @@ export const LOG_CODES = [
   'email_links', // an email's links, all opened in this one microVM (count)
   'email_link', // the agent opens one of them (n, host)
   'email_link_verdict', // what that link led to (n, verdict, by, host)
+  'file_fetch', // a file someone handed us is fetched into this microVM (bytes)
+  'file_approved', // its download was approved by the person when they handed it over
+  'file_view', // the file is a page: it is opened in the sandbox as one
+  'file_read', // what was found in it (verdict, findings, type)
 ] as const;
 export type LogCode = (typeof LOG_CODES)[number];
 
@@ -40,10 +44,10 @@ type Shape = 'host' | 'token' | 'int' | 'bool' | 'hex' | 'model';
 const KEYS: Readonly<Record<string, Shape>> = {
   host: 'host', from: 'host', to: 'host',
   position: 'int', slot: 'int', vcpu: 'int', mem_mib: 'int', delay_s: 'int', status: 'int', count: 'int', requests: 'int',
-  hosts: 'int', n: 'int', blocked: 'int', ms: 'int', tokens: 'int', step: 'int', inspected: 'int', findings: 'int',
+  hosts: 'int', n: 'int', bytes: 'int', blocked: 'int', ms: 'int', tokens: 'int', step: 'int', inspected: 'int', findings: 'int',
   password: 'bool', saved: 'bool', by_session: 'bool', malicious: 'bool', publish: 'bool', auto: 'bool',
   state: 'token', reason: 'token', mode: 'token', verdict: 'token', next: 'token', action: 'token', risk: 'token',
-  device: 'token', result: 'token', by: 'token', source: 'token',
+  device: 'token', result: 'token', by: 'token', source: 'token', type: 'token',
   // the guest image's hash: proof of the image that ran; our rule set's and prompt's hashes are never shown
   image: 'hex',
   model: 'model',

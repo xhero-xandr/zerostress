@@ -2,7 +2,7 @@
 
 ZeroStress opens a suspicious link for you inside a disposable sandbox and tells you what it found. This page says what that takes from you, where it goes, and how long it stays. It covers the site https://zerostress.space and the ZeroStress browser extension.
 
-Last updated: 7 November 2026.
+Last updated: 8 November 2026.
 
 ## The short version
 
@@ -10,10 +10,13 @@ Last updated: 7 November 2026.
 - What you send is the link you want checked, and any question you ask about the result.
 - A report lives for 24 hours, then it is deleted.
 - An email you paste stays in your browser: it is read there. Only its links are sent, one you pick or all of them when you ask to check the whole email, never its text.
+- A file you want checked (an attachment, or one you pick): before you ask for the sandbox only its fingerprint (SHA-256) is sent. When you ask, the file goes to a disposable sandbox and is read only there; our server holds it in memory, never on disk, just until the sandbox has fetched it, at most five minutes, and keeps no copy.
 
 ## What we receive
 
 **The link you check.** We open it in a disposable microVM, a small virtual machine made for this one check and destroyed after it. The website behind the link sees a visit from our server, not from you.
+
+**A file you ask us to check.** Its fingerprint (SHA-256), computed in your browser, is sent first to ask VirusTotal whether the file is known. If you press "Open in a sandbox", the file itself is sent: our server keeps it in memory under a one-time address, the sandbox fetches it once and reads it, and the server forgets it at that moment (or after five minutes if the sandbox never fetched it). It is never written to our disk and is not part of the report; the sandbox, with the file in it, is destroyed after the check. The report keeps the file's name, size, fingerprint and what was found in it (for example "macros", or the addresses written in it) for 24 hours. A file that is a web page is also opened in the sandbox as a page.
 
 **Questions you ask.** If you ask the agent about a result, your question is sent with the report to the language model that answers it.
 
@@ -32,7 +35,7 @@ Do not check a link that carries something private, such as a one-time sign-in l
 - **Vultr** hosts the service, and runs the language model (Vultr Serverless Inference). The model receives the report of a check and your questions about it. It does not receive your IP address.
 - **Cloudflare** sits in front of the site as a network proxy and sees the traffic to it, as any such provider does.
 - **Cloudflare URL Scanner** is asked on its own when our sandbox meets a bot check and cannot read the page. We first look for an existing public scan of the same address; otherwise we send a new scan as unlisted: it stays in our Cloudflare account and is not shown in Cloudflare's public search. Cloudflare's scanner then visits the address you checked.
-- **Google Safe Browsing, Spamhaus, VirusTotal and urlscan.io** are asked what they already know: Google receives the address you checked and where it led, the others only the site's domain (and, for an email, the sender's domain). None of them receives your IP address or anything else about you.
+- **Google Safe Browsing, Spamhaus, VirusTotal and urlscan.io** are asked what they already know: Google receives the address you checked and where it led (and the addresses found in a file you check), the others only the site's domain (and, for an email, the sender's domain); VirusTotal also receives a checked file's fingerprint (SHA-256), never the file. None of them receives your IP address or anything else about you.
 - **The website you check** sees a visit from our sandbox, and whatever the page itself loads.
 
 We do not send your data anywhere else.
@@ -44,7 +47,7 @@ We do not send your data anywhere else.
 - **sidePanel**: shows the ZeroStress agent (https://zerostress.space/panel) in the browser's side panel.
 - **storage**: keeps the link you right-clicked in the browser's session storage for the moment it takes the side panel to open, then removes it. Nothing is stored after you close the browser.
 - To tell who sent an email, the domain of its sender (for example `shop.example`, never the address) is looked up: its registration date and the mail policies it publishes in DNS.
-- An email you paste into the panel is read in your browser to find its links. The email is not sent to us; only the link you pick, or its links when you check the whole email, are sent. Unsubscribe links are left out.
+- An email you paste into the panel is read in your browser to find its links. The email is not sent to us; only the link you pick, or its links when you check the whole email, are sent. Unsubscribe links are left out. Its attachments are read there too: only their fingerprints are sent, and an attachment itself only when you open it in the sandbox.
 - Its code is open: https://github.com/xhero-xandr/zerostress
 
 ## In your browser

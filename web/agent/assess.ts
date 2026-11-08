@@ -10,7 +10,7 @@ import type { AgentConfig } from './config.ts';
 import { buildDossier } from './dossier.ts';
 import { parseAnswer, type Answer, type Message, type ModelClient } from './model.ts';
 import { analyze, raise, type Signal, type Verdict } from './signals.ts';
-import type { Reputation } from './reputation.ts';
+import type { FileVerdict, Reputation } from './reputation.ts';
 import type { TaskHooks } from './task-hooks.ts';
 import { RULESET_SHA256 } from '../hooks/rules.ts';
 
@@ -74,6 +74,8 @@ export interface AssessInput {
   domainAgeDays?: number | null;
   /** what Google, Spamhaus and VirusTotal know about the address and its domain (reputation.ts) */
   reputation?: Reputation | null;
+  /** what VirusTotal knows about a file the sandbox fetched, by its hash */
+  fileReputation?: { virustotal: FileVerdict | null } | null;
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -86,7 +88,7 @@ function isPng(b: Uint8Array): boolean {
 
 export async function assess(input: AssessInput, deps: AssessDeps): Promise<Assessment> {
   const nowMs = (deps.now ?? Date.now)();
-  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null });
+  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null, fileReputation: input.fileReputation ?? null });
   const notes: string[] = [];
   const result: Assessment = {
     verdict: rules.verdict,

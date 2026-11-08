@@ -46,11 +46,11 @@ export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
     <Page header={<NavLink to="/" className={`${btnSecondary} h-10 no-underline`}>{T.newCheck}</NavLink>}>
       <section aria-label={T.checkedAddress} className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-2">
-          <span className="text-[13px] font-semibold tracking-wider text-faint uppercase">{T.checkedAddress}</span>
+          <span className="text-[13px] font-semibold tracking-wider text-faint uppercase">{r.file ? T.file.checkedFile : T.checkedAddress}</span>
           <div className="flex min-w-0 items-center gap-2">
             {/* the checked address is text, never a link (spec 007, 3.5) */}
-            <span className="min-w-0 font-mono text-lg font-medium [overflow-wrap:anywhere]">{r.url}</span>
-            <CopyButton text={() => r.url} label={T.copyAddress} icon="copy" />
+            <span className="min-w-0 font-mono text-lg font-medium [overflow-wrap:anywhere]">{r.file ? r.file.name : r.url}</span>
+            <CopyButton text={() => (r.file ? r.file.sha256 : r.url)} label={r.file ? T.file.copyHash : T.copyAddress} icon="copy" />
           </div>
           <span className="text-sm text-muted">{T.checkedAt(fmtTime(status.checked_at))}</span>
         </div>

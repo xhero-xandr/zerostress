@@ -5,7 +5,13 @@
 import { linksFromEmail, type EmailLink } from './logic.ts';
 import { T } from './text.ts';
 
-export interface EmailAttachment { name: string; type: string; risk: 'program' | 'web_page' | 'macros' | 'archive' | null }
+export interface EmailAttachment {
+  name: string;
+  type: string;
+  risk: 'program' | 'web_page' | 'macros' | 'archive' | null;
+  /** its content, decoded, kept in this page only: sent nowhere unless the person opens it in the sandbox */
+  data: Uint8Array | null;
+}
 export interface EmailWarning { id: string; level: 'high' | 'medium'; text: string }
 export interface EmailCheck {
   /** it was the source of an email (headers and MIME parts), not just its text */
@@ -155,7 +161,8 @@ function walk(h: Headers, body: string, w: Walk, depth: number): void {
   if (attached || !/^text\/(plain|html)$/.test(type)) {
     if (name || attached) {
       const n = decodeWords(name ?? '(no name)').slice(0, 200);
-      w.attachments.push({ name: n, type, risk: attachmentRisk(n, type) });
+      const raw = bytes() ?? (enc === '' || enc === '7bit' || enc === '8bit' || enc === 'binary' ? new TextEncoder().encode(body) : null);
+      w.attachments.push({ name: n, type, risk: attachmentRisk(n, type), data: raw && raw.length > 0 ? raw : null });
     }
     return;
   }

@@ -2,11 +2,11 @@
 
 These terms cover the site https://zerostress.space and the ZeroStress browser extension. By using them you agree to these terms.
 
-Last updated: 7 November 2026.
+Last updated: 8 November 2026.
 
 ## What the service is
 
-ZeroStress opens a link in a disposable sandbox, collects evidence about the page, and gives a verdict with an explanation. It is a free, open-source project, run on a best-effort basis. It may change, slow down or stop at any time.
+ZeroStress opens a link or a file in a disposable sandbox, collects evidence about the page, and gives a verdict with an explanation. It is a free, open-source project, run on a best-effort basis. It may change, slow down or stop at any time.
 
 ## A verdict is advice, not a guarantee
 
@@ -14,11 +14,11 @@ A page can show one thing to our sandbox and another to you, change after the ch
 
 ## Use it fairly
 
-- Check only links you received or found, to protect yourself or others.
+- Check only links and files you received or found, to protect yourself or others. Do not upload a file that holds other people's personal data or anything you are not allowed to share; a file is read only in the sandbox and not kept, but its name and what was found in it appear in the report.
 - Do not use ZeroStress to attack, overload or probe any website or service, to get around its limits, or to reach illegal content.
 - Do not try to break out of the sandbox or attack the service; if you find a weakness, report it privately to devp.xandr@gmail.com.
 
-We may refuse a link, limit the number of checks, or block access to protect the service and others.
+We may refuse a link or a file, limit the number of checks, or block access to protect the service and others.
 
 ## Reports
 

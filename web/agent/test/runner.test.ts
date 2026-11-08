@@ -312,6 +312,84 @@ test('an email: every link opened in this one microVM from our list, each judged
   assert.deepEqual(r.log.filter((e) => e.code === 'email_link_verdict').map((e) => [e.d.n, e.d.verdict === 'benign']).sort(), [[1, true], [2, false], [3, false]]);
 });
 
+test('a file: fetched once into this microVM from our page, read there; an attached page is opened as a page; the upload approved the download only', async () => {
+  const PAGE = 'https://zerostress.test/fx/0123';
+  const FILE = 'https://zerostress.test/f/tok';
+  const VIEW = 'https://zerostress.test/f/tok/view';
+  const { sup, deps } = await setup();
+  const asked: string[] = [];
+  deps.reputation = { enabled: true, check: async (urls: string[]) => ({ google: urls.includes('https://collect.evil.test/p') ? ['SOCIAL_ENGINEERING'] : [], spamhaus: null, virustotal: null }), file: async (h: string) => { asked.push(h); return { known: true, malicious: 0, suspicious: 0, total: 70, label: null, first_seen: null }; } } as never;
+  const snap = 1;
+  const list = [
+    ev('nav', { via: 'requested', from: '', to: PAGE }),
+    ev('page', { url: PAGE, title: 'a file', lang: 'en', text: 'The file', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+    ev('forms', { forms: [], total: 0, loose_password_fields: 0 }),
+    ev('snapshot', { snap, text: '- list', lines: 1, truncated: false }),
+    ev('links', { snap, links: [{ ref: 'e1', text: 'The file', href: FILE, origin_differs: false }, { ref: 'e2', text: 'The attached page', href: VIEW, origin_differs: false }] }),
+    ev('summary', { final_url: PAGE, nav_error: null }),
+  ];
+  const done = (id: string, evidence: any[]) => {
+    for (const e of evidence) sup.evidence(e);
+    sup.evidence(ev('cmd_result', { id, ok: true, snap }));
+    sup.emit('command', { command_id: id, status: 'done' });
+  };
+  sup.onCommand = (cmd) => {
+    if (cmd.cmd === 'download') return held(cmd);
+    if (cmd.cmd === 'open_link') {
+      setTimeout(() => done(cmd.id, [
+        ev('nav', { via: 'commit', from: PAGE, to: VIEW }),
+        ev('page', { url: VIEW, title: 'Sign in', lang: 'en', text: 'Sign in to your bank', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+        ev('forms', { forms: [{ form: 0, action: 'https://collect.evil.test/p', has_password: true, cross_origin: true, fields: [{ type: 'password', name: 'pw' }] }], total: 1, loose_password_fields: 0 }),
+        ev('snapshot', { snap, text: '- page', lines: 1, truncated: false }), ev('links', { snap, links: [] }),
+      ]), 5);
+    }
+    if (cmd.cmd === 'screenshot') setTimeout(() => done(cmd.id, []), 5);
+    if (cmd.cmd === 'close') { sup.evidence(ev('cmd_result', { id: cmd.id, ok: true })); finish(sup); }
+  };
+  sup.onApprove = (id) => {
+    sup.emit('command', { command_id: id, status: 'approved' });
+    done(id, [
+      ev('download', { url: FILE, filename: 'statement.html', mime: 'application/octet-stream', saved: true, status: 200 }),
+      ev('file', { filename: 'statement.html', mime: 'application/octet-stream', bytes: 300, sha256: 'c'.repeat(64), file_type: 'html', ext_mismatch: false, double_extension: false,
+        findings: [{ id: 'html_password_form', detail: '' }, { id: 'html_form_elsewhere', detail: 'collect.evil.test' }], links: ['https://collect.evil.test/p', 'javascript:alert(1)'], entries: [] }),
+    ]);
+  };
+  const seen: unknown[] = [];
+  deps.onProgress = (p) => { if (p.kind === 'approval') seen.push(p); };
+  begin(sup, list, true);
+  const r = await run(runTask({ url: PAGE, session: {}, file: { name: 'statement.html', bytes: 300, sha256: 'c'.repeat(64), url: FILE, view: VIEW } }, deps));
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['download', 'open_link', 'screenshot', 'close']);
+  assert.deepEqual(sup.commands[0], { cmd: 'download', snap, ref: 'e1', id: sup.commands[0].id }, 'the download of exactly our file link');
+  assert.deepEqual(sup.approvals, [[sup.commands[0].id, 'b'.repeat(64)]], 'approved once, by the hash the supervisor gave');
+  assert.equal(sup.commands[1].ref, 'e2');
+  assert.deepEqual(seen, [], 'nobody is asked again: the upload was the decision');
+  assert.ok(r.log.some((e) => e.code === 'file_approved'));
+  assert.deepEqual(asked, ['c'.repeat(64)], 'VirusTotal is asked by the hash');
+  const f = r.file!;
+  assert.equal(f.type, 'html');
+  assert.equal(f.read, true);
+  assert.equal(f.viewed, true);
+  assert.deepEqual(f.findings, ['html_password_form', 'html_form_elsewhere']);
+  assert.deepEqual(f.links, ['https://collect.evil.test/p'], 'only web addresses');
+  const ids = r.assessment.rules.signals.map((x) => x.id);
+  for (const id of ['file_html_password', 'file_html_form_elsewhere', 'password_form_cross_origin', 'listed_by_google']) assert.ok(ids.includes(id), id);
+  assert.equal(r.assessment.verdict, 'malicious');
+  assert.equal(r.reputation, undefined, 'no reputation of our own page');
+});
+
+test('a file that was never fetched is "could not check", and nothing but our file link is ever downloaded', async () => {
+  const PAGE = 'https://zerostress.test/fx/0123';
+  const { sup, deps } = await setup();
+  sup.onCommand = (cmd) => { if (cmd.cmd === 'close') { sup.evidence(ev('cmd_result', { id: cmd.id, ok: true })); finish(sup); } };
+  begin(sup, [ev('nav', { via: 'requested', from: '', to: PAGE }), ev('page', { url: PAGE, title: 'x', lang: 'en', text: 'x', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+    ev('snapshot', { snap: 1, text: '-', lines: 1, truncated: false }), ev('links', { snap: 1, links: [{ ref: 'e1', text: 'other', href: 'https://evil.test/x.exe', origin_differs: true }] }), ev('summary', { final_url: PAGE, nav_error: null })], true);
+  const r = await run(runTask({ url: PAGE, session: {}, file: { name: 'a.pdf', bytes: 1, sha256: 'd'.repeat(64), url: 'https://zerostress.test/f/tok' } }, deps));
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['close']);
+  assert.deepEqual(sup.approvals, []);
+  assert.equal(r.assessment.verdict, 'unknown');
+  assert.equal(r.file!.read, false);
+});
+
 /** The command a person is asked about: the supervisor holds it until the web layer passes the decision on. */
 const held = (cmd: any) => ({ body: { command_id: cmd.id, status: 'awaiting_approval', command_sha256: 'b'.repeat(64) } });
 const download = () => chat(answer({ next: { action: 'download', ref: refOfPlain() } }));

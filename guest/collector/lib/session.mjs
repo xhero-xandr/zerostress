@@ -1,6 +1,7 @@
 import { LIMITS, cut } from './limits.mjs';
 import { validateCommand } from './commands.mjs';
-import { reportPage, reportSnapshot, saveArtifact, saveScreenshot, navErrorCode } from './scan.mjs';
+import { reportPage, reportSnapshot, saveScreenshot, navErrorCode } from './scan.mjs';
+import { analyzeFile } from './file.mjs';
 
 const OP_TIMEOUT_MS = 10_000;
 const DOWNLOAD_MAX_BYTES = 16 * 1024 * 1024;
@@ -135,9 +136,9 @@ export async function runSession({ job, context, page, lines, emitter, scan, art
       const disposition = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers()['content-disposition'] ?? '');
       const name = cut(decodeName(disposition?.[1]) || target.pathname.split('/').pop() || 'download', 255);
       const mime = cut((res.headers()['content-type'] ?? 'application/octet-stream').split(';')[0], 100);
-      const a = await saveArtifact(emitter, artifactDir, state, { name, mime, data: body, ext: 'bin' });
-      emit('download', { url: cut(target.href, LIMITS.urlChars), filename: name, mime, saved: a.saved, status: res.status() });
-      if (!a.saved) throw new CommandError(a.error ?? 'artifact_failed');
+      // The bytes never leave the guest (no artifact): only what the analysis found does.
+      emit('download', { url: cut(target.href, LIMITS.urlChars), filename: name, mime, saved: true, status: res.status() });
+      emit('file', analyzeFile({ name, mime, data: body }));
       return {};
     },
     async submit_form(c) {

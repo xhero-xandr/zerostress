@@ -4,7 +4,9 @@
 import { cleanEntry, MAX_LOG } from '../agent/agent-log.ts';
 import { DEMO_CSP, DEMO_FILE, DEMO_FILE_NAME, DEMO_PAGE } from './demo.ts';
 import { LEGAL_CSP, loadLegal } from './legal.ts';
-import { emailListPage } from './demo.ts';
+import { emailListPage, fileListPage } from './demo.ts';
+import { createFileDrop, FILE_MAX_BYTES, type FileDrop } from './files.ts';
+import type { FileVerdict } from '../agent/reputation.ts';
 import { DOMAIN, type SenderInfo } from './sender.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanText } from '../hooks/index.ts';
@@ -46,6 +48,10 @@ export interface AppDeps {
   publicUrl?: string;
   /** Cloudflare's URL Scanner for a second opinion on a page we could not read; without it the endpoint is absent */
   urlscan?: Pick<UrlScanClient, 'opinion'>;
+  /** files on their way into the sandbox, in memory only (files.ts); the default holds them in this process */
+  files?: FileDrop;
+  /** what VirusTotal knows about a file by its SHA-256 (reputation.ts); without it the hash endpoint is absent */
+  fileReputation?: (sha256: string) => Promise<FileVerdict | null>;
 }
 
 // The client sends everything with fetch, it has no forms, so form-action can be 'none' (spec 007, 3.5).
@@ -118,6 +124,32 @@ async function readCapped(c: Context, max: number): Promise<string | null> {
     chunks.push(value);
   }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+async function readCappedBytes(c: Context, max: number): Promise<Buffer | null> {
+  const stream = c.req.raw.body;
+  if (!stream) return Buffer.alloc(0);
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
+/** the same page as the sender, when the browser says which page that is */
+function sameOrigin(c: Context): boolean {
+  const origin = c.req.header('origin');
+  if (origin === undefined) return true;
+  try { return new URL(origin).host === c.req.header('host'); } catch { return false; }
 }
 
 /** A JSON object from a POST: the same page as the sender, the right type, a small body. Anything else is a plain refusal. */
@@ -271,6 +303,83 @@ export function createApp(deps: AppDeps): Hono {
     return c.html(emailListPage(t.links), 200, { 'content-security-policy': LEGAL_CSP, 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex', 'cache-control': 'no-store' });
   });
 
+  // ---- a file: held in memory until the sandbox fetches it once, opened only there (files.ts, runner.ts TaskInput.file) ----
+  const files = deps.files ?? createFileDrop();
+  app.post('/api/files', async (c) => {
+    if (!sameOrigin(c)) return fail(c, 403, 'forbidden');
+    const declared = Number(c.req.header('content-length') ?? '0');
+    if (declared > FILE_MAX_BYTES) return fail(c, 413, 'file_too_large');
+    let name = 'file';
+    try { name = decodeURIComponent(c.req.header('x-file-name') ?? 'file'); } catch { /* the name stays "file" */ }
+    const data = await readCappedBytes(c, FILE_MAX_BYTES);
+    if (data === null) return fail(c, 413, 'file_too_large');
+    if (data.length === 0) return fail(c, 400, 'bad_request');
+    const slot = deps.limiter.start(ip(c));
+    if (!slot.ok) return fail(c, slot.reason === 'daily_cap' ? 503 : 429, slot.reason, { 'retry-after': String(slot.retryAfterS) });
+    const held = files.put(data, name, (c.req.header('content-type') ?? '').split(';')[0]!.trim());
+    if (!held) { slot.cancel(); return fail(c, 503, 'busy', { 'retry-after': '30' }); }
+    const { task, key } = deps.store.create(`${publicUrl}/fx/pending`, true);
+    task.url = `${publicUrl}/fx/${task.id}`;
+    task.file = { ...held.file, token: held.token };
+    try {
+      await begin(task, true, slot.release);
+    } catch (e) {
+      slot.cancel();
+      files.drop(held.token);
+      deps.store.drop(task.id);
+      if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
+      return fail(c, 503, 'supervisor_unavailable');
+    }
+    return json(c, 202, { id: task.id, key, name: held.file.name, bytes: held.file.bytes, sha256: held.file.sha256 });
+  });
+
+  // what VirusTotal knows about a file the browser has hashed: only the hash comes here, never the file
+  const hashAsks = new Map<string, number[]>();
+  if (deps.fileReputation) {
+    const ask = deps.fileReputation;
+    app.post('/api/file-hash', async (c) => {
+      const read = await readJsonBody(c);
+      if (!read.ok) return read.res;
+      const sha = typeof read.body.sha256 === 'string' ? read.body.sha256.toLowerCase() : '';
+      if (Object.keys(read.body).some((k) => k !== 'sha256') || !/^[0-9a-f]{64}$/.test(sha)) return fail(c, 400, 'bad_request');
+      const who = ip(c);
+      const t = Date.now();
+      const recent = (hashAsks.get(who) ?? []).filter((x) => t - x < 60_000);
+      if (recent.length >= 20) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
+      hashAsks.set(who, [...recent, t]);
+      if (hashAsks.size > 10_000) hashAsks.clear();
+      return json(c, 200, { virustotal: await ask(sha) });
+    });
+  }
+
+  // the page the sandbox opens for a file: a link to the file and, for an attached page, a link to look at it
+  const NO_STORE = { 'referrer-policy': 'no-referrer', 'x-robots-tag': 'noindex', 'cache-control': 'no-store' };
+  app.get('/fx/:id', (c) => {
+    const t = deps.store.get(c.req.param('id'));
+    if (!t?.file) return c.text('not found', 404);
+    return c.html(fileListPage(t.file.token, t.file.html), 200, { 'content-security-policy': LEGAL_CSP, ...NO_STORE });
+  });
+  // the file itself, once, as a download that nothing renders
+  app.get('/f/:token', (c) => {
+    const f = files.take(c.req.param('token'));
+    if (!f) return c.text('not found', 404);
+    return c.body(new Uint8Array(f.data), 200, {
+      'content-type': 'application/octet-stream',
+      'content-disposition': `attachment; filename="${f.name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.name)}`,
+      'content-security-policy': "default-src 'none'; sandbox", 'x-content-type-options': 'nosniff', ...NO_STORE,
+    });
+  });
+  // an attached page, once, in a sandbox of its own: no access to this site, its scripts and forms work as in a mail client
+  app.get('/f/:token/view', (c) => {
+    const v = files.takeView(c.req.param('token'));
+    if (!v) return c.text('not found', 404);
+    return c.body(new Uint8Array(v), 200, {
+      'content-type': 'text/html; charset=utf-8',
+      'content-security-policy': 'sandbox allow-scripts allow-forms allow-popups',
+      'x-content-type-options': 'nosniff', ...NO_STORE,
+    });
+  });
+
   /** Start the run and return once the supervisor has taken it (or refused it). The rest happens in the background. */
   function begin(task: Task, deep: boolean, release: () => void): Promise<void> {
     return new Promise<void>((resolve, reject) => {
@@ -303,10 +412,16 @@ export function createApp(deps: AppDeps): Hono {
         const s = stageOf(p.state);
         if (s && s !== task.stage || (s === 'queued' && p.position !== task.position)) setStage(s!, p.position);
       };
-      const input = task.links
-        ? { url: `${publicUrl}/x/${task.id}`, session: deps.session, links: task.links }
-        : { url: task.url, ...(deep ? { session: deps.session } : {}) };
+      const held = task.file;
+      const input: TaskInput = held
+        ? { url: task.url, session: deps.session, file: { name: held.name, bytes: held.bytes, sha256: held.sha256, url: `${publicUrl}/f/${held.token}`, ...(held.html ? { view: `${publicUrl}/f/${held.token}/view` } : {}) } }
+        : task.links
+          ? { url: `${publicUrl}/x/${task.id}`, session: deps.session, links: task.links }
+          : { url: task.url, ...(deep ? { session: deps.session } : {}) };
+      // whatever happens to the run, the file is not kept a moment longer
+      const forget = () => { if (held) files.drop(held.token); delete task.file; };
       deps.run(input, onProgress).then((result) => {
+        forget();
         task.pending = [];
         delete task.links;
         task.result = result;
@@ -317,6 +432,7 @@ export function createApp(deps: AppDeps): Hono {
         // a wall: Cloudflare is asked right away, nobody has to press anything
         if (walled(task)) void askCloudflare(task, true);
       }).catch((e) => {
+        forget();
         task.pending = [];
         delete task.links;
         if (!taken) { taken = true; reject(e); return; }
@@ -474,7 +590,7 @@ export function createApp(deps: AppDeps): Hono {
   const asking = new Map<string, Promise<void>>();
   // a scan we sent that was still running when the answer was due: the next ask polls it instead of sending another
   const submitted = new Map<string, string>();
-  const walled = (t: Task): boolean => t.stage === 'done' && !!t.result && !t.result.second_opinion && publicReport(t.result).verdict === 'unknown';
+  const walled = (t: Task): boolean => t.stage === 'done' && !!t.result && !t.result.file && !t.result.second_opinion && publicReport(t.result).verdict === 'unknown';
 
   function askCloudflare(t: Task, auto: boolean): Promise<void> {
     const running = asking.get(t.id);

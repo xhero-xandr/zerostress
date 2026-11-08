@@ -57,6 +57,14 @@ export const startTask = (url: string, deep: boolean): Promise<{ id: string; key
 export const startEmailCheck = (links: string[]): Promise<{ id: string; key: string; links: number; skipped: number }> =>
   fetch('/api/email-checks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ links }) }).then((r) => read<{ id: string; key: string; links: number; skipped: number }>(r));
 
+export interface FileVerdict { known: boolean; malicious: number; suspicious: number; total: number; label: string | null; first_seen: string | null }
+/** what VirusTotal knows about a file: only its SHA-256 is sent */
+export const getFileHash = (sha256: string): Promise<{ virustotal: FileVerdict | null }> =>
+  fetch('/api/file-hash', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ sha256 }) }).then((r) => read<{ virustotal: FileVerdict | null }>(r));
+/** the file itself, to be opened in the sandbox: held in memory until the sandbox has fetched it, then gone */
+export const startFileCheck = (data: Uint8Array, name: string, mime: string): Promise<{ id: string; key: string; name: string; bytes: number; sha256: string }> =>
+  fetch('/api/files', { method: 'POST', headers: { 'content-type': mime || 'application/octet-stream', 'x-file-name': encodeURIComponent(name) }, body: data as Uint8Array<ArrayBuffer> }).then((r) => read<{ id: string; key: string; name: string; bytes: number; sha256: string }>(r));
+
 export interface SenderInfo { domain: string; age_days: number | null; created: string | null; dmarc: 'reject' | 'quarantine' | 'none' | null; spf: boolean; mx: boolean; brand: string | null; lookalike: string | null; freemail: boolean; spamhaus: string | null; virustotal: { malicious: number; suspicious: number; total: number } | null }
 /** what is known about the domain an email came from: only the domain is sent */
 export const getSender = (domain: string): Promise<{ sender: SenderInfo }> =>

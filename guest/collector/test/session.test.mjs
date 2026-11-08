@@ -101,21 +101,27 @@ test('scroll, wait and screenshot', async () => {
   await close(c);
 });
 
-test('download saves the file only on this command; size and SHA-256 match', async () => {
+test('download: the file is analysed in the guest and never handed over as an artifact', async () => {
   const c = await session('/dl');
   assert.equal(c.kinds('download').length, 0);
+  const artifactsBefore = c.kinds('artifact').length;
+  const filesBefore = c.files();
   const link = c.first('links').links.find((l) => l.text === 'Download report');
   const r = await c.command({ cmd: 'download', id: 'd1', snap: 1, ref: link.ref });
   assert.equal(r.ok, true, JSON.stringify(r));
   const d = c.kinds('download').at(-1);
   assert.deepEqual([d.filename, d.mime, d.saved, d.status], ['report.bin', 'application/octet-stream', true, 200]);
-  const art = c.kinds('artifact').at(-1);
+  // no artifact event and no file for the supervisor to fetch: the bytes stay in the guest
+  assert.equal(c.kinds('artifact').length, artifactsBefore);
+  assert.deepEqual(c.files(), filesBefore);
   const content = Buffer.from('BINARY-CONTENT-0123456789');
-  assert.equal(art.bytes, content.length);
-  assert.match(art.file, /^[0-9a-f]{16}\.bin$/);
-  assert.ok(c.files().includes(art.file));
-  assert.equal(art.sha256, createHash('sha256').update(content).digest('hex'));
-  assert.equal(art.saved, true);
+  const f = c.kinds('file').at(-1);
+  assert.ok(c.events.indexOf(f) > c.events.indexOf(d), 'the analysis follows the download event');
+  assert.ok(c.events.indexOf(f) < c.events.indexOf(r), 'and comes before the command result');
+  assert.deepEqual(
+    [f.filename, f.mime, f.bytes, f.sha256, f.file_type, f.ext_mismatch, f.double_extension, f.findings, f.truncated],
+    ['report.bin', 'application/octet-stream', content.length, createHash('sha256').update(content).digest('hex'), 'text', false, false, [], false],
+  );
   await close(c);
 });
 

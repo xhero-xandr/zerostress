@@ -86,6 +86,7 @@ const app = createApp({
   session: { idle_s: 90, max_s: 240 },
   publicUrl: env.WEB_PUBLIC_URL ?? 'https://zerostress.space',
   sender: createSenderCheck({ rdap, reputation }),
+  ...(reputation.enabled ? { fileReputation: (sha256: string) => reputation.file(sha256) } : {}),
 });
 
 setInterval(() => { store.sweep(); }, 10 * 60_000).unref();

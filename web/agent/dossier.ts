@@ -56,6 +56,14 @@ export function buildDossier(events: readonly unknown[], analysis: Analysis, mod
 
   const downloads = of('download').slice(0, 5).map((e) => ({ filename: cut(str(e.filename), 100), mime: cut(str(e.mime), 60), saved: e.saved === true }));
 
+  // a file read inside the sandbox: what it is and what was found in it, never its content
+  const files = of('file').slice(0, 3).map((e) => ({
+    filename: cut(str(e.filename), 100), type: cut(str(e.file_type), 20), bytes: typeof e.bytes === 'number' ? e.bytes : 0,
+    name_hides_type: e.ext_mismatch === true || e.double_extension === true,
+    findings: list(e.findings).filter(isObj).slice(0, 20).map((f) => cut(str(f.id), 40)),
+    link_hosts: [...new Set(list(e.links).map((u) => parseUrl(u)?.host ?? '').filter(Boolean))].slice(0, 10).map((h) => cut(h, 100)),
+  }));
+
   const pageText = str(page?.text);
   const hidden = isObj(page?.hidden_text) && page.hidden_text.present === true;
   const meta = list(page?.meta).filter(isObj).slice(0, 10).map((m) => ({ name: cut(str(m.name), 40), content: cut(str(m.content), 200) }));
@@ -70,6 +78,7 @@ export function buildDossier(events: readonly unknown[], analysis: Analysis, mod
     ...(forms.length ? { forms } : {}),
     ...(links.length ? { links: links.slice(0, linkCount) } : {}),
     ...(downloads.length ? { downloads } : {}),
+    ...(files.length ? { files } : {}),
     signals: analysis.signals.map((s) => ({ id: s.id, level: s.level, text: s.text })),
     rules_verdict: analysis.verdict,
   });

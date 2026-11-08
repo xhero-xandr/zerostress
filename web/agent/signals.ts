@@ -7,7 +7,7 @@ import { pageViews, sessionStart } from './evidence.ts';
 import { hidesText } from './hiding.ts';
 import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } from './lists.ts';
 import { domainToUnicode } from 'node:url';
-import type { Reputation } from './reputation.ts';
+import type { FileVerdict, Reputation } from './reputation.ts';
 import { isIpHost, mixedScripts, onSharedHost, parseUrl, registrable, sld, skeleton } from './domain.ts';
 
 export type Level = 'info' | 'low' | 'medium' | 'high';
@@ -43,6 +43,8 @@ export interface Options {
   domainAgeDays?: number | null;
   /** what Google, Spamhaus and VirusTotal already know about the address and its domain (reputation.ts) */
   reputation?: Reputation | null;
+  /** what VirusTotal knows about a file the sandbox fetched, by its SHA-256 (reputation.ts) */
+  fileReputation?: { virustotal: FileVerdict | null } | null;
 }
 
 type Ev = Record<string, unknown>;
@@ -269,6 +271,43 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   }
   if (exec.length) add('executable_download', 'high', 'A file that can run programs, or that is disguised as a document, was offered for download.', exec);
 
+  // ---- a file, as the collector read it inside the sandbox (guest/collector/lib/file.mjs) ----
+  // Only the guest opened it; here are its findings, of a fixed set, each with the weight it carries.
+  const fileFindings = new Set<string>();
+  for (const [e, i] of of('file')) {
+    const found = (id: string) => list(e.findings).some((f) => isObj(f) && f.id === id);
+    const detail = (id: string) => str(list(e.findings).find((f): f is Ev => isObj(f) && f.id === id)?.detail).slice(0, 80);
+    const say = (id: string, level: Level, text: string) => { if (!fileFindings.has(id)) { fileFindings.add(id); add(id, level, text, [i]); } };
+    if (e.ext_mismatch === true) say('file_disguised', 'high', `The file's name says one kind of file, its content is another (${str(e.file_type) || 'unknown'}): a disguise.`);
+    if (e.double_extension === true) say('file_double_extension', 'high', 'The file name hides its real type behind a second extension (such as "invoice.pdf.exe").');
+    if (found('executable')) say('file_executable', 'high', 'The file is a program.');
+    if (found('script_file')) say('file_script', 'high', 'The file is a script that runs when opened.');
+    if (found('shortcut')) say('file_shortcut', 'high', 'The file is a Windows shortcut, a common way to start a hidden program.');
+    if (found('macros')) say('file_macros', found('auto_exec') ? 'high' : 'medium', found('auto_exec') ? 'The document carries macros that run as soon as it is opened.' : 'The document carries macros (code inside the document).');
+    if (found('external_template')) say('file_remote_template', 'high', `The document loads a part of itself from the internet when opened${detail('external_template') ? ` (${detail('external_template')})` : ''}, a known way to deliver malware.`);
+    if (found('dde')) say('file_dde', 'high', 'The document has a field that can start a program (DDE).');
+    if (found('ole_object')) say('file_embedded_object', 'medium', 'The document has an object embedded in it that can be a program.');
+    if (found('pdf_launch')) say('file_pdf_launch', 'high', 'The PDF asks to start a program.');
+    if (found('pdf_javascript')) say('file_pdf_javascript', found('pdf_open_action') ? 'high' : 'medium', found('pdf_open_action') ? 'The PDF runs code as soon as it is opened.' : 'The PDF contains code (JavaScript).');
+    if (found('pdf_embedded_file')) say('file_pdf_embedded', 'medium', 'The PDF has another file hidden inside it.');
+    if (found('pdf_submit_form')) say('file_pdf_form', 'medium', 'The PDF has a form that sends what you type to the internet.');
+    if (found('archive_executable')) say('file_archive_program', 'high', `The archive contains a program or a script${detail('archive_executable') ? ` (${detail('archive_executable')})` : ''}.`);
+    if (found('archive_encrypted')) say('file_archive_locked', 'medium', 'The archive is locked with a password, which keeps antivirus from looking inside.');
+    if (found('nested_archive')) say('file_nested_archive', 'low', 'The archive contains another archive.');
+    if (found('disk_image')) say('file_disk_image', 'medium', 'The file is a disk image, a common wrapper used to slip programs past protection.');
+    if (found('html_smuggling')) say('file_html_smuggling', 'high', 'The page builds a file inside the browser and hands it over as a download (HTML smuggling).');
+    if (found('svg_script')) say('file_svg_script', 'high', 'The image (SVG) contains code that runs when it is opened.');
+    if (found('html_password_form')) say('file_html_password', 'high', 'The attached page asks for a password: a sign-in form inside a file is how credential phishing travels by email.');
+    if (found('html_form_elsewhere')) say('file_html_form_elsewhere', 'medium', `The attached page sends its form to a site on the internet${detail('html_form_elsewhere') ? ` (${detail('html_form_elsewhere')})` : ''}.`);
+    if (found('html_obfuscated_script')) say('file_obfuscated', 'medium', 'The file hides code in encoded form, to be decoded only when it runs.');
+    if (found('html_redirect')) say('file_redirect', 'medium', 'The attached page sends the visitor on to a site on the internet.');
+  }
+  const fvt = opts.fileReputation?.virustotal;
+  if (fvt && fvt.malicious + fvt.suspicious > 0) {
+    const n = fvt.malicious + fvt.suspicious;
+    add('file_flagged_by_virustotal', fvt.malicious >= 3 ? 'high' : n >= 2 ? 'medium' : 'low', `${n} of ${fvt.total} antivirus engines on VirusTotal flag this very file (by its SHA-256)${fvt.label ? `: ${fvt.label.slice(0, 60)}` : ''}.`);
+  }
+
   // ---- behaviour ----
   const popups = of('popup');
   const dialogs = of('dialog');
@@ -303,12 +342,12 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   if (empty) add('empty_page', 'info', 'The page loaded but showed nothing, so there was nothing to judge.', page ? [page[1]] : []);
 
   const loaded = page !== undefined && navError === '' && !warned && !challenged && !httpError && !empty;
-  if (!loaded && !warned && !challenged && !httpError && !empty && navError !== 'download') add('unreachable', 'info', 'The page could not be loaded or read.', summary ? [summary[1]] : []);
+  if (!loaded && !warned && !challenged && !httpError && !empty && navError !== 'download' && of('file').length === 0) add('unreachable', 'info', 'The page could not be loaded or read.', summary ? [summary[1]] : []);
 
   const score = signals.reduce((s, x) => s + POINTS[x.level], 0);
   const top = signals.some((s) => s.level === 'high') ? 'high' : signals.some((s) => s.level === 'medium') ? 'medium' : 'low';
   let verdict: Verdict = top === 'high' || score >= MALICIOUS_AT ? 'malicious' : top === 'medium' || score >= SUSPICIOUS_AT ? 'suspicious' : 'benign';
-  if (verdict === 'benign' && !loaded && navError !== 'download') verdict = 'unknown';
+  if (verdict === 'benign' && !loaded && navError !== 'download' && of('file').length === 0) verdict = 'unknown';
   return { signals, score, verdict, confidence: confidenceOf(verdict, signals, page) };
 }
 

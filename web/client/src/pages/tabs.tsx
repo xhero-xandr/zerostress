@@ -8,6 +8,7 @@ import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { SecondOpinion } from './second-opinion.tsx';
 import { EmailLinks } from '../email-links.tsx';
+import { FileCard } from '../file-check.tsx';
 import { Card, Fact, Facts, LevelPill, Notice, TableWrap, Td, Th, VERDICT_STYLE } from '../ui.tsx';
 
 type R = { r: PublicReport };
@@ -161,6 +162,7 @@ export function Summary({ r, status }: R & { status: TaskStatus }) {
     <div className="flex flex-wrap items-start gap-5">
       <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
         <VerdictCard r={r} />
+        <FileCard r={r} />
         <EmailLinks r={r} id={status.id} />
         <SecondOpinion r={r} id={status.id} />
         <ReputationCard r={r} />

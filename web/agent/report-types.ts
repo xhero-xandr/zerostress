@@ -49,6 +49,19 @@ export interface PublicReport {
   email: null | {
     links: Array<{ url: string; final_host: string; verdict: PublicVerdict; by: string; signals: string[]; password: boolean; downloads: number; redirects: number; error: string | null; shot: boolean }>;
   };
+  /** a file someone handed us, read inside the sandbox; null for a link or an email */
+  file: null | {
+    name: string;
+    bytes: number;
+    sha256: string;
+    type: string | null;
+    read: boolean;
+    findings: string[];
+    links: string[];
+    entries: string[];
+    viewed: boolean;
+    virustotal: null | { known: boolean; malicious: number; suspicious: number; total: number; label: string | null; first_seen: string | null };
+  };
   /** asked on its own when the verdict is unknown: 'asking' until Cloudflare answers, 'failed' when it could not */
   second_opinion_state: 'asking' | 'failed' | null;
   /** Cloudflare's URL Scanner, asked afterwards about a page we could not read; its verdict may only raise ours */

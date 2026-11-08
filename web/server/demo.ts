@@ -68,3 +68,12 @@ ${links.map((u, i) => `<li><a href="${esc(u)}">Link ${i + 1}</a></li>`).join('\n
 </ol></body></html>
 `;
 }
+
+/** the page the sandbox opens for a file: the one-time link to it, and to the attached page when it is one */
+export function fileListPage(token: string, html: boolean): string {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>ZeroStress: a file to check</title></head>
+<body><p>ZeroStress fetches this file inside this sandbox and reads it here.</p>
+<ul><li><a href="/f/${esc(token)}">The file</a></li>${html ? `\n<li><a href="/f/${esc(token)}/view">The attached page</a></li>` : ''}</ul></body></html>
+`;
+}

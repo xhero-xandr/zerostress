@@ -34,6 +34,8 @@ export interface Task {
   cancel: (() => void) | null;
   /** an email's links, through the gate, while they are being checked (kept in memory only, never on disk) */
   links?: string[];
+  /** a file on its way into the sandbox: what it is and its one-time address (the bytes stay in files.ts, in memory) */
+  file?: { name: string; mime: string; bytes: number; sha256: string; html: boolean; token: string };
 }
 
 export interface Store {

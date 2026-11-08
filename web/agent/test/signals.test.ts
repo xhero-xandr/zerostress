@@ -624,3 +624,55 @@ test('a brand\'s own site that names other brands, or a word that only contains 
   const fake = [...visit('https://secure-login.example/', 'Sign in', 'Chase online banking'), forms(form('https://secure-login.example/s', true))];
   assert.equal(has(fake, 'brand_domain_mismatch')?.level, 'high');
 });
+
+// ---- a file read inside the sandbox ------------------------------------------------------------------------------------
+
+const fileVisit = (f: Record<string, unknown>) => [
+  ev('download', { url: 'https://zerostress.space/f/x', filename: String(f.filename ?? 'file.bin'), mime: 'application/octet-stream', saved: true, status: 200 }),
+  ev('file', { filename: 'file.bin', file_type: 'other', bytes: 10, sha256: 'a'.repeat(64), findings: [], ext_mismatch: false, double_extension: false, ...f }),
+  summary('https://zerostress.space/f/x', { nav_error: 'file' }),
+];
+
+test('each finding in a file is a reason of its own weight', () => {
+  const cases: Array<[Record<string, unknown>, string, string]> = [
+    [{ ext_mismatch: true, file_type: 'pe' }, 'file_disguised', 'high'],
+    [{ double_extension: true }, 'file_double_extension', 'high'],
+    [{ findings: [{ id: 'executable', detail: '' }] }, 'file_executable', 'high'],
+    [{ findings: [{ id: 'script_file', detail: '' }] }, 'file_script', 'high'],
+    [{ findings: [{ id: 'shortcut', detail: '' }] }, 'file_shortcut', 'high'],
+    [{ findings: [{ id: 'macros', detail: '' }] }, 'file_macros', 'medium'],
+    [{ findings: [{ id: 'macros', detail: '' }, { id: 'auto_exec', detail: 'AutoOpen' }] }, 'file_macros', 'high'],
+    [{ findings: [{ id: 'external_template', detail: 'evil.example' }] }, 'file_remote_template', 'high'],
+    [{ findings: [{ id: 'dde', detail: '' }] }, 'file_dde', 'high'],
+    [{ findings: [{ id: 'ole_object', detail: '' }] }, 'file_embedded_object', 'medium'],
+    [{ findings: [{ id: 'pdf_launch', detail: '' }] }, 'file_pdf_launch', 'high'],
+    [{ findings: [{ id: 'pdf_javascript', detail: '' }] }, 'file_pdf_javascript', 'medium'],
+    [{ findings: [{ id: 'pdf_javascript', detail: '' }, { id: 'pdf_open_action', detail: '' }] }, 'file_pdf_javascript', 'high'],
+    [{ findings: [{ id: 'pdf_embedded_file', detail: '' }] }, 'file_pdf_embedded', 'medium'],
+    [{ findings: [{ id: 'pdf_submit_form', detail: '' }] }, 'file_pdf_form', 'medium'],
+    [{ findings: [{ id: 'archive_executable', detail: 'invoice.pdf.exe' }] }, 'file_archive_program', 'high'],
+    [{ findings: [{ id: 'archive_encrypted', detail: '' }] }, 'file_archive_locked', 'medium'],
+    [{ findings: [{ id: 'nested_archive', detail: '' }] }, 'file_nested_archive', 'low'],
+    [{ findings: [{ id: 'disk_image', detail: '' }] }, 'file_disk_image', 'medium'],
+    [{ findings: [{ id: 'html_smuggling', detail: '' }] }, 'file_html_smuggling', 'high'],
+    [{ findings: [{ id: 'svg_script', detail: '' }] }, 'file_svg_script', 'high'],
+    [{ findings: [{ id: 'html_password_form', detail: '' }] }, 'file_html_password', 'high'],
+    [{ findings: [{ id: 'html_form_elsewhere', detail: 'evil.example' }] }, 'file_html_form_elsewhere', 'medium'],
+    [{ findings: [{ id: 'html_obfuscated_script', detail: '' }] }, 'file_obfuscated', 'medium'],
+    [{ findings: [{ id: 'html_redirect', detail: '' }] }, 'file_redirect', 'medium'],
+  ];
+  for (const [f, id, level] of cases) {
+    const s = analyze(fileVisit(f)).signals.find((x) => x.id === id);
+    assert.equal(s?.level, level, `${id} from ${JSON.stringify(f)}`);
+  }
+  assert.match(analyze(fileVisit({ findings: [{ id: 'external_template', detail: 'evil.example' }] })).signals[0]!.text, /evil\.example/);
+  assert.match(analyze(fileVisit({ ext_mismatch: true, file_type: 'pe' })).signals[0]!.text, /\(pe\)/, 'the content type as the collector names it');
+  assert.equal(analyze(fileVisit({ findings: [{ id: 'archive_executable', detail: 'invoice.pdf.exe' }] })).verdict, 'malicious');
+});
+
+test('a file with nothing found is "nothing found", not "could not check"; an unknown finding is no reason', () => {
+  const a = analyze(fileVisit({ file_type: 'pdf', findings: [{ id: 'something_new', detail: 'x' }] }));
+  assert.deepEqual(a.signals.map((s) => s.id), []);
+  assert.equal(a.verdict, 'benign');
+  assert.equal(analyze([summary('https://x.example/', { nav_error: 'file' })]).verdict, 'unknown', 'no file read: nothing to say');
+});

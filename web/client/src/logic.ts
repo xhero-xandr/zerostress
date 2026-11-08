@@ -132,6 +132,10 @@ export function logLine(e: LogEntry): string {
     case 'email_links': return L.emailLinks(num('count') ?? 0);
     case 'email_link': return L.emailLink(num('n') ?? 0, str('host'));
     case 'email_link_verdict': return L.emailLinkVerdict(num('n') ?? 0, str('host'), T.verdict[str('verdict') as keyof typeof T.verdict] ?? str('verdict'));
+    case 'file_fetch': return L.fileFetch(num('bytes') ?? 0);
+    case 'file_approved': return L.fileApproved;
+    case 'file_view': return L.fileView;
+    case 'file_read': return L.fileRead(num('findings') ?? 0, str('type'), T.verdict[str('verdict') as keyof typeof T.verdict] ?? str('verdict'));
     case 'second_opinion': return L.second(str('source'), num('status'), typeof d.malicious === 'boolean' ? d.malicious : null, str('host'));
   }
 }

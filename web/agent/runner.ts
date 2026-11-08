@@ -11,7 +11,7 @@ import { taskHooks } from './task-hooks.ts';
 import { landingView } from './evidence.ts';
 import { assess, type Assessment, type Prompt } from './assess.ts';
 import { validateCommand } from './commands.ts';
-import type { Reputation, ReputationClient } from './reputation.ts';
+import type { FileVerdict, Reputation, ReputationClient } from './reputation.ts';
 import type { Verdict } from './signals.ts';
 import type { Budget } from './budget.ts';
 import type { AgentConfig } from './config.ts';
@@ -43,6 +43,11 @@ export interface TaskInput {
    * opens each one from that page, in this one microVM, looks at it, and comes back for the next.
    */
   links?: string[];
+  /**
+   * A file someone handed us: `url` is then our page that links to it, and in its session the agent fetches it once,
+   * inside this microVM, where the collector reads it; an attached page (`view`) is then opened there too.
+   */
+  file?: { name: string; bytes: number; sha256: string; url: string; view?: string };
 }
 
 /** One link of an email, as the agent found it. Only our shapes: the page's own words stay in the evidence. */
@@ -58,6 +63,26 @@ export interface EmailLinkResult {
   /** why it could not be opened, when it could not */
   error: string | null;
   shot: string | null;
+}
+
+/** A file, as read inside the sandbox. Its name comes from whoever sent it; everything else is of our own shapes. */
+export interface FileResult {
+  name: string;
+  bytes: number;
+  sha256: string;
+  /** what its content is, as the collector found it (guest/collector/lib/file.mjs) */
+  type: string | null;
+  /** it was fetched into the sandbox and read there */
+  read: boolean;
+  /** the finding ids of the collector, of a fixed set */
+  findings: string[];
+  /** addresses found in it, at most 20 */
+  links: string[];
+  /** for an archive: the names inside it, at most 30 */
+  entries: string[];
+  /** an attached page that was also opened in the sandbox, as a page */
+  viewed: boolean;
+  virustotal: FileVerdict | null;
 }
 
 export interface Step {
@@ -101,6 +126,8 @@ export interface TaskResult {
   email?: { links: EmailLinkResult[] };
   /** what Google, Spamhaus and VirusTotal knew about the address and its domain */
   reputation?: Reputation;
+  /** a file someone handed us (TaskInput.file), as the collector read it inside the microVM: our shapes only */
+  file?: FileResult;
   notes: string[];
 }
 
@@ -467,7 +494,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       const e = r.event as Ev;
       if (e.kind === 'session_ready') {
         ready = true;
-        if (input.session && !driving) driving = input.links ? driveEmail(input.links) : drive();
+        if (input.session && !driving) driving = input.file ? driveFile(input.file) : input.links ? driveEmail(input.links) : drive();
       }
       if (e.kind === 'cmd_result' && typeof e.id === 'string') {
         const step = steps.find((x) => x.id === e.id);
@@ -495,6 +522,101 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
         if (a.mime === 'image/png') note('screenshot');
       }
     }
+  }
+
+  // ---- a file: fetched once into this microVM from our page, read there by the collector ----
+  // The download is the one risky command here, and the person decided it when they handed us the file: their upload is
+  // the approval of exactly this download of exactly this address, and of nothing else (docs/containment.md, rule 8:
+  // code decides, not a model). An attached page is then opened in the sandbox like any page, with a safe command.
+  let fileStart = -1;
+  let fileEnd = -1;
+  let view: Stretch | null = null;
+  async function driveFile(f: NonNullable<TaskInput['file']>): Promise<void> {
+    note('file_fetch', { bytes: f.bytes });
+    const ref = refOf(f.url);
+    const snap = gate.state().snap;
+    if (ref !== null && snap !== null) {
+      const id = `f${++cmdNo}`;
+      const line = JSON.stringify({ cmd: 'download', snap, ref, id });
+      const v = validateCommand(line);
+      if (v.ok && v.risk === 'risky') {
+        const step: Step = { id, action: 'download', line, risk: 'risky', status: 'sending' };
+        steps.push(step);
+        fileStart = events.length;
+        const done = new Promise<void>((resolve) => { waiters.set(id, resolve); });
+        try {
+          const receipt = await deps.sup.command(runId, line);
+          if (!COMMAND_END.has(step.status)) step.status = receipt.status;
+          if (receipt.status === 'awaiting_approval') {
+            await deps.sup.approve(runId, receipt.command_id, receipt.command_sha256);
+            note('file_approved');
+          }
+          await Promise.race([done, new Promise<void>((r) => setTimeout(r, commandWaitMs).unref())]);
+        } catch (e) {
+          step.status = 'error';
+          step.error = e instanceof SupervisorError ? e.code : 'unreachable';
+        }
+        fileEnd = events.length;
+        if (step.status === 'done' && f.view && !finished) {
+          const vref = refOf(f.view);
+          const vsnap = gate.state().snap;
+          if (vref !== null && vsnap !== null) {
+            note('file_view');
+            const start = events.length;
+            const opened = await send({ cmd: 'open_link', snap: vsnap, ref: vref });
+            const ok = opened?.status === 'done';
+            const shot = ok ? (await send({ cmd: 'screenshot' }))?.status === 'done' : false;
+            view = { url: f.view, start, end: events.length, error: ok ? null : (opened?.error ?? opened?.status ?? 'refused'), shot };
+          }
+        }
+      }
+    } else notes.push('the file was not found on our page in the sandbox');
+    if (!finished) {
+      try { await deps.sup.command(runId, '{"cmd":"close","id":"close-1"}'); } catch { notes.push('the session could not be closed by the agent; the supervisor will close it'); }
+    }
+  }
+
+  /** The file's findings and, for an attached page, that page: judged together, by the rules and then the model. */
+  async function judgeFile(f: NonNullable<TaskInput['file']>): Promise<{ assessment: Assessment; events: unknown[]; shot: string | null; result: FileResult }> {
+    const own = fileStart >= 0 ? events.slice(fileStart, fileEnd).filter((e) => isObj(e) && (e.kind === 'download' || e.kind === 'file')) : [];
+    const read = own.filter((e): e is Ev => isObj(e) && e.kind === 'file').at(-1);
+    const strs = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, n).map((x) => x.slice(0, max)) : []);
+    const links = strs(read?.links, 20, 2000).filter((u) => /^https?:\/\//i.test(u));
+    const vt = deps.reputation?.enabled ? await deps.reputation.file(f.sha256).catch(() => null) : null;
+    // the links in the file: Google is asked about each address, as it is for a link (only Google: no domain lookups
+    // for twenty addresses in one go)
+    const listed = links.length && deps.reputation?.enabled ? await deps.reputation.check(links, '').catch(() => null) : null;
+    let evs: unknown[];
+    let shot: string | null = null;
+    const v = view as Stretch | null;
+    if (v && v.error === null) {
+      const seen = events.slice(v.start, v.end).filter((e) => !(isObj(e) && (e.kind === 'cmd_result' || e.kind === 'snapshot')));
+      const pages = seen.filter((e): e is Ev => isObj(e) && e.kind === 'page');
+      const final = typeof pages.at(-1)?.url === 'string' ? String(pages.at(-1)!.url) : v.url;
+      evs = [{ kind: 'nav', via: 'requested', from: '', to: v.url }, ...own, ...seen, { kind: 'summary', final_url: final, nav_error: null }];
+      const saved = new Set(artifacts.filter((a) => a.mime === 'image/png').map((a) => a.name));
+      const file = seen.filter((e): e is Ev => isObj(e) && e.kind === 'artifact' && e.saved === true && e.mime === 'image/png').map((e) => String(e.file)).at(-1);
+      shot = v.shot && file && saved.has(file) ? file : null;
+    } else {
+      evs = [...own, { kind: 'summary', final_url: f.url, nav_error: read ? 'file' : 'not_opened' }];
+    }
+    let png: Buffer | null = null;
+    if (shot && deps.cfg.vision) { try { png = await deps.sup.artifact(runId, shot, SHOT_MAX); } catch { png = null; } }
+    const assessment = await assess({ events: evs, hooks: task, screenshot: png, domainAgeDays: null, reputation: listed?.google?.length ? { google: listed.google, spamhaus: null, virustotal: null } : null, fileReputation: { virustotal: vt } }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+    note('file_read', { verdict: assessment.verdict, findings: Array.isArray(read?.findings) ? read.findings.length : 0, ...(typeof read?.file_type === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(read.file_type) ? { type: read.file_type } : {}) });
+    const result: FileResult = {
+      name: typeof read?.filename === 'string' && read.filename ? read.filename.slice(0, 200) : f.name,
+      bytes: f.bytes,
+      sha256: f.sha256,
+      type: typeof read?.file_type === 'string' && /^[a-z0-9]{1,12}$/.test(read.file_type) ? read.file_type : null,
+      read: read !== undefined,
+      findings: Array.isArray(read?.findings) ? [...new Set(read.findings.filter(isObj).map((x) => x.id).filter((x): x is string => typeof x === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(x)))].slice(0, 30) : [],
+      links,
+      entries: strs(read?.entries, 30, 200),
+      viewed: v !== null && v.error === null,
+      virustotal: vt,
+    };
+    return { assessment, events: evs, shot, result };
   }
 
   try {
@@ -525,8 +647,9 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     for (const id of [...waiters.keys()]) wake(id);
     if (driving) await driving.catch(() => notes.push('the session driver failed'));
     const email = input.links ? await judgeEmail(input.links) : null;
+    const file = input.file ? await judgeFile(input.file) : null;
     // an email with no link that could be opened is "could not check", never a verdict on our own list page
-    const assessment = !email ? await assessNow(false) : email.worst ? email.worst.assessment
+    const assessment = file ? file.assessment : !email ? await assessNow(false) : email.worst ? email.worst.assessment
       : await assess({ events: [{ kind: 'summary', final_url: input.links![0] ?? input.url, nav_error: 'not_opened' }], hooks: task, screenshot: null, domainAgeDays: null }, { cfg: deps.cfg, prompt: deps.prompt, client: undefined, budget: deps.budget });
     const hs = { triggered: task.triggered, findings: task.findings(), ruleset: hooks.state().ruleset };
     note('verdict', { verdict: assessment.verdict, by: assessment.mode });
@@ -539,15 +662,16 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       failure,
       assessment,
       evidence_events: events.length,
-      facts: email?.worst ? buildFacts(email.worst.events, { geo: deps.geo, domain: await domainFor(parseUrl(email.worst.final)?.hostname ?? '') }) : buildFacts(events, { geo: deps.geo, domain: await domainNow() }),
+      facts: file ? buildFacts(file.events, { geo: deps.geo, domain: null }) : email?.worst ? buildFacts(email.worst.events, { geo: deps.geo, domain: await domainFor(parseUrl(email.worst.final)?.hostname ?? '') }) : buildFacts(events, { geo: deps.geo, domain: await domainNow() }),
       hooks: { triggered: hs.triggered, findings: hs.findings.map((f) => ({ rule: f.rule, category: String(f.category), strength: f.strength, place: f.place, layer: f.layer })), ruleset: hs.ruleset },
       steps,
       refused,
       pending_approval: pending,
       artifacts,
-      shots: email ? { desktop: email.worst?.shot ?? null, mobile: null, tablet: null } : pickShots(events, artifacts),
+      shots: file ? { desktop: file.shot, mobile: null, tablet: null } : email ? { desktop: email.worst?.shot ?? null, mobile: null, tablet: null } : pickShots(events, artifacts),
       ...(email ? { email: { links: email.results } } : {}),
-      ...(lastReputation && !email ? { reputation: lastReputation } : {}),
+      ...(lastReputation && !email && !file ? { reputation: lastReputation } : {}),
+      ...(file ? { file: file.result } : {}),
       timeline,
       log: log.entries,
       notes: [...notes, ...(ready ? [] : input.session ? ['the session never became ready'] : [])],

@@ -34,6 +34,7 @@ export const T = {
     scan_pending: 'Cloudflare is still scanning the page. Ask again in a minute.',
     scan_refused: 'Cloudflare does not scan this link.',
     scan_quota: 'Today\'s new scans at Cloudflare are used up. A recent scan of this link by someone else can still be found: ask again tomorrow for a new one.',
+    file_too_large: 'That file is too large. Files of up to 10 MB can be checked.',
     server: 'Something went wrong on our side. Please try again.',
   } as Readonly<Record<string, string>>,
 };
