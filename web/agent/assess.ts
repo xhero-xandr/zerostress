@@ -2,7 +2,7 @@
 // possible, the model's opinion, which can only raise it. Nothing here throws: the verdict by the rules exists before
 // the model is asked, and any failure of the model leaves it standing.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Budget, Usage } from './budget.ts';
@@ -129,7 +129,7 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
     // the last look before the model: the dossier is built by us, but it is made of what the page said
     if (await input.hooks.scan('dossier', text)) return degrade(fired(), 'the dossier itself tripped the hooks');
 
-    const nonce = (deps.nonce ?? (() => createHash('sha256').update(`${Math.random()}${nowMs}`).digest('hex').slice(0, 16)))();
+    const nonce = (deps.nonce ?? (() => randomBytes(8).toString('hex')))();
     const body = `Review this dossier.\n<untrusted_data id="${nonce}">\n${text}\n</untrusted_data id="${nonce}">`;
     const messages: Message[] = [
       { role: 'system', content: deps.prompt.text },

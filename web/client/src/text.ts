@@ -438,10 +438,12 @@ export const T = {
     download: (saved: boolean) => (saved ? 'A file was downloaded, inside the sandbox only' : 'The page tried to start a download'),
     visitDone: (requests: number, hosts: number, blocked: number) => `Visit recorded: ${plural(requests, 'request', 'requests')} to ${plural(hosts, 'host', 'hosts')}${blocked ? `, ${blocked} blocked by the sandbox` : ''}`,
     hooksFired: 'Injection detectors caught text aimed at an AI in the page: the model is not asked, and the agent takes no action',
+    inspectionFailed: 'Part of the page could not be checked for text aimed at an AI in time: the model is not asked (this says nothing against the page)',
     modelAsked: (model: string, vision: boolean) => `Asking ${model} on Vultr Serverless Inference, ${vision ? 'with the screenshot (vision)' : 'text only'}`,
     modelAnswered: (seconds: string, tokens: number, verdict: string, next: string | null) => `The model answered in ${seconds} s (${tokens} tokens): ${verdict}${next ? `; it proposes: ${next}` : ''}`,
     rulesOnly: {
       hooks_fired: 'Verdict by the rules alone: the page tried to instruct the model',
+      inspection_failed: 'Verdict by the rules alone: part of the page could not be checked for text aimed at an AI in time (this says nothing against it)',
       model_output_flagged: 'The model’s answer repeated instructions from the page: it is ignored, the rules decide',
       page_not_read: 'Verdict by the rules alone: the page itself could not be read',
       no_model_configured: 'Verdict by the rules alone: no model is configured',

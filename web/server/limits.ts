@@ -39,6 +39,8 @@ export interface Limiter {
    */
   chat(client: string, reportId: string, counts: boolean): { ok: true; release: () => void } | { ok: false; reason: ChatDenied; retryAfterS: number };
   stats(): { today: number; cap: number };
+  /** how many clients the limiter remembers: those with nothing left in any window are forgotten */
+  tracked(): number;
 }
 
 const HOUR = 3_600_000;
@@ -56,6 +58,20 @@ export function createLimiter(cfg: LimitConfig = DEFAULT_LIMITS, now: () => numb
   let today = 0;
 
   const prune = (arr: number[], span: number, t: number): number[] => arr.filter((x) => t - x < span);
+  // A client is remembered only while one of its windows holds something: once a minute, the ones whose windows have
+  // all run out are dropped, so the maps do not grow with every address that ever came (review, minor).
+  let swept = now();
+  const sweep = (t: number) => {
+    if (t - swept < 60_000) return;
+    swept = t;
+    for (const [m, span] of [[starts, DAY], [bad, 60_000], [chats, HOUR]] as const) {
+      for (const [k, arr] of m) {
+        const left = prune(arr, span, t);
+        if (left.length === 0) m.delete(k);
+        else m.set(k, left);
+      }
+    }
+  };
   const bump = (m: Map<string, number>, k: string, d: number) => {
     const v = (m.get(k) ?? 0) + d;
     if (v <= 0) m.delete(k);
@@ -65,6 +81,7 @@ export function createLimiter(cfg: LimitConfig = DEFAULT_LIMITS, now: () => numb
   return {
     start(client) {
       const t = now();
+      sweep(t);
       const dk = Math.floor(t / DAY);
       if (dk !== dayKey) { dayKey = dk; today = 0; }
       if (today >= cfg.dailyCap) return { ok: false, reason: 'daily_cap', retryAfterS: Math.ceil(((dk + 1) * DAY - t) / 1000) };
@@ -99,6 +116,7 @@ export function createLimiter(cfg: LimitConfig = DEFAULT_LIMITS, now: () => numb
     },
     badKey(client) {
       const t = now();
+      sweep(t);
       const mine = prune(bad.get(client) ?? [], 60_000, t);
       mine.push(t);
       bad.set(client, mine);
@@ -106,6 +124,7 @@ export function createLimiter(cfg: LimitConfig = DEFAULT_LIMITS, now: () => numb
     },
     chat(client, reportId, counts) {
       const t = now();
+      sweep(t);
       if (chatBusy.has(client)) return { ok: false, reason: 'chat_busy', retryAfterS: 5 };
       const mine = prune(chats.get(client) ?? [], HOUR, t);
       chats.set(client, mine);
@@ -121,6 +140,7 @@ export function createLimiter(cfg: LimitConfig = DEFAULT_LIMITS, now: () => numb
       return { ok: true, release: () => { if (!released) { released = true; chatBusy.delete(client); } } };
     },
     stats: () => ({ today, cap: cfg.dailyCap }),
+    tracked: () => new Set([...starts.keys(), ...bad.keys(), ...chats.keys(), ...active.keys(), ...streams.keys()]).size,
   };
 }
 

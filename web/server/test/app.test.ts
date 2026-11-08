@@ -494,6 +494,22 @@ function talker(over: Partial<ChatReply> = {}) {
 const chatPost = (r: Rig, id: string, body: unknown, headers: Record<string, string> = {}) =>
   r.app.request(`/api/reports/${id}/chat`, { method: 'POST', headers: { ...JSONH, ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
 
+test('Explain: two people asking at the same moment share one call to the model (review)', async () => {
+  let calls = 0;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => { release = r; });
+  const chat: AppDeps['chat'] = { async reply() { calls++; await gate; return { text: 'shared', source: 'model', reason: null }; } };
+  const r = rig({ chat });
+  const { id } = await finished(r);
+  const a = chatPost(r, id, { kind: 'explain' }, { 'x-test-ip': '1.1.1.1' });
+  const b = chatPost(r, id, { kind: 'explain' }, { 'x-test-ip': '2.2.2.2' });
+  await new Promise((res) => setTimeout(res, 20));
+  release();
+  const [ra, rb] = await Promise.all([a, b]);
+  assert.deepEqual([await ra.json(), await rb.json()], [{ text: 'shared', source: 'model', note: null }, { text: 'shared', source: 'model', note: null }]);
+  assert.equal(calls, 1);
+});
+
 test('Explain: the reply of the assistant, asked once per report and kept; the public report is what it reads', async () => {
   const t = talker();
   const r = rig({ chat: t.chat });

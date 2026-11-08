@@ -8,7 +8,7 @@ import { runTask, type RunnerDeps, type TaskResult } from '../runner.ts';
 import { publicReport } from '../report.ts';
 import { createSupervisorClient } from '../supervisor.ts';
 import { createGuardedHooks, type GuardedHooks } from '../../hooks/index.ts';
-import { makeState } from '../../hooks/hooks.ts';
+import { makeFinding, makeState } from '../../hooks/hooks.ts';
 import { answer, chat, startFakeModel, type FakeModel } from './fakemodel.ts';
 import { startFakeSup, type FakeSup } from './fakesup.ts';
 
@@ -105,4 +105,29 @@ test('a citation shaped as a path can still carry the page\'s words, and the hoo
   assert.equal(r.assessment.mode, 'rules_only');
   assert.equal(r.hooks.triggered, true);
   assert.doesNotMatch(JSON.stringify(publicReport(r)), /ignore_all_previous/);
+});
+
+test('a text the hooks could not inspect is logged as such, not as an injection; a real finding as an injection (B5)', async () => {
+  const limited = (real: boolean) => (): GuardedHooks => {
+    const g = createGuardedHooks();
+    let n = 0;
+    return {
+      inspect: async (e) => {
+        const r = await g.inspect(e);
+        if (++n !== 2) return r;
+        const f = [makeFinding('hook_timeout', 'event'), ...(real ? [{ rule: 'test', category: 'override' as const, strength: 'strong' as const, place: 'page.text', view: 'raw' as const, layer: 0, quote: '' }] : [])];
+        return { event: r.event, findings: f };
+      },
+      scan: (p, t) => g.scan(p, t),
+      state: () => g.state(),
+      close: () => g.close(),
+    };
+  };
+  for (const real of [false, true]) {
+    const s = await setup(() => chat(answer({ verdict: 'benign', next: { action: 'none' } })), limited(real));
+    const r = await runTask({ url: 'http://page.test/', session: {} }, s.deps) as TaskResult;
+    const codes = r.log.map((e) => e.code);
+    assert.equal(codes.includes('hooks_fired'), real, `hooks_fired when real=${real}`);
+    assert.equal(codes.includes('inspection_failed'), !real, `inspection_failed when real=${real}`);
+  }
 });

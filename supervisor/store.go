@@ -157,8 +157,14 @@ func (s *Store) Update(id string, fn func(*RunRecord)) error {
 	if !ok {
 		return errors.New("no such run")
 	}
-	fn(r)
-	return s.persist(r)
+	// the change goes to a copy, and into memory only once it is on disk: a failed write leaves both as they were
+	next := copyRecord(r)
+	fn(&next)
+	if err := s.persist(&next); err != nil {
+		return err
+	}
+	*r = next
+	return nil
 }
 
 func (s *Store) collect(keep func(*RunRecord) bool) []RunRecord {

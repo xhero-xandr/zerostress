@@ -17,6 +17,7 @@ export const LOG_CODES = [
   'download', // a download started (saved or not)
   'visit_done', // the visit as a whole: requests, other sites, blocked requests
   'hooks_fired', // the injection detectors found something (which rule is not told: the report never names them)
+  'inspection_failed', // some text could not be inspected in time (too large, or the check ran out of time): no model
   'model_asked', // the model was asked (model, text or vision, step)
   'model_answered', // its answer (time, tokens, its verdict, the next action it proposed)
   'rules_only', // the model was not asked or not listened to (reason)

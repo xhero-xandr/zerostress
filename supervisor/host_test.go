@@ -866,7 +866,7 @@ func TestHost_ImageSHAFrom(t *testing.T) {
 	}
 }
 
-func TestHost_ImageSHAFrom_IsReadOnceAndCached(t *testing.T) {
+func TestHost_ImageSHAFrom_IsCachedUntilTheManifestChanges(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.json")
 	if err := os.WriteFile(path, []byte(`{"image":{"sha256":"first"}}`), 0o600); err != nil {
@@ -879,8 +879,18 @@ func TestHost_ImageSHAFrom_IsReadOnceAndCached(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"image":{"sha256":"second"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := get(); got != "first" {
-		t.Errorf("after the file changed: %q, want the cached value", got)
+	// an image installed while the supervisor runs: health tells the new one, without a restart
+	if got := get(); got != "second" {
+		t.Errorf("after the manifest changed: %q, want the new value", got)
+	}
+	// unchanged: the cached value, the file is not parsed again
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() != 0 {
+		if got := get(); got != "second" {
+			t.Errorf("an unchanged manifest was read again: %q", got)
+		}
 	}
 }
 

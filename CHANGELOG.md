@@ -37,6 +37,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 - A safe demo page, `/demo/shared-file`, that offers a harmless text file: a deep check of it has a download to ask the owner about (Pattern B on camera).
 
 ### Changed
+- Small fixes from the review of 7 November: an API answer for something that does not exist says `not_found`, not `bad_request`; the nonce around untrusted data is random bytes; the limiter forgets clients whose windows have all run out; two people opening the explanation of one report at once share one model call; the agent's log says "could not be checked in time" apart from "text aimed at an AI"; a run record changes in memory only once it is on disk; the supervisor's health tells an image installed while it runs; leftover microVMs are stopped when the supervisor stops.
 - The browser extension says what it checks now: its name and description name emails and files, which the side panel takes (pasted, dropped or picked) since the panel became one field.
 - The code and every build belong to a new account, `zerostress`, with no sudo and no login, instead of the server's administrator; `./zs install` and `./zs update` give back any file written as root, and `./zs verify` checks both. The logs are root's only. `web/tools/panel-check.mjs` runs a deep check through the extension.
 - In a deep check the model is asked to propose a download when a page offers a file (the person still decides), so that the file itself becomes evidence.

@@ -542,3 +542,27 @@ func TestStore_ResultFilesConcurrentAppendKeepsEveryLineIntact(t *testing.T) {
 		last[g] = e.Seq
 	}
 }
+
+// A change that could not be written stays out of memory too: what Get says is what a restart would find (review E).
+func TestStore_AFailedWriteLeavesTheRecordAsItWas(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into a read-only directory")
+	}
+	dir := t.TempDir()
+	s := storeTOpen(t, dir)
+	id := storeTID(1)
+	if err := s.Insert(RunRecord{ID: id, URL: "u", CreatedAt: 1, ExpiresAt: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o700)
+	if err := s.Update(id, func(r *RunRecord) { r.State = StateRunning; r.Slot = ptr(2) }); err == nil {
+		t.Fatal("the write into a read-only directory did not fail")
+	}
+	got, _ := s.Get(id)
+	if got.State != StateQueued || got.Slot != nil {
+		t.Fatalf("memory took a change the disk did not: %+v", got)
+	}
+}

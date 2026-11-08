@@ -503,10 +503,11 @@ export function createApp(deps: AppDeps): Hono {
   // anything. The explanation is asked once per report and kept; questions are limited per person, per report and by the
   // daily budget of the model. Report ids are public by design, so these limits, not secrecy, are what holds the cost down.
   const explained = new Map<string, ChatReply>();
+  const explaining = new Map<string, Promise<ChatReply>>();
   const talks = new Map<string, Turn[]>();
   const KEEP_FOR_EVER = new Set<ChatReason | null>([null, 'hooks_fired', 'page_not_read', 'no_model']);
   app.post('/api/reports/:id/chat', async (c) => {
-    if (!deps.chat) return fail(c, 404, 'bad_request');
+    if (!deps.chat) return fail(c, 404, 'not_found');
     const read = await readJsonBody(c);
     if (!read.ok) return read.res;
     const { kind, message, ...rest } = read.body;
@@ -519,12 +520,17 @@ export function createApp(deps: AppDeps): Hono {
     } else if (message !== undefined) return fail(c, 400, 'bad_request');
 
     const task = deps.store.get(c.req.param('id') ?? '');
-    if (!task?.result || task.stage !== 'done') return fail(c, 404, 'bad_request');
+    if (!task?.result || task.stage !== 'done') return fail(c, 404, 'not_found');
     const done = (r: ChatReply) => json(c, 200, { text: r.text, source: r.source, note: r.reason ? chatNote(r.reason) : null });
 
     if (kind === 'explain') {
       const kept = explained.get(task.id);
       if (kept) return done(kept);
+      // someone else's explanation of this report is on its way: wait for it rather than ask the model again
+      const going = explaining.get(task.id);
+      if (going) {
+        try { return done(await going); } catch { return fail(c, 500, 'server'); }
+      }
     }
     const who = ip(c);
     const slot = deps.limiter.chat(who, task.id, kind === 'ask');
@@ -532,9 +538,18 @@ export function createApp(deps: AppDeps): Hono {
     try {
       const tkey = `${task.id}|${who}`;
       const history = talks.get(tkey) ?? [];
-      const reply = await deps.chat.reply(publicReport(task.result), kind === 'explain' ? { kind: 'explain' } : { kind: 'ask', message: question, history });
+      const asking = deps.chat.reply(publicReport(task.result), kind === 'explain' ? { kind: 'explain' } : { kind: 'ask', message: question, history });
+      if (kind === 'explain') explaining.set(task.id, asking);
+      let reply: ChatReply;
+      let current = false; // false when the report changed meanwhile (a second opinion came): not kept then
+      try {
+        reply = await asking;
+      } finally {
+        current = explaining.get(task.id) === asking;
+        if (current) explaining.delete(task.id);
+      }
       if (kind === 'explain') {
-        if (KEEP_FOR_EVER.has(reply.reason)) { if (explained.size > 500) explained.clear(); explained.set(task.id, reply); }
+        if (current && KEEP_FOR_EVER.has(reply.reason)) { if (explained.size > 500) explained.clear(); explained.set(task.id, reply); }
       } else if (reply.source === 'model') {
         if (talks.size > 500) talks.clear();
         talks.set(tkey, [...history, { q: question, a: reply.text }].slice(-4));
@@ -550,7 +565,7 @@ export function createApp(deps: AppDeps): Hono {
   // ---- progress ----
   app.get('/api/tasks/:id/events', (c) => {
     const task = deps.store.get(c.req.param('id'));
-    if (!task) return fail(c, 404, 'bad_request');
+    if (!task) return fail(c, 404, 'not_found');
     const close = deps.limiter.openStream(ip(c));
     if (!close) return fail(c, 429, 'too_many_active', { 'retry-after': '10' });
     const last = Number(c.req.header('last-event-id') ?? 0);
@@ -576,7 +591,7 @@ export function createApp(deps: AppDeps): Hono {
   // ---- the owner's decisions ----
   const owned = (c: Context): Task | Response => {
     const task = deps.store.get(c.req.param('id') ?? '');
-    if (!task) return fail(c, 404, 'bad_request');
+    if (!task) return fail(c, 404, 'not_found');
     if (!deps.store.keyOk(task, c.req.header('x-task-key'))) {
       if (!deps.limiter.badKey(ip(c))) return fail(c, 429, 'forbidden', { 'retry-after': '60' });
       return fail(c, 403, 'forbidden');
@@ -626,6 +641,7 @@ export function createApp(deps: AppDeps): Hono {
       log('second_opinion', { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() });
       // the report changed (its verdict may have been raised): what was said about it before no longer holds
       explained.delete(t.id);
+      explaining.delete(t.id); // an explanation of the report as it was is not kept
       for (const k of talks.keys()) if (k.startsWith(`${t.id}|`)) talks.delete(k);
     };
     const p = run()

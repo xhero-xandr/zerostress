@@ -130,6 +130,7 @@ export function logLine(e: LogEntry): string {
     case 'download': return L.download(d.saved === true);
     case 'visit_done': return L.visitDone(num('requests') ?? 0, num('hosts') ?? 0, num('blocked') ?? 0);
     case 'hooks_fired': return L.hooksFired;
+    case 'inspection_failed': return L.inspectionFailed;
     case 'model_asked': return L.modelAsked(str('model'), str('mode') === 'vision');
     case 'model_answered': return L.modelAnswered(((num('ms') ?? 0) / 1000).toFixed(1), num('tokens') ?? 0, str('verdict'), str('next') && str('next') !== 'none' ? str('next') : null);
     case 'rules_only': return L.rulesOnly[str('reason')] ?? L.rulesOther;

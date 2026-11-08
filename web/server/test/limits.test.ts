@@ -75,3 +75,27 @@ test('chat: a refused call uses up nothing', () => {
   const fresh = l.chat('a', 'rep', false);
   assert.ok(fresh.ok, 'the refusals did not count against the hour');
 });
+
+test('a client whose windows have all run out is forgotten: the limiter does not grow with every address (review)', () => {
+  let t = 1_000_000;
+  const l = createLimiter({ ...DEFAULT_LIMITS, dailyCap: 10_000 }, () => t);
+  for (let i = 0; i < 500; i++) {
+    const s = l.start(`10.0.${i >> 8}.${i & 255}`);
+    if (s.ok) s.release();
+    l.badKey(`10.1.${i >> 8}.${i & 255}`);
+    const c = l.chat(`10.2.${i >> 8}.${i & 255}`, 'r', false);
+    if (c.ok) c.release();
+  }
+  assert.equal(l.tracked(), 1500);
+  t += 2 * 60_000; // the bad keys' minute is over
+  l.badKey('10.9.0.1');
+  assert.equal(l.tracked(), 1001, 'the bad keys of a minute ago are forgotten, today\'s starts and chats are not');
+  t += 2 * 3_600_000; // the chats' hour too
+  l.badKey('10.9.0.2');
+  assert.equal(l.tracked(), 501);
+  t += 86_400_000; // and the starts' day
+  l.badKey('10.9.0.3');
+  assert.equal(l.tracked(), 1);
+  const again = l.start('10.0.0.1');
+  assert.equal(again.ok, true, 'a forgotten client starts afresh');
+});

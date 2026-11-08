@@ -213,14 +213,22 @@ func freeGBOf(path string) func() float64 {
 }
 
 // imageSHAFrom reads the SHA-256 of the installed guest image as recorded by guest/image/build.sh, for /v1/health.
+// It is read again whenever manifest.json changes (an image installed while the supervisor runs), not only at start.
 func imageSHAFrom(imageDir string) func() string {
 	var cached *string
+	var seen time.Time
+	var seenSize int64
+	path := filepath.Join(imageDir, "manifest.json")
 	return func() string {
-		if cached != nil {
+		st, statErr := os.Stat(path)
+		if cached != nil && statErr == nil && st.ModTime().Equal(seen) && st.Size() == seenSize {
 			return *cached
 		}
+		if statErr == nil {
+			seen, seenSize = st.ModTime(), st.Size()
+		}
 		sha := ""
-		if b, err := os.ReadFile(filepath.Join(imageDir, "manifest.json")); err == nil {
+		if b, err := os.ReadFile(path); err == nil {
 			var m struct {
 				Image struct {
 					SHA256 string `json:"sha256"`

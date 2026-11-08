@@ -5,7 +5,7 @@
 // page was not read, no model, no budget, a bad answer) the reply is our own explanation from explain.ts, never silence
 // and never a guess.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Budget } from './budget.ts';
@@ -119,7 +119,7 @@ export async function reply(report: PublicReport, input: ChatInput, deps: ChatDe
     // the last look before the model, as in assess.ts: the view is made of what the page and the network said
     if ((await scanGuarded('chat_context', view)).triggered) return rules('hooks_fired');
 
-    const nonce = (deps.nonce ?? (() => createHash('sha256').update(`${Math.random()}${Date.now()}`).digest('hex').slice(0, 16)))();
+    const nonce = (deps.nonce ?? (() => randomBytes(8).toString('hex')))();
     const question = input.kind === 'explain' ? EXPLAIN_QUESTION : input.message;
     const earlier = input.kind === 'ask' ? input.history.slice(-3) : [];
     const messages: Message[] = [

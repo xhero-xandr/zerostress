@@ -23,7 +23,7 @@ import type { DomainInfo } from './rdap.ts';
 import { createGatekeeper, type Reason } from './gatekeeper.ts';
 import type { ModelClient } from './model.ts';
 import { SupervisorError, type SupervisorClient } from './supervisor.ts';
-import { createGuardedHooks, type GuardedHooks } from '../hooks/index.ts';
+import { createGuardedHooks, isInspectionLimit, type GuardedHooks } from '../hooks/index.ts';
 
 type Ev = Record<string, unknown>;
 const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -189,6 +189,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   note('submitted', { position: sub.position ?? 0 });
   let asked = 0;
   let hooksNoted = false;
+  let limitNoted = false;
   let inspected = 0;
 
   const events: unknown[] = [];
@@ -493,9 +494,13 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       const r = await hooks.inspect(o);
       inspected++;
       events.push(r.event);
-      if (r.findings.length && !hooksNoted) {
+      // what spoke to a model and what could only not be inspected are told apart (B5), each once
+      if (r.findings.some((f) => !isInspectionLimit(f)) && !hooksNoted) {
         hooksNoted = true;
         note('hooks_fired');
+      } else if (r.findings.length && !hooksNoted && !limitNoted) {
+        limitNoted = true;
+        note('inspection_failed');
       }
       noteEvidence(r.event);
       gate.observe(r.event);
