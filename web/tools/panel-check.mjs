@@ -7,7 +7,8 @@
 //     default link: https://zerostress.space/demo/shared-file (offers a harmless file), default answer: allow
 //
 // Run it as the owner of the checkout (Chromium refuses to sandbox itself as root). It needs Playwright's Chromium:
-// `npx playwright install chromium` in guest/collector, once.
+// `npx playwright install chromium` in guest/collector, once. On the server itself, ZS_ORIGIN=127.0.0.1 talks to the local
+// Caddy instead of going out through Cloudflare (which may challenge the server's own address).
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -19,7 +20,7 @@ const ext = join(root, 'build/extension');
 const out = join(root, 'build/e2e/panel');
 mkdirSync(out, { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), 'zs-panel-'));
-const ctx = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`] });
+const ctx = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, ...(process.env.ZS_ORIGIN ? [`--host-resolver-rules=MAP zerostress.space ${process.env.ZS_ORIGIN}`] : [])] });
 try {
   const sw = ctx.serviceWorkers()[0] ?? await ctx.waitForEvent('serviceworker', { timeout: 15000 });
   const p = await ctx.newPage();
