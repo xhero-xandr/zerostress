@@ -89,7 +89,7 @@ The supervisor refuses to start with a value out of range (`supervisor/config.go
 | `SUP_QUEUE_WAIT_S` | 120 | how long a job may wait in the queue |
 | `SUP_BOOT_TIMEOUT_S` | 15 | microVM boot timeout |
 | `SUP_HARD_TIMEOUT_S` | 90 | total time limit of a plain check |
-| `SUP_VCPU` | 2 (1–4) | vCPUs per microVM |
+| `SUP_VCPU` | 1 (1–4) | vCPUs per microVM. One is faster than two when several checks run at once on a small host and keeps a single guest to one host CPU (measured 8 November 2026 with the real collector on heavy sites) |
 | `SUP_MEM_MIB` | 1024 (256–4096) | memory per microVM |
 | `SUP_SCRATCH_MIB` | 1024 (256–4096) | the disk a microVM writes to (the guest image is read-only); the most one run can write to the host |
 | `SUP_MIN_FREE_GB` | 20 | below this much free disk, new runs are refused |

@@ -94,7 +94,7 @@ func LoadConfig(env map[string]string) (Config, error) {
 		QueueWait:        sec(get("SUP_QUEUE_WAIT_S", 120, 1, 3600)),
 		BootTimeout:      sec(get("SUP_BOOT_TIMEOUT_S", 15, 1, 120)),
 		HardTimeout:      sec(get("SUP_HARD_TIMEOUT_S", 90, 5, 600)),
-		VCPU:             get("SUP_VCPU", 2, 1, 4),
+		VCPU:             get("SUP_VCPU", 1, 1, 4),
 		MemMiB:           get("SUP_MEM_MIB", 1024, 256, 4096),
 		ScratchMiB:       get("SUP_SCRATCH_MIB", 1024, 256, 4096),
 		MinFreeGB:        get("SUP_MIN_FREE_GB", 20, 0, 1000),
