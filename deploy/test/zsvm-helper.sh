@@ -43,6 +43,25 @@ rm -f "$RUNS/$S"
 install -d -m 0700 "$RUNS/$S"   # owned by root, not by the supervisor user
 refused "run directory with the wrong owner refused" run 0 $S 1024 2
 rm -rf "$RUNS/$S"
+# a directory the supervisor has not handed to the slot (review C1): Firecracker would run as zerostress-vm0 on it
+handed() { # dir-group dir-mode disk-group disk-mode
+  rm -rf "$RUNS/$S"; install -d -m "$2" -o zerostress-sup -g "$1" "$RUNS/$S"
+  install -m "$4" -o zerostress-sup -g "$3" /dev/null "$RUNS/$S/rootfs.ext4"
+}
+handed zerostress-sup 0700 zerostress-sup 0600
+refused "run directory not handed to the slot refused"     run 0 $S 1024 2
+handed zerostress-vm1 0770 zerostress-vm1 0660
+refused "run directory of another slot refused"            run 0 $S 1024 2
+handed zerostress-vm0 0777 zerostress-vm0 0660
+refused "run directory open to everyone refused"           run 0 $S 1024 2
+handed zerostress-vm0 0770 zerostress-sup 0660
+refused "disk not handed to the slot refused"              run 0 $S 1024 2
+handed zerostress-vm0 0770 zerostress-vm0 0660
+rm -f "$RUNS/$S/rootfs.ext4"; ln -s /etc/shadow "$RUNS/$S/rootfs.ext4"
+refused "symlinked disk refused"                           run 0 $S 1024 2
+rm -f "$RUNS/$S/rootfs.ext4"; ln /etc/hostname "$RUNS/$S/rootfs.ext4" 2>/dev/null || true
+[[ -e $RUNS/$S/rootfs.ext4 ]] && refused "hard-linked disk refused" run 0 $S 1024 2
+rm -rf "$RUNS/$S"
 
 echo "== harmless commands work"
 out=$(asup stop $GOOD); [[ $out =~ rc=0$ ]] && ok "stop of an unknown unit is a no-op" || bad "stop no-op" "$out"

@@ -5,7 +5,8 @@
 #                                      console) are connected to the caller; exit of this command == the VM is gone
 #   zsvm stop RUN_ID                    stop the unit (SIGTERM), idempotent
 #   zsvm recover                        stop every leftover zsvm-*.service (startup recovery)
-# The unit runs Firecracker as zerostress-sup; ExecStopPost tears the slot's network down even if the supervisor died.
+# The unit runs Firecracker as zerostress-vmSLOT and shows it only its binary, the kernel and its run directory of the
+# project; ExecStopPost tears the slot's network down even if the supervisor died.
 set -euo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
@@ -14,10 +15,43 @@ RUNS=/zerostress/data/supervisor/runs
 ZSNET=/zerostress/bin/zsnet
 FC=/zerostress/bin/firecracker
 SUPUSER=zerostress-sup
+VMUSER=zerostress-vm
 
 die() { echo "zsvm: $*" >&2; exit 2; }
 id_ok() { [[ ${1:-} =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; }
 
+# The properties of a VM's unit, in PROPS. A function, so that deploy/test/zsvm-isolation.sh can run a probe in exactly
+# the sandbox Firecracker gets.
+unit_props() { # SLOT RUN_ID DIR MEM_MIB VCPU
+  local slot=$1 id=$2 dir=$3 mem=$4 vcpu=$5 src disk
+  # write-bandwidth cap on the whole disk behind the state directory (io.max does not apply to partitions)
+  src=$(df --output=source "$RUNS" | tail -1)
+  disk=$(lsblk -no pkname "$src" 2>/dev/null | head -1 || true)
+  PROPS=(
+    # a user of its own per slot (review C1): not the supervisor, not another slot's VM. Its group owns the run
+    # directory and the sockets Firecracker makes there (UMask 0007), and the supervisor is a member of it.
+    -p User="$VMUSER$slot" -p Group="$VMUSER$slot" -p SupplementaryGroups=kvm -p UMask=0007 -p WorkingDirectory="$dir"
+    # of the project, only what Firecracker needs: the binaries (a directory: SELinux lets systemd make a mount point
+    # for a directory in the empty tree, not for a file), the kernel, its own run directory
+    -p TemporaryFileSystem=/zerostress:mode=0755 -p "BindReadOnlyPaths=/zerostress/bin /zerostress/images" -p "BindPaths=$dir"
+    # no other process is seen, signalled or entered through /proc
+    -p ProtectProc=invisible -p ProcSubset=pid
+    # guest RAM + headroom for Firecracker itself and page cache (reclaimable); no swap
+    -p MemoryMax="$((mem + 640))M" -p MemorySwapMax=0 -p CPUQuota="$((vcpu * 100))%" -p TasksMax=128
+    -p TimeoutStopSec=5 -p "ExecStopPost=+$ZSNET down $slot"
+    -p RuntimeMaxSec=900
+    -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes -p "ReadWritePaths=$dir"
+    -p ProtectKernelModules=yes -p ProtectKernelLogs=yes -p ProtectKernelTunables=yes -p ProtectControlGroups=yes
+    -p ProtectClock=yes -p ProtectHostname=yes -p LockPersonality=yes -p RestrictSUIDSGID=yes -p RestrictNamespaces=yes
+    -p RestrictAddressFamilies=AF_UNIX
+    -p DevicePolicy=closed -p "DeviceAllow=/dev/kvm rw" -p "DeviceAllow=/dev/net/tun rw"
+    -p "DeviceAllow=/dev/null rw" -p "DeviceAllow=/dev/zero rw" -p "DeviceAllow=/dev/urandom r"
+  )
+  [[ -n $disk ]] && PROPS+=(-p "IOWriteBandwidthMax=/dev/$disk 200M")
+  return 0
+}
+
+main() {
 [[ $# -ge 1 ]] || die "usage: zsvm run|stop|recover"
 cmd=$1
 
@@ -32,26 +66,13 @@ case $cmd in
     dir=$RUNS/$id
     [[ -d $dir && ! -L $dir ]] || die "run directory is missing or a symlink"
     [[ $(stat -c %U "$dir") == "$SUPUSER" ]] || die "run directory has the wrong owner"
+    # the supervisor hands the directory and the disk to the slot's group, and to nobody else
+    [[ $(stat -c '%G %a' "$dir") == "$VMUSER$slot 770" ]] || die "run directory is not the slot's (group $VMUSER$slot, mode 770)"
+    disk=$dir/rootfs.ext4
+    [[ -f $disk && ! -L $disk && $(stat -c '%U %G %a %h' "$disk") == "$SUPUSER $VMUSER$slot 660 1" ]] || die "the disk is not the slot's"
 
-    # write-bandwidth cap on the whole disk behind the state directory (io.max does not apply to partitions)
-    src=$(df --output=source "$RUNS" | tail -1)
-    disk=$(lsblk -no pkname "$src" 2>/dev/null | head -1 || true)
-    io=()
-    [[ -n $disk ]] && io=(-p "IOWriteBandwidthMax=/dev/$disk 200M")
-
-    # guest RAM + headroom for Firecracker itself and page cache (reclaimable); no swap
-    exec systemd-run --quiet --pipe --wait --collect --unit="zsvm-$id" \
-      -p User="$SUPUSER" -p SupplementaryGroups=kvm -p WorkingDirectory="$dir" \
-      -p MemoryMax="$((mem + 640))M" -p MemorySwapMax=0 -p CPUQuota="$((vcpu * 100))%" -p TasksMax=128 "${io[@]}" \
-      -p TimeoutStopSec=5 -p "ExecStopPost=+$ZSNET down $slot" \
-      -p RuntimeMaxSec=900 \
-      -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes -p "ReadWritePaths=$dir" \
-      -p ProtectKernelModules=yes -p ProtectKernelLogs=yes -p ProtectKernelTunables=yes -p ProtectControlGroups=yes \
-      -p ProtectClock=yes -p ProtectHostname=yes -p LockPersonality=yes -p RestrictSUIDSGID=yes -p RestrictNamespaces=yes \
-      -p RestrictAddressFamilies=AF_UNIX \
-      -p DevicePolicy=closed -p "DeviceAllow=/dev/kvm rw" -p "DeviceAllow=/dev/net/tun rw" \
-      -p "DeviceAllow=/dev/null rw" -p "DeviceAllow=/dev/zero rw" -p "DeviceAllow=/dev/urandom r" \
-      "$FC" --api-sock "$dir/fc.sock" --id "$id"
+    unit_props "$slot" "$id" "$dir" "$mem" "$vcpu"
+    exec systemd-run --quiet --pipe --wait --collect --unit="zsvm-$id" "${PROPS[@]}" "$FC" --api-sock "$dir/fc.sock" --id "$id"
     ;;
   stop)
     [[ $# -eq 2 ]] || die "usage: zsvm stop RUN_ID"
@@ -71,3 +92,7 @@ case $cmd in
     ;;
   *) die "unknown command" ;;
 esac
+}
+
+# sourced by a test: only the functions
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi

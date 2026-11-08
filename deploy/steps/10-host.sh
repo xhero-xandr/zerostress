@@ -16,6 +16,12 @@ id "$CODE_USER" >/dev/null 2>&1 || useradd -r -m -d /var/lib/zerostress-build -s
 getent group caddy >/dev/null || groupadd --system caddy
 id caddy >/dev/null 2>&1 || useradd --system --gid caddy -M -d /nonexistent --shell /usr/sbin/nologin caddy
 usermod -aG zerostress-ipc zerostress-sup
+# Firecracker runs as a user of its own per slot (zsvm, review C1); the supervisor joins their groups to reach the
+# sockets Firecracker makes in a run directory, and to hand the directory to the slot
+for n in 0 1 2 3; do
+  id "zerostress-vm$n" >/dev/null 2>&1 || useradd -r -U -M -d /nonexistent -s /sbin/nologin "zerostress-vm$n"
+done
+usermod -aG zerostress-vm0,zerostress-vm1,zerostress-vm2,zerostress-vm3 zerostress-sup
 usermod -aG zerostress-ipc zerostress-web
 
 # the project's own places (git-ignored); the code itself stays with the owner of the checkout

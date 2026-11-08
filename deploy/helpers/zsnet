@@ -13,7 +13,9 @@ RULES_VERSION=2
 # a guest may open this many new connections per second after a first burst: a page opens dozens, a scan thousands
 NEW_CONN_RATE=20
 NEW_CONN_BURST=200
-TAP_OWNER=zerostress-sup
+# the slot's tap belongs to the slot's group: Firecracker runs as zerostress-vmN (zsvm, review C1), and the supervisor,
+# a member of every slot's group, still opens it in the tests that start Firecracker themselves
+TAP_GROUP_PREFIX=zerostress-vm
 
 die() { echo "zsnet: $*" >&2; exit 2; }
 
@@ -87,7 +89,7 @@ case $cmd in
     # idempotent: clear leftovers of this slot first
     ip link del "$tap" 2>/dev/null || true
     nft delete element inet $TABLE slots "{ \"$tap\" . $guest_ip }" 2>/dev/null || true
-    ip tuntap add dev "$tap" mode tap user "$TAP_OWNER"
+    ip tuntap add dev "$tap" mode tap group "$TAP_GROUP_PREFIX$n"
     ip addr add "$host_ip/30" dev "$tap"
     ip link set "$tap" up
     # forwarding is enabled persistently (/etc/sysctl.d/90-zerostress.conf); only check it, so the

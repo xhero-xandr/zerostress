@@ -2,7 +2,7 @@
 
 These nine rules hold for every change to the project. Code comments refer to them by number ("containment rule 6").
 
-1. **Process isolation.** Every task runs in its own Firecracker microVM. Chromium in the guest runs as an unprivileged user with its own sandbox enabled (`chromiumSandbox: true`, never `--no-sandbox`).
+1. **Process isolation.** Every task runs in its own Firecracker microVM. Firecracker itself runs as a user of its own per slot, sees nothing of the project but its binary, the kernel and its run directory, and cannot see or signal any other process (so an escape from the guest does not reach the supervisor, its API or another microVM). Chromium in the guest runs as an unprivileged user with its own sandbox enabled (`chromiumSandbox: true`, never `--no-sandbox`).
 2. **Secrets.** Keys and tokens live only on the host, in the services' environment. Under no circumstances do they reach the guest image or a microVM.
 3. **Limits.** Every run is capped: the microVM's vCPUs and memory, the task's time, the size of downloads, and what the guest sends: its outgoing bandwidth and packet rate (in Firecracker's network device) and how fast it opens new connections (in the host's firewall); mail ports are closed to it.
 4. **Lifecycle.** A microVM is created for one task and destroyed after it, including on errors and timeouts. Every task gets a clean disk image.

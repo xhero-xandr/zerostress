@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -97,11 +98,46 @@ func (b *LinuxBackend) NetDown(ctx context.Context, slot int, _ string) error {
 }
 
 func (b *LinuxBackend) Start(ctx context.Context, o StartOptions) (VM, error) {
+	if err := handToSlot(o.RunDir, o.Slot); err != nil {
+		return nil, newRunError(ReasonFcAPI, err.Error())
+	}
 	vm, err := launchFirecracker(ctx, b.cfg, o)
 	if err != nil {
 		return nil, err
 	}
 	return vm, nil
+}
+
+// slotGroup is the group of the user Firecracker runs as in a slot (zsvm, review C1); the supervisor is a member.
+func slotGroup(slot int) string { return "zerostress-vm" + strconv.Itoa(slot) }
+
+// handToSlot gives the run directory and its disk to the slot's group, so that Firecracker, running as the slot's user,
+// can use them, and nobody else: not the web layer (the supervisor's primary group), not another slot. zsvm refuses to
+// start a VM on a directory that is not handed over this way.
+func handToSlot(runDir string, slot int) error {
+	if _, err := slotArg(slot); err != nil {
+		return err
+	}
+	g, err := user.LookupGroup(slotGroup(slot))
+	if err != nil {
+		return fmt.Errorf("the slot's group: %w", err)
+	}
+	gid, err := strconv.Atoi(g.Gid)
+	if err != nil {
+		return fmt.Errorf("the slot's group: %w", err)
+	}
+	for _, f := range []struct {
+		path string
+		mode os.FileMode
+	}{{runDir, 0o770}, {filepath.Join(runDir, "rootfs.ext4"), 0o660}} {
+		if err := os.Lchown(f.path, -1, gid); err != nil {
+			return fmt.Errorf("handing %s to %s: %w", filepath.Base(f.path), g.Name, err)
+		}
+		if err := os.Chmod(f.path, f.mode); err != nil {
+			return fmt.Errorf("handing %s to %s: %w", filepath.Base(f.path), g.Name, err)
+		}
+	}
+	return nil
 }
 
 func (b *LinuxBackend) RemoveRunDir(runDir string) error { return os.RemoveAll(runDir) }

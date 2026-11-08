@@ -52,6 +52,9 @@ for f in $(cd "$F" && find . -type f | sort); do
   if cmp -s "$F$host" "$host"; then ok "$host"; else no "$host differs from deploy/files$host"; fi
 done
 for h in zsvm zsnet; do check "bin/$h is deploy/helpers/$h" cmp -s "$S/bin/$h" "$S/deploy/helpers/$h"; done
+for n in 0 1 2 3; do
+  check "Firecracker's user of slot $n exists, has no login, and the supervisor is in its group" bash -c "[[ \$(getent passwd zerostress-vm$n | cut -d: -f7) == */nologin ]] && id -nG zerostress-sup | grep -qw zerostress-vm$n"
+done
 
 # A finished check of example.com, the stable control: the run must be done (a failed run has a report too, saying it
 # could not check) and the verdict benign. Takes a task id, so it can be tried on a task that is already there.
