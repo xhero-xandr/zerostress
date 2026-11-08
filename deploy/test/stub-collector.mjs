@@ -118,10 +118,14 @@ async function runProbes() {
 
   // devices and mounts: nothing shared with the host
   const mounts = readFileSync('/proc/mounts', 'utf8').split('\n').map((l) => l.split(' ')).filter((c) => c.length > 2);
-  const shared = mounts.filter((c) => /^(9p|virtiofs|nfs|nfs4|cifs|overlay|fuse|fuse\..+)$/.test(c[2])).map((c) => `${c[1]}:${c[2]}`);
+  // the one overlay allowed is the guest's own root: its scratch disk over the read-only image (zerostress-init, review D3),
+  // seen again under the bind mounts systemd makes of it
+  const ownRoot = (c) => c[2] === 'overlay' && /(^|,)upperdir=\/overlay\/upper(,|$)/.test(c[3] ?? '');
+  const shared = mounts.filter((c) => /^(9p|virtiofs|nfs|nfs4|cifs|overlay|fuse|fuse\..+)$/.test(c[2]) && !ownRoot(c)).map((c) => `${c[1]}:${c[2]}`);
   wall('no shared folders or network mounts from the host', shared.length === 0, shared.join(', ') || 'none');
-  const blocks = readdirSync('/sys/block').filter((b) => !/^(loop|ram|zram)/.test(b));
-  wall('the only disk is the VM\'s own root disk', blocks.length === 1 && blocks[0] === 'vda', blocks.join(', '));
+  const blocks = readdirSync('/sys/block').filter((b) => !/^(loop|ram|zram)/.test(b)).sort();
+  const ro = (b) => { try { return readFileSync(`/sys/block/${b}/ro`, 'utf8').trim(); } catch { return '?'; } };
+  wall('the only disks are the read-only image and the VM\'s own scratch disk', blocks.join(',') === 'vda,vdb' && ro('vda') === '1' && ro('vdb') === '0', blocks.map((b) => `${b}(ro=${ro(b)})`).join(', '));
   const dev = ['/dev/kvm', '/dev/mem', '/dev/kmem', '/dev/port'].filter((p) => existsSync(p) && (() => { try { accessSync(p, fsc.R_OK); return true; } catch { return false; } })());
   wall('no readable /dev/kvm, /dev/mem or /dev/port', dev.length === 0, dev.join(', ') || 'none');
 
