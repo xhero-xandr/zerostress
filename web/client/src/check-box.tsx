@@ -65,7 +65,7 @@ export function CheckBox({ busy, error, onLink, onEmail, demos = [], initial = '
   };
   const clear = () => { setText(''); setFile(null); setNote(''); field.current?.focus(); };
 
-  const chip = file ? C.isFile(file.name, sizeText(file.data.length))
+  const chip = file ? C.isFile(sizeText(file.data.length))
     : found.kind === 'link' ? C.isLink
       : found.kind === 'email' ? C.isEmail(found.mail.links.length, found.mail.attachments.length, found.mail.source)
         : found.kind === 'text' ? C.isText : '';

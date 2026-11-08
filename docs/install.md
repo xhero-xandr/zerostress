@@ -12,8 +12,8 @@ The reference host: a Vultr VM with nested virtualisation (`/dev/kvm`), Rocky Li
 ├── supervisor/ web/ guest/ deploy/ docs/      code (git)
 ├── bin/                firecracker, zsvm, zsnet, caddy, zerostress-supervisor (owned by root)
 ├── runtime/            node, go
-├── images/             the guest microVM image
-├── data/               supervisor/ (runs, results), web/ (reports), geo/, caddy/ (certificates)
+├── images/             the guest microVM image (read-only in every microVM; replaced only by a rename) and its packages.txt
+├── data/               supervisor/ (runs: a run's scratch disk and sockets; results), web/ (reports), geo/, caddy/ (certificates)
 ├── logs/               web.log, supervisor.log, caddy.log
 ├── run/                supervisor.sock
 └── build/              everything the builds produce
@@ -94,19 +94,21 @@ deploy/test/image-session.sh          guest agent sessions over real vsock
 deploy/test/supervisor-e2e.sh         the supervisor service with real microVMs (47 checks; image with a stub collector)
 deploy/test/supervisor-sessions-e2e.sh  commands, approvals, idle time, slots (about 3 minutes)
 deploy/test/supervisor-timeouts.sh    time limits (about 2 minutes; changes the unit temporarily)
-deploy/test/collector-e2e.sh          the real collector behind the supervisor (swaps the image for the test)
+deploy/test/collector-e2e.sh          the real collector behind the supervisor (swaps the image for the test, by a rename)
 deploy/test/agent-e2e.sh              the whole agent: supervisor, microVM, collector, hooks, the real model
-deploy/test/containment-e2e.sh        isolation from inside a microVM: cloud metadata, the host, internal networks
+deploy/test/containment-e2e.sh        isolation from inside a microVM: cloud metadata, the host, internal networks, its disks; memory, CPU, a full disk
 deploy/test/zsnet-netns.sh            the real zsnet in throwaway network namespaces, real traffic: mail ports, the new-connection rate, the table rebuilt on a new ruleset (the host's network is untouched)
 deploy/test/zsvm-helper.sh            zsvm rejects everything malformed
 deploy/test/zsvm-isolation.sh         what an escape into Firecracker could reach: the supervisor, other VMs, the project
 deploy/test/image-readonly.sh         the image is read-only, the guest boots over its own scratch disk (next to live checks)
 deploy/test/zsvm-probe.sh             the microVM unit: cgroup, signals, cleanup (stop the supervisor first)
 deploy/test/unit-compat.sh LABEL PROP...  compatibility of unit properties with SELinux
+deploy/test/bench-concurrency.mjs     memory, CPU and timings at 1 to 4 microVMs at once (changes the unit temporarily)
 ```
+Measurements through the live site (they count against its limits): `node web/tools/quality.mjs` (live phishing from OpenPhish and large sites known for bot walls, through the whole pipeline) and `node web/tools/panel-check.mjs [link] [allow|deny]` (one deep check through the browser extension, with the approval answered), both as the owner of the checkout.
 The image tests need the guest agent (`guest/agent/build.sh`). An image with the stub collector is built explicitly: `COLLECTOR_ENTRY=deploy/test/stub-collector.mjs guest/image/build.sh` (the real collector is the default).
 
 If a test was interrupted, these should all be empty: `pgrep firecracker`, `ip -br link | grep zstap`, `ls /zerostress/data/supervisor/runs`, `losetup -a`. SELinux denials are in `/var/log/audit/audit.log`.
 
 ## System settings
-Users `zerostress-sup` (group `kvm`), `zerostress-web` and `caddy`, group `zerostress-ipc`; `zerostress`, with no sudo and no login, owns the code and runs every build (npm, vite, go run third-party code, so never as root or as an administrator), and `./zs install` and `./zs update` give it back any file someone wrote as root; the logs in `logs/` hold visitors' addresses and are root's only (`0600`); `/dev/kvm` is `0660`; a `zerostress` zone and a `zerostress-egress` policy in firewalld; the nftables table `inet zerostress` appears on the first `zsnet up`. Only `sshd` and Caddy (80, 443) listen outside. The kernel parameter `spec_store_bypass_disable=seccomp` forces the Speculative Store Bypass mitigation on every seccomp process, including each Firecracker (`/proc/<pid>/status` shows `thread force mitigated`).
+Users `zerostress-sup` (group `kvm`, and the groups of the four slots), `zerostress-web` and `caddy`, group `zerostress-ipc`; `zerostress-vm0` to `zerostress-vm3`, one per slot, as which Firecracker runs (no login, nothing of their own but the run directory the supervisor hands to the slot's group and the slot's tap); `zerostress`, with no sudo and no login, owns the code and runs every build (npm, vite, go run third-party code, so never as root or as an administrator), and `./zs install` and `./zs update` give it back any file someone wrote as root; the logs in `logs/` hold visitors' addresses and are root's only (`0600`); `/dev/kvm` is `0660`; a `zerostress` zone and a `zerostress-egress` policy in firewalld; the nftables table `inet zerostress` appears on the first `zsnet up`. Only `sshd` and Caddy (80, 443) listen outside. The kernel parameter `spec_store_bypass_disable=seccomp` forces the Speculative Store Bypass mitigation on every seccomp process, including each Firecracker (`/proc/<pid>/status` shows `thread force mitigated`).

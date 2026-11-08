@@ -161,7 +161,6 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
 
   // ---- the same address as a phone and as a tablet ----
   const views = deviceViews(events);
-  const names = (d: string) => views.filter((v) => v.differs.includes(d as never)).map((v) => (v.device === 'mobile' ? 'a phone' : 'a tablet'));
   // A sign-in form only a phone or a tablet sees is cloaking when something else about it is off: the form sends the
   // password to another site, the phone lands on another site, or the domain is young. On an old domain, with the form
   // on the site itself, it is what many big sites do (TikTok, Instagram ask phones to sign in): told, not counted.

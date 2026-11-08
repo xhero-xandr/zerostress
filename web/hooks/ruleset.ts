@@ -32,7 +32,6 @@ export const LIMITS = {
   squashedMin: 16,
 };
 
-const VIEWS: readonly ViewName[] = ['lat', 'leet', 'cyr', 'raw', 'squashed_lat', 'squashed_cyr', 'rot13', 'reversed'];
 const MATCH_VIEWS: readonly ViewName[] = ['lat', 'leet', 'cyr', 'raw', 'rot13', 'reversed'];
 const NB = String.raw`[^\p{L}\p{N}]`;
 const WD = String.raw`[\p{L}\p{N}']`;

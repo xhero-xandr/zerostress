@@ -20,7 +20,7 @@ Paste a link, and the report shows:
 - **A screenshot**, as proof of what the browser actually saw.
 - **An "Explain" button and a chat** about the finished report — the assistant can only talk about evidence that is already in the report; it has no access to the sandbox, the model that produced the verdict, or any action that changes anything.
 
-A risky action a human asks the agent to take — submit a form, download a file — always waits for that human's explicit approval first; the agent never approves itself.
+A risky step the agent proposes inside the sandbox, such as downloading a file, waits for the explicit approval of the person who started the check; submitting a form is not a step it can propose at all, and it never approves itself.
 
 ## Vultr services used
 
@@ -35,7 +35,7 @@ A risky action a human asks the agent to take — submit a form, download a file
 2. A gatekeeper checks the address, and a fresh microVM boots. Progress streams to the page stage by stage.
 3. About 15 seconds later (the average on live phishing links) the report is ready. In this example it says *Dangerous*, because the link went through three redirects to a two-day-old domain hosting a password and card-number form that posts to a third host. The screenshot shows what the browser saw; the phone view shows the same form.
 4. "Explain" opens a chat that answers in plain words from that evidence only, and points at the signals it relies on.
-5. With a deep check, the agent may go one step further inside the same microVM, for example by trying the form with dummy data. A risky step like that pauses until *you* approve it, using the private link only the task's owner holds; a shared report link can read but never approve.
+5. With a deep check, the agent may go a few steps further inside the same microVM: open a link on the page, scroll, take another look. A risky step, such as downloading the file a page offers, pauses until *you* approve it, from the browser tab that started the check (the owner's key leaves the address bar at once, so a copied address cannot approve); a shared report link can read but never approve.
 6. Whatever happened, the microVM is destroyed. Nothing from the page touched your device or the host.
 
 ## Browser extension, email and files
@@ -51,7 +51,7 @@ A risky action a human asks the agent to take — submit a form, download a file
 ## How it works
 
 1. A gatekeeper checks the submitted address (scheme, size, no internal or cloud-metadata addresses) before anything runs.
-2. A Go supervisor starts a one-shot Firecracker micro-VM from a prebuilt, read-only disk image.
+2. A Go supervisor starts a one-shot Firecracker micro-VM, as a user of its own for that slot. The guest image is attached read-only and shared; everything the guest writes goes to an empty scratch disk of its own (1 GiB), laid over the image at boot and deleted with the run.
 3. A collector inside the micro-VM (Node.js, Playwright, driven over the Chrome DevTools Protocol so client-side redirects aren't invisible) opens the target in a sandboxed, unprivileged Chromium and reports every request, redirect, form, download attempt, and dialog as it happens.
 4. Deterministic rules turn that evidence into signals; a Vultr Serverless Inference model may add to the plan or raise the verdict, never lower it below what the rules found.
 5. The report is built from a fixed list of fields — anything the page, the submitter, or the model wrote is escaped and clearly marked as untrusted text, never trusted as a size, a boolean, or a command.
@@ -63,23 +63,23 @@ The hackathon's own containment checklist, the way this project meets it:
 
 | Requirement | How |
 |---|---|
-| Process isolation | One Firecracker micro-VM per task; Chromium runs as an unprivileged guest user with its own sandbox enabled (no `--no-sandbox`) |
+| Process isolation | One Firecracker micro-VM per task; Chromium runs as an unprivileged guest user with its own sandbox enabled (no `--no-sandbox`). Firecracker itself runs as a user of its own per slot and sees nothing of the host but its binaries, the kernel and its run directory: an escape from the guest reaches neither the supervisor nor another micro-VM |
 | Secret hygiene | API keys live only in the host's service environment; never copied into the guest image or a micro-VM |
-| Resource limits | vCPU, memory, task time, and download size are capped per run; so is what a guest sends (2 MiB/s in Firecracker's network device) and how fast it opens new connections; mail ports are closed |
-| Lifecycle | A clean disk image per task; the micro-VM is torn down after every run, including on error or timeout |
+| Resource limits | vCPU, memory, task time, and download size are capped per run; so is what a guest sends (2 MiB/s in Firecracker's network device), how fast it opens new connections, and what it can write to the host (its 1 GiB scratch disk); mail ports are closed |
+| Lifecycle | Every task starts from the same clean image, attached read-only; what the guest writes is deleted with the run. The micro-VM is torn down after every run, including on error or timeout, and a slot whose VM did not end is not given to the next one |
 
-Verified from *inside* a real guest, as the same unprivileged user the browser runs as (`deploy/test/containment-e2e.sh`): no write access outside the task, no secrets on disk or in any readable environment, no shared mounts, no route to the host, the cloud metadata address, or the host's gateway.
+Verified from *inside* a real guest, as the same unprivileged user the browser runs as (`deploy/test/containment-e2e.sh`): no write access outside the task, no secrets on disk or in any readable environment, no shared mounts, only the read-only image and its own scratch disk, no route to the host, the cloud metadata address, or the host's gateway; a guest that fills its disk stops at its scratch disk. And from inside the sandbox Firecracker itself runs in (`deploy/test/zsvm-isolation.sh`): no reach to the supervisor's socket, state or settings, other micro-VMs, the logs or the code, and no other process seen or signalled.
 
 The full set of nine rules every change must keep is in [docs/containment.md](docs/containment.md).
 
-Untrusted input (page text, OCR, file names) is treated as data a model reads, never as instructions it follows; a model can only push a verdict up, never down; deterministic hooks scan every piece of untrusted text before and after a model call and can fall back to rules-only on their own.
+Untrusted input (page text, OCR, file names) is treated as data a model reads, never as instructions it follows; a model can only push a verdict up, never down; deterministic hooks scan every piece of untrusted text before and after a model call, in a worker thread with a deadline, and can fall back to rules-only on their own. A text they could not inspect in time keeps the model away too, but is not counted against the page.
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
 | Host | Rocky Linux 10, Firecracker, KVM, SELinux Enforcing |
-| Guest image | Ubuntu 24.04, Node.js 24, Playwright 1.65.0, Chrome Headless Shell |
+| Guest image | Ubuntu 24.04 (packages from a pinned snapshot of the archive), Node.js 24, Playwright 1.65.0, Chrome Headless Shell (pinned checksum); built step by step in namespaces of its own, read-only in every micro-VM |
 | Supervisor (privileged) | Go, standard library only — microVM lifecycle, queueing, sessions, artifacts, over a Unix socket |
 | Collector (in the guest) | Node.js, Playwright + a raw CDP session |
 | Web layer and agent (unprivileged) | Node.js 24, TypeScript (type-stripping, no build step), [Hono](https://hono.dev/) |
@@ -97,7 +97,7 @@ The directory a piece of code sits in tells you its privilege level and where it
 | `web/` | `hooks/` (injection detectors, rules as data), `agent/` (rules, model client, verdict, report), `server/` (the Hono API: tasks, progress stream, report, chat, approvals; serves the built client) | **Host, unprivileged** — no access to Firecracker or the supervisor's socket beyond its own API |
 | `web/client/` | The interface: React, React Router, TanStack Query, Tailwind; light and dark themes, or the system's | **In the visitor's browser**; only the build reaches the host |
 | `web/extension/` | The browser extension (Manifest V3): the agent in a side panel, built with the client's tools; reads no page | **In the visitor's browser** |
-| `web/tools/` | Dev tooling: mutation testing, the corpus check, model benchmarking, the DB-IP fetch script | Run by hand or in CI, never by the running service |
+| `web/tools/` | Dev tooling: mutation testing, the corpus check, model benchmarking, the quality run on live phishing and walled sites, a deep check through the extension, the DB-IP fetch script | Run by hand or in CI, never by the running service |
 | `guest/` | `agent/` (the Go job receiver, over vsock), `collector/` (Node.js + Playwright over a raw CDP session), `image/` (builds the guest disk image) | `agent/` and `collector/` run **inside the guest micro-VM** as an unprivileged user; `image/` runs on the host only to build the image |
 | `config/` | `web.env` (holds the model key) and `supervisor.env`, git-ignored; their `*.example` templates are in git | Read by systemd for the services |
 | `deploy/` | `steps/` (what `./zs install` runs), `versions.env` (every pinned version and checksum), `files/` (the few system files: units, sudoers, sysctl, udev, logrotate), `helpers/` (`zsvm`, `zsnet`), `test/` (tests on real micro-VMs) | **Host**, at install time |
@@ -110,7 +110,7 @@ On a server the checkout lives at `/zerostress` and everything else lives next t
 
 Isolation, the supervisor, the collector, the injection-detection hooks, the agent and the web layer are implemented, tested in CI and on real microVMs, and running at [zerostress.space](https://zerostress.space).
 
-Not done yet: when a page sits behind a "verify you are human" wall, the report says it could not check the page but does not yet show what was collected before the wall; an install on a clean machine has not been verified end to end.
+Not done yet: an install on a clean machine has not been verified end to end; the guest image is still built as root (in a chroot, though each step runs in namespaces of its own); QR codes in files are not read.
 
 ## Running it yourself
 

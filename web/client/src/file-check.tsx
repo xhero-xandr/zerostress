@@ -73,24 +73,6 @@ export function FileRow({ name, mime, data, note, onOpen }: { name: string; mime
   );
 }
 
-/** A file picked from the computer: read here, nothing is sent until the person presses the button. */
-export function FilePicker() {
-  const [picked, setPicked] = useState<{ name: string; mime: string; data: Uint8Array } | null>(null);
-  return (
-    <div className="flex w-full max-w-3xl flex-col gap-2.5 text-left">
-      <label htmlFor="file" className="text-sm font-semibold text-muted">{F.pickLabel}</label>
-      <input id="file" type="file" className="block w-full text-[15px] file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface file:px-3 file:py-2 file:text-fg"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (!f) { setPicked(null); return; }
-          void f.arrayBuffer().then((b) => setPicked({ name: f.name, mime: f.type, data: new Uint8Array(b) }));
-        }} />
-      <p className="text-sm text-faint">{F.privacy}</p>
-      {picked && <ul className="flex flex-col gap-2"><FileRow name={picked.name} mime={picked.mime} data={picked.data} /></ul>}
-    </div>
-  );
-}
-
 const FINDING_LEVEL: Readonly<Record<string, 'high' | 'medium' | 'low'>> = {
   executable: 'high', script_file: 'high', shortcut: 'high', auto_exec: 'high', external_template: 'high', dde: 'high', pdf_launch: 'high',
   archive_executable: 'high', html_smuggling: 'high', svg_script: 'high', html_password_form: 'high',
