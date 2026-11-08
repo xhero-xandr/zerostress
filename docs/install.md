@@ -100,6 +100,7 @@ deploy/test/containment-e2e.sh        isolation from inside a microVM: cloud met
 deploy/test/zsnet-netns.sh            the real zsnet in throwaway network namespaces, real traffic: mail ports, the new-connection rate, the table rebuilt on a new ruleset (the host's network is untouched)
 deploy/test/zsvm-helper.sh            zsvm rejects everything malformed
 deploy/test/zsvm-isolation.sh         what an escape into Firecracker could reach: the supervisor, other VMs, the project
+deploy/test/image-readonly.sh         the image is read-only, the guest boots over its own scratch disk (next to live checks)
 deploy/test/zsvm-probe.sh             the microVM unit: cgroup, signals, cleanup (stop the supervisor first)
 deploy/test/unit-compat.sh LABEL PROP...  compatibility of unit properties with SELinux
 ```
