@@ -9,3 +9,5 @@ export const RELEASE: string = BUILD.replace(/[-+].*$/, '');
 export const REPO = 'https://github.com/xhero-xandr/zerostress';
 export const releasePage = (v: string = RELEASE): string => `${REPO}/releases/tag/v${v}`;
 export const extensionZip = (v: string = RELEASE): string => `${REPO}/releases/download/v${v}/zerostress-extension-${v}.zip`;
+/** the Chrome Web Store listing: the id the store itself assigned (EXTENSION_ORIGINS in web/server/app.ts) */
+export const STORE_URL = 'https://chromewebstore.google.com/detail/jbfpfekapmgpjjbiigjkhahongcjdlpm';

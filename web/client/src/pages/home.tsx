@@ -6,7 +6,7 @@ import { ApiError, getDemos, startEmailCheck, startTask } from '../api.ts';
 import { asLink, isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
 import { CheckBox } from '../check-box.tsx';
 import { T } from '../text.ts';
-import { extensionZip, RELEASE, releasePage } from '../version.ts';
+import { extensionZip, RELEASE, releasePage, STORE_URL } from '../version.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
 
 export function Home() {
@@ -105,7 +105,8 @@ export function Home() {
 }
 
 
-/** Where to get the browser agent and how to install it (an unpacked extension until the Chrome Web Store has it). */
+/** Where to get the browser agent: the Chrome Web Store listing first, a release .zip (any Chromium browser, or an
+ * older version) further down. */
 function ExtensionSection() {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -113,35 +114,45 @@ function ExtensionSection() {
   };
   return (
     <section id="extension" aria-labelledby="extension-title" className="mx-auto max-w-6xl px-4 pb-14 sm:px-6">
-      <div className="grid gap-6 rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:grid-cols-2">
-        <div className="flex flex-col gap-3">
+      <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
+        <div className="flex flex-col items-start gap-3">
           <h2 id="extension-title" className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
             <PanelRight className="size-6 text-accent" aria-hidden /> {T.ext.title}
           </h2>
-          <p className="text-[15px] leading-relaxed text-muted">{T.ext.text}</p>
-          <a href={extensionZip()} className={`${btnPrimary} self-start no-underline`}>
-            <Download className="size-5" aria-hidden /> {T.ext.download(RELEASE)}
+          <p className="max-w-2xl text-[15px] leading-relaxed text-muted">{T.ext.text}</p>
+          <a href={STORE_URL} className={`${btnPrimary} no-underline`}>
+            <PanelRight className="size-5" aria-hidden /> {T.ext.store}
           </a>
-          <p className="text-sm text-faint">{T.ext.browsers} <a href={releasePage()} className="text-faint">{T.ext.notes}</a></p>
+          <p className="text-sm text-faint">{T.ext.browsers}</p>
         </div>
-        <div className="flex flex-col gap-3">
-          <h3 className="text-[17px] font-semibold">{T.ext.stepsTitle}</h3>
-          <ol className="flex flex-col gap-2.5">
-            {T.ext.steps.map((s, i) => (
-              <li key={s} className="flex gap-3 text-[15px]">
-                <span className="flex size-7 flex-none items-center justify-center rounded-lg bg-accent-soft text-sm font-bold text-accent-ink" aria-hidden>{i + 1}</span>
-                <span className="pt-0.5">{s}</span>
-              </li>
-            ))}
-          </ol>
-          <div className="flex items-center gap-2 self-start rounded-xl border border-line-strong bg-canvas px-3 py-2">
-            <code className="font-mono text-[15px]">{T.ext.address}</code>
-            <button type="button" onClick={copy} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-muted hover:text-fg">
-              <Copy className="size-4" aria-hidden /> {copied ? T.ext.copied : T.ext.copy}
-            </button>
+        <details className="mt-6 border-t border-line pt-5">
+          <summary className="cursor-pointer text-[15px] font-medium text-muted hover:text-fg">{T.ext.manualTitle}</summary>
+          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <a href={extensionZip()} className="inline-flex w-fit items-center gap-2 rounded-lg border border-line-strong px-4 py-2 text-[15px] font-medium text-fg no-underline hover:bg-canvas">
+                <Download className="size-5" aria-hidden /> {T.ext.download(RELEASE)}
+              </a>
+              <p className="text-sm text-faint"><a href={releasePage()} className="text-faint">{T.ext.notes}</a></p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-[17px] font-semibold">{T.ext.stepsTitle}</h3>
+              <ol className="flex flex-col gap-2.5">
+                {T.ext.steps.map((s, i) => (
+                  <li key={s} className="flex gap-3 text-[15px]">
+                    <span className="flex size-7 flex-none items-center justify-center rounded-lg bg-accent-soft text-sm font-bold text-accent-ink" aria-hidden>{i + 1}</span>
+                    <span className="pt-0.5">{s}</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="flex items-center gap-2 self-start rounded-xl border border-line-strong bg-canvas px-3 py-2">
+                <code className="font-mono text-[15px]">{T.ext.address}</code>
+                <button type="button" onClick={copy} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-muted hover:text-fg">
+                  <Copy className="size-4" aria-hidden /> {copied ? T.ext.copied : T.ext.copy}
+                </button>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-faint">{T.ext.later}</p>
-        </div>
+        </details>
       </div>
     </section>
   );
