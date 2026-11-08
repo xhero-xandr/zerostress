@@ -173,7 +173,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
   const runId = sub.run_id;
   const hooks = (deps.hooks ?? createGuardedHooks)();
   // one latch for the whole task: the page's events and every scan the agent makes (docs/containment.md, rule 9)
-  const task = taskHooks(() => hooks.state());
+  const task = taskHooks(() => hooks.state(), hooks);
   const gate = createGatekeeper({ maxSteps: deps.cfg.maxSteps });
 
   const progress = (p: Progress): void => {

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { createHooks } from '../../hooks/index.ts';
+import { makeFinding, makeState } from '../../hooks/hooks.ts';
 import { RULESET_SHA256 } from '../../hooks/rules.ts';
 import { assess, loadPrompt, type Assessment } from '../assess.ts';
 import { createBudget } from '../budget.ts';
@@ -305,4 +306,38 @@ test('the prompt: loaded with its hash; an empty one is refused; it tells the mo
   writeFileSync(join(dir, 'p.md'), 'short');
   try { assert.throws(() => loadPrompt(join(dir, 'p.md')), /missing or empty/); } finally { rmSync(dir, { recursive: true, force: true }); }
   for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only things that appear in the dossier/, /Do not propose anything else/, /propose `download`.*only if the person agrees/]) assert.match(prompt.text, must);
+});
+
+test('a text the hooks could not inspect keeps the model away but is no evidence: no injection signal, no raised verdict (B5)', async () => {
+  const s = await serve(() => chat(answer({ verdict: 'malicious' })));
+  const cfg = cfgFor(s.url);
+  const events = createHooks();
+  const evs = fixture('plain').map((e) => events.inspect(e).event);
+  const failed = taskHooks(() => makeState(true, [makeFinding('hook_timeout', 'event')]));
+  const a = await assess({ events: evs, hooks: failed }, { cfg, prompt, client: createModelClient(cfg, { sleep: async () => {} }) });
+  assert.equal(a.mode, 'rules_only');
+  assert.equal(a.mode_reason, 'inspection_failed');
+  assert.equal(s.seen.length, 0, 'no model call');
+  assert.ok(!a.rules.signals.some((x) => x.id === 'injection_attempt'), 'no injection signal');
+  const clean = await assess({ events: evs, hooks: taskHooks() }, { cfg, prompt });
+  assert.equal(a.verdict, clean.rules.verdict, 'the verdict is the rules\' verdict of the same page');
+
+  const real = taskHooks(() => makeState(true, [makeFinding('hook_timeout', 'event'), { ...makeFinding('override.ignore', 'page.text'), category: 'override' }]));
+  const b = await assess({ events: evs, hooks: real }, { cfg, prompt, client: createModelClient(cfg, { sleep: async () => {} }) });
+  assert.equal(b.mode_reason, 'hooks_fired');
+  assert.ok(b.rules.signals.some((x) => x.id === 'injection_attempt'), 'a real finding is still the injection signal');
+});
+
+test('the dossier is scanned where the task says: a scan that ran out of time keeps the model away, as a limit (B4)', async () => {
+  const s = await serve(() => chat(answer({ verdict: 'malicious' })));
+  const cfg = cfgFor(s.url);
+  const events = createHooks();
+  const evs = fixture('plain').map((e) => events.inspect(e).event);
+  const places: string[] = [];
+  const late = taskHooks(() => events.state(), { scan: async (place) => { places.push(place); return { triggered: true, findings: [makeFinding('hook_timeout', place)] }; } });
+  const a = await assess({ events: evs, hooks: late }, { cfg, prompt, client: createModelClient(cfg, { sleep: async () => {} }) });
+  assert.deepEqual(places, ['dossier']);
+  assert.equal(s.seen.length, 0, 'no model call');
+  assert.equal(a.mode_reason, 'inspection_failed');
+  assert.equal(late.triggered, true, 'the task remembers it');
 });

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { cleanAnswer, CHAT_SCHEMA, chatNote, reply, validCite, MAX_ANSWER, type ChatDeps } from '../chat.ts';
 import { loadAgentConfig } from '../config.ts';
@@ -197,4 +198,12 @@ test('explain by rules: the verdict, the strongest findings first, advice', () =
   const many = report({ signals: Array.from({ length: 12 }, (_, i) => ({ id: `s${i}`, level: 'medium', text: `Finding number ${i}.` })) });
   assert.equal(explainPlain(many).split('\n').filter((l) => l.startsWith('- ')).length, 5);
   assert.match(explainPlain({ ...report(), verdict: '<x>' as never }), /could not be read/, 'an odd verdict is read as unknown');
+});
+
+test('the chat and the second opinion scan texts only in the guarded thread, never in the web layer\'s own (B4)', () => {
+  for (const f of ['../chat.ts', '../../server/app.ts']) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /\bscan(Text|String)\(/, f);
+    assert.match(src, /scanGuarded\(/, f);
+  }
 });

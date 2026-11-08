@@ -17,6 +17,7 @@ import { RULESET_SHA256 } from '../hooks/rules.ts';
 export type Mode = 'rules_only' | 'text' | 'vision';
 export type ModeReason =
   | 'hooks_fired'
+  | 'inspection_failed'
   | 'page_not_read'
   | 'no_model_configured'
   | 'budget'
@@ -88,7 +89,7 @@ function isPng(b: Uint8Array): boolean {
 
 export async function assess(input: AssessInput, deps: AssessDeps): Promise<Assessment> {
   const nowMs = (deps.now ?? Date.now)();
-  const rules = analyze(input.events, { injection: input.hooks.triggered, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null, fileReputation: input.fileReputation ?? null });
+  const rules = analyze(input.events, { injection: input.hooks.injection, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null, fileReputation: input.fileReputation ?? null });
   const notes: string[] = [];
   const result: Assessment = {
     verdict: rules.verdict,
@@ -112,7 +113,8 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
   };
 
   try {
-    if (input.hooks.triggered) return degrade('hooks_fired');
+    const fired = (): ModeReason => (input.hooks.injection ? 'hooks_fired' : 'inspection_failed');
+    if (input.hooks.triggered) return degrade(fired());
     // nothing of the site was read (a wall, an error, an empty page): the model would only guess, and a guess must not
     // turn "we could not see" into "suspicious"
     if (rules.verdict === 'unknown') return degrade('page_not_read');
@@ -125,7 +127,7 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
     const text = JSON.stringify(dossier.json);
 
     // the last look before the model: the dossier is built by us, but it is made of what the page said
-    if (input.hooks.scan('dossier', text)) return degrade('hooks_fired', 'the dossier itself tripped the hooks');
+    if (await input.hooks.scan('dossier', text)) return degrade(fired(), 'the dossier itself tripped the hooks');
 
     const nonce = (deps.nonce ?? (() => createHash('sha256').update(`${Math.random()}${nowMs}`).digest('hex').slice(0, 16)))();
     const body = `Review this dossier.\n<untrusted_data id="${nonce}">\n${text}\n</untrusted_data id="${nonce}">`;
@@ -155,7 +157,9 @@ export async function assess(input: AssessInput, deps: AssessDeps): Promise<Asse
 
     // the model may have repeated what the page told it: its words go through the hooks like any other
     const outputs = [answer.summary, ...answer.reasons.flatMap((x) => [x.claim, ...x.evidence])];
-    if (outputs.map((t) => input.hooks.scan('model', t)).some(Boolean)) return degrade('model_output_flagged', 'the model\'s own words tripped the hooks; its opinion is ignored');
+    let flagged = false;
+    for (const t of outputs) if (await input.hooks.scan('model', t)) flagged = true;
+    if (flagged) return degrade(input.hooks.injection ? 'model_output_flagged' : 'inspection_failed', 'the model\'s own words tripped the hooks; its opinion is ignored');
 
     result.mode = mode;
     result.mode_reason = null;

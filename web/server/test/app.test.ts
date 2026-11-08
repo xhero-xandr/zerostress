@@ -729,9 +729,10 @@ test('second opinion: asked on its own as soon as a check ends at a wall; kept w
   const s = scanner({ ok: true, opinion: { ...OPINION, source: 'submitted' }, screenshot: new Uint8Array(PNG) });
   const r = rig({ urlscan: s.urlscan });
   const j = await walledTask(r);
-  await tick();
+  // the page's title goes through the guarded hooks thread first, which may still be starting
+  let rep = await report(r, j.id);
+  for (let i = 0; i < 300 && !rep.second_opinion; i++) { await tick(); rep = await report(r, j.id); }
   assert.deepEqual(s.calls, [{ url: 'https://www.decathlon.si/' }], 'nobody pressed anything');
-  const rep = await report(r, j.id);
   assert.equal(rep.second_opinion.source, 'submitted');
   assert.equal(rep.second_opinion.final_host, 'www.decathlon.si');
   assert.equal(rep.second_opinion_state, null);

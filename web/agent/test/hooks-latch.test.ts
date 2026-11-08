@@ -69,6 +69,7 @@ test('hooks that fire while the model is thinking stop the action it proposes', 
     const real = createGuardedHooks();
     return {
       inspect: (e) => real.inspect(e),
+      scan: (p, t) => real.scan(p, t),
       state: () => (hostile ? makeState(true, [{ rule: 'test', category: 'override', strength: 'strong', place: 'console', view: 'raw', layer: 0, quote: '' }]) : real.state()),
       close: () => real.close(),
     };

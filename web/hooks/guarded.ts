@@ -8,6 +8,11 @@ import { Worker } from 'node:worker_threads';
 import { makeFinding, makeState, withholdEvent, type HookState, type Inspected } from './hooks.ts';
 import type { Finding } from './scan.ts';
 
+export interface TextScan {
+  triggered: boolean;
+  findings: Finding[];
+}
+
 export interface GuardedOptions {
   /** hard limit for one event, counted from the moment the thread is ready; default 2000 ms */
   timeoutMs?: number;
@@ -23,6 +28,11 @@ export interface GuardedOptions {
 
 export interface GuardedHooks {
   inspect(event: unknown): Promise<Inspected>;
+  /**
+   * Scans one text of ours (the dossier, the model's words, a chat question) in the thread, with the same deadline:
+   * a thread that is late or dies gives a finding of an inspection limit, never a pass. Does not change state().
+   */
+  scan(place: string, text: string): Promise<TextScan>;
   state(): HookState;
   /** stops the thread; the object must not be used afterwards */
   close(): Promise<void>;
@@ -45,6 +55,8 @@ export function createGuardedHooks(opts: GuardedOptions = {}): GuardedHooks {
   let last: HookState = makeState(false, []);
   let forced = false;
   const forcedFindings: Finding[] = [];
+  // what threads that were killed had found: a replacement starts empty, and their findings must not be lost (B5)
+  const carried: Finding[] = [];
 
   const force = (rule: string, place: string): Finding[] => {
     forced = true;
@@ -75,18 +87,20 @@ export function createGuardedHooks(opts: GuardedOptions = {}): GuardedHooks {
     return { w, ready };
   };
 
-  async function run(event: unknown): Promise<Inspected> {
+  // One request to the thread, with the deadline: its answer, or what a failure (rule) makes of it. A late, dead or
+  // never-ready thread is killed and a new one takes its place.
+  async function call<T>(msg: Record<string, unknown>, onReply: (m: Record<string, unknown>) => T, onFail: (rule: string) => T): Promise<T> {
     const s = (slot ??= spawn());
     if (!(await s.ready)) {
       if (slot === s) slot = null;
       void s.w.terminate();
-      return { event: withholdEvent(event), findings: force('hook_boot', 'event') };
+      return onFail('hook_boot');
     }
     const w = s.w;
     return new Promise((resolve) => {
       const id = ++seq;
       let done = false;
-      const finish = (r: Inspected, kill: boolean) => {
+      const finish = (r: T, kill: boolean) => {
         if (done) return;
         done = true;
         clearTimeout(timer);
@@ -94,16 +108,17 @@ export function createGuardedHooks(opts: GuardedOptions = {}): GuardedHooks {
         w.off('error', onError);
         w.off('exit', onExit);
         if (kill) {
+          for (const f of last.findings) if (carried.length < MAX_FINDINGS) carried.push(f);
+          last = makeState(last.triggered, []);
           if (slot?.w === w) slot = closed ? null : spawn(); // the replacement starts at once, so the next event finds it ready
           void w.terminate();
         }
         resolve(r);
       };
-      const fail = (rule: string) => finish({ event: withholdEvent(event), findings: force(rule, 'event') }, true);
-      const onMessage = (m: { id: number; result: Inspected; state: HookState }) => {
+      const fail = (rule: string) => finish(onFail(rule), true);
+      const onMessage = (m: Record<string, unknown>) => {
         if (m.id !== id) return;
-        last = m.state;
-        finish(m.result, false);
+        finish(onReply(m), false);
       };
       const onError = () => fail('hook_crash');
       const onExit = () => fail('hook_crash');
@@ -112,12 +127,18 @@ export function createGuardedHooks(opts: GuardedOptions = {}): GuardedHooks {
       w.on('error', onError);
       w.on('exit', onExit);
       try {
-        w.postMessage({ id, event });
+        w.postMessage({ id, ...msg });
       } catch {
         fail('hook_error'); // not cloneable: it cannot be inspected, so it does not go on
       }
     });
   }
+
+  const run = (event: unknown): Promise<Inspected> => call(
+    { event },
+    (m) => { last = m.state as HookState; return m.result as Inspected; },
+    (rule) => ({ event: withholdEvent(event), findings: force(rule, 'event') }),
+  );
 
   // The thread starts now, not with the first event: a task spends seconds booting its machine, and the thread boots
   // and warms up meanwhile.
@@ -140,8 +161,16 @@ export function createGuardedHooks(opts: GuardedOptions = {}): GuardedHooks {
       queue = next.catch(() => undefined);
       return next;
     },
+    scan(place, text) {
+      const failed = (rule: string): TextScan => ({ triggered: true, findings: [makeFinding(rule, place)] });
+      if (closed) return Promise.resolve(failed('hook_closed'));
+      if (typeof text !== 'string' || text.length > maxEventBytes) return Promise.resolve(failed('oversize'));
+      const next = queue.then(() => call({ scan: { place, text } }, (m) => m.scanned as TextScan, failed));
+      queue = next.catch(() => undefined);
+      return next;
+    },
     state() {
-      const findings = [...last.findings, ...forcedFindings].slice(0, MAX_FINDINGS);
+      const findings = [...carried, ...last.findings, ...forcedFindings].slice(0, MAX_FINDINGS);
       return makeState(last.triggered || forced, findings);
     },
     async close() {

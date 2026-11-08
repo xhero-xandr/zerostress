@@ -9,7 +9,7 @@ import { createFileDrop, FILE_MAX_BYTES, type FileDrop } from './files.ts';
 import type { FileVerdict } from '../agent/reputation.ts';
 import { DOMAIN, type SenderInfo } from './sender.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
-import { scanText } from '../hooks/index.ts';
+import { scanGuarded } from '../hooks/index.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -620,7 +620,7 @@ export function createApp(deps: AppDeps): Hono {
       }
       submitted.delete(t.id);
       // the title was written by the page: it goes through the hooks like any text of a page
-      const withheld = out.opinion.title !== '' && scanText('second_opinion', out.opinion.title).triggered;
+      const withheld = out.opinion.title !== '' && (await scanGuarded('second_opinion', out.opinion.title)).triggered;
       if (out.screenshot) deps.store.saveImage(t, 'second-opinion', out.screenshot);
       result.second_opinion = { ...out.opinion, title: withheld ? '' : out.opinion.title, title_withheld: withheld, screenshot: out.screenshot !== null };
       log('second_opinion', { source: out.opinion.source, ...(out.opinion.status !== null ? { status: out.opinion.status } : {}), ...(out.opinion.malicious !== null ? { malicious: out.opinion.malicious } : {}), host: (() => { try { return new URL(out.opinion.final_url).host; } catch { return ''; } })() });

@@ -13,7 +13,7 @@ import type { AgentConfig } from './config.ts';
 import { explainPlain } from './explain.ts';
 import type { Message, ModelClient, ResponseFormat } from './model.ts';
 import type { PublicReport } from './report.ts';
-import { scanText } from '../hooks/index.ts';
+import { scanGuarded } from '../hooks/index.ts';
 
 export const CHAT_SCHEMA: ResponseFormat = {
   name: 'chat_answer',
@@ -110,14 +110,14 @@ export async function reply(report: PublicReport, input: ChatInput, deps: ChatDe
     reason,
   });
   try {
-    if (input.kind === 'ask' && scanText('question', input.message).triggered) return rules('question_flagged');
+    if (input.kind === 'ask' && (await scanGuarded('question', input.message)).triggered) return rules('question_flagged');
     if (report.injection_attempt) return rules('hooks_fired');
     if (report.verdict === 'unknown') return rules('page_not_read');
     if (!deps.cfg.enabled || !deps.client) return rules('no_model');
 
     const view = JSON.stringify(modelView(report));
     // the last look before the model, as in assess.ts: the view is made of what the page and the network said
-    if (scanText('chat_context', view).triggered) return rules('hooks_fired');
+    if ((await scanGuarded('chat_context', view)).triggered) return rules('hooks_fired');
 
     const nonce = (deps.nonce ?? (() => createHash('sha256').update(`${Math.random()}${Date.now()}`).digest('hex').slice(0, 16)))();
     const question = input.kind === 'explain' ? EXPLAIN_QUESTION : input.message;
@@ -144,7 +144,7 @@ export async function reply(report: PublicReport, input: ChatInput, deps: ChatDe
     const text = cleanAnswer(answer);
     if (text === '' || grounded.length === 0) return rules('model_output_invalid');
     // the model may have repeated what the page told it: its words go through the hooks like any other
-    if (scanText('model', text).triggered) return rules('model_output_flagged');
+    if ((await scanGuarded('model', text)).triggered) return rules('model_output_flagged');
     return { text: text.length > MAX_ANSWER ? `${text.slice(0, MAX_ANSWER - 1)}…` : text, source: 'model', reason: null };
   } catch {
     return rules('model_unavailable');

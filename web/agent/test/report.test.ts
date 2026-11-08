@@ -53,6 +53,23 @@ test('public: the page is blamed for an injection only when the detectors fired 
   assert.equal(source({ ...r.hooks, triggered: true, findings: [{ ...f('model'), place: 'Model' }] }), 'page', 'exactly the place model');
 });
 
+test('public: a text that could not be inspected is no injection: no notice, nobody blamed, the reason told (B5)', async () => {
+  const r = await injection();
+  const limit = (rule: string, category: string, place = 'event') => ({ rule, category, strength: 'strong', place, layer: 0 });
+  const pub = (findings: unknown[]) => publicReport({ ...r, hooks: { ...r.hooks, triggered: true, findings }, assessment: { ...r.assessment, mode: 'rules_only', mode_reason: 'inspection_failed' } } as TaskResult);
+  for (const only of [[limit('hook_timeout', 'error')], [limit('oversize', 'size', 'page.text')], [limit('hook_crash', 'error'), limit('overflow', 'size', 'page.text')]]) {
+    const p = pub(only);
+    assert.equal(p.injection_attempt, false, JSON.stringify(only));
+    assert.equal(p.injection_source, null);
+    assert.match(p.mode_text ?? '', /could not be checked/);
+    assert.match(p.mode_text ?? '', /nothing against the page/);
+  }
+  const real = { ...r.hooks.findings[0]!, place: 'model' };
+  const mixed = pub([limit('hook_timeout', 'error'), real]);
+  assert.equal(mixed.injection_attempt, true, 'a real finding next to a failure still counts');
+  assert.equal(mixed.injection_source, 'answer', 'and is blamed on whoever spoke');
+});
+
 test('public: the page that addressed the model: the fact is told, the rule and the place are not', async () => {
   const r = await injection();
   assert.ok(r.hooks.findings.length > 0);

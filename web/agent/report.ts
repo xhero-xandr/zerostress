@@ -12,6 +12,7 @@
 // markup, script or an instruction (spec 007).
 
 import { cleanLog } from './agent-log.ts';
+import { isInspectionLimit, showsInjection } from '../hooks/index.ts';
 import { raise, type Verdict } from './signals.ts';
 import { ASK_CODES } from './fields.ts';
 import type { PublicFacts, PublicReport, PublicVerdict } from './report-types.ts';
@@ -73,6 +74,7 @@ export const UNTRUSTED: readonly string[] = [
 /** Our own sentence for each reason the model was not used (or not trusted). */
 export const MODE_TEXT: Readonly<Record<string, string>> = {
   hooks_fired: 'The page contains text addressed to an automated reader. The verdict comes from fixed rules only, and no model was asked.',
+  inspection_failed: 'Part of the page could not be checked for text addressed to an automated reader (it was too large, or the check ran out of time), so no model was asked. This says nothing against the page; the verdict comes from fixed rules.',
   page_not_read: 'The page itself was not seen, so there was nothing for a model to judge. No model was asked.',
   no_model_configured: 'No model was used. The verdict comes from fixed rules.',
   budget: 'The daily limit on model use was reached. The verdict comes from fixed rules.',
@@ -154,9 +156,11 @@ const SCAN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Only the model's answer tripped the detectors: every finding is in place 'model'. Anything else counts as the page's. */
 function injectionSource(hooks: unknown): PublicReport['injection_source'] {
   const h = o(hooks);
-  if (h.triggered !== true) return null;
-  const findings = list<Record<string, unknown>>(h.findings, 1000);
-  return findings.length > 0 && findings.every((f) => o(f).place === 'model') ? 'answer' : 'page';
+  const all = list<Record<string, unknown>>(h.findings, 1000).map((f) => ({ category: String(o(f).category), place: o(f).place }));
+  if (!showsInjection(h.triggered === true, all)) return null;
+  // only what spoke to a model counts here: a text that could not be inspected was nobody's message
+  const findings = all.filter((f) => !isInspectionLimit(f));
+  return findings.length > 0 && findings.every((f) => f.place === 'model') ? 'answer' : 'page';
 }
 
 function secondOpinion(x: unknown): PublicReport['second_opinion'] {
@@ -259,7 +263,7 @@ export function publicReport(r: TaskResult): PublicReport {
     reputation: reputationOf(r.reputation),
     second_opinion_state: r.file || secondOpinion(r.second_opinion) !== null || a.verdict !== 'unknown' || r.state !== 'done' ? null : r.second_opinion_error ? 'failed' : 'asking',
     mode_text: reason === null ? null : MODE_TEXT[reason]!,
-    injection_attempt: o(r.hooks).triggered === true,
+    injection_attempt: showsInjection(o(r.hooks).triggered === true, list<Record<string, unknown>>(o(r.hooks).findings, 1000).map((f) => ({ category: String(o(f).category) }))),
     injection_source: injectionSource(r.hooks),
     signals: list<Record<string, unknown>>(o(a.rules).signals, 40).map((x) => ({ id: s(x.id, 40), level: s(x.level, 10), text: s(x.text, 300) })),
     summary: typeof a.summary === 'string' ? a.summary.slice(0, 400) : null,

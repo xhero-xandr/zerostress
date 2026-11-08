@@ -23,8 +23,10 @@ export interface HookState {
   triggered: boolean;
   mode: Mode;
   require_confirmation: boolean;
-  /** signal for the rules that raise the risk (spec 008); null while nothing was found */
+  /** signal for the rules that raise the risk (spec 008); null while nothing was found, or only inspection limits */
   signal: 'injection_attempt' | null;
+  /** some text could not be inspected (see isInspectionLimit) */
+  inspection_failed: boolean;
   findings: Finding[];
   /** SHA-256 of the rule files that produced this state: kept with the run */
   ruleset: string;
@@ -72,6 +74,20 @@ export function withholdEvent(event: unknown): unknown {
   }
 }
 
+/**
+ * A finding that says a text could not be inspected (the thread was late or died, a string or an event was too large,
+ * the scan stopped counting), not that it spoke to a model. Such a text is still withheld and the task still goes on
+ * without the model, since nothing vouches for it; but it is no evidence against the page (review B5).
+ */
+export function isInspectionLimit(f: { category: string }): boolean {
+  return f.category === 'error' || f.category === 'size';
+}
+
+/** Whether findings show text aimed at a model; a latch with no findings at all is taken as one, to stay on the safe side. */
+export function showsInjection(triggered: boolean, findings: ReadonlyArray<{ category: string }>): boolean {
+  return triggered && (findings.length === 0 || findings.some((f) => !isInspectionLimit(f)));
+}
+
 export function makeFinding(rule: string, place: string): Finding {
   return { ...errorFinding(place), rule };
 }
@@ -81,7 +97,8 @@ export function makeState(triggered: boolean, findings: Finding[]): HookState {
     triggered,
     mode: triggered ? 'rules_only' : 'model',
     require_confirmation: triggered,
-    signal: triggered ? 'injection_attempt' : null,
+    signal: showsInjection(triggered, findings) ? 'injection_attempt' : null,
+    inspection_failed: findings.some(isInspectionLimit),
     findings: [...findings],
     ruleset: RULESET_SHA256,
   };

@@ -16,6 +16,7 @@
 import { serve } from '@hono/node-server';
 import { fileURLToPath } from 'node:url';
 import { loadPrompt } from '../agent/assess.ts';
+import { warmGuarded } from '../hooks/index.ts';
 import { createBudget } from '../agent/budget.ts';
 import { describeConfig, loadAgentConfig, loadScannerConfig } from '../agent/config.ts';
 import { createUrlScanClient } from '../agent/urlscan.ts';
@@ -92,6 +93,8 @@ const app = createApp({
 setInterval(() => { store.sweep(); }, 10 * 60_000).unref();
 
 const port = num('WEB_PORT', 8080);
+// the hooks thread for chat questions and second opinions boots now, not on the first visitor's request
+warmGuarded();
 serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) => {
   console.log(JSON.stringify({ at: new Date().toISOString(), msg: 'listening', port: info.port, agent: describeConfig(cfg), url_scanner: scanner.enabled }));
 });

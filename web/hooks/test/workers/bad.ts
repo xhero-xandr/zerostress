@@ -2,14 +2,20 @@
 // rest are handled by the real hooks.
 import { writeFileSync } from 'node:fs';
 import { parentPort } from 'node:worker_threads';
-import { createHooks, warmUp } from '../../hooks.ts';
+import { createHooks, scanText, warmUp } from '../../hooks.ts';
 
 const hooks = createHooks();
 const port = parentPort!;
 
 warmUp();
 port.postMessage({ ready: true });
-port.on('message', (m: { id: number; event: { mode?: string } }) => {
+port.on('message', (m: { id: number; event: { mode?: string }; scan?: { place: string; text: string } }) => {
+  if (m.scan) {
+    if (m.scan.text === 'hang') for (;;) { /* never returns */ }
+    const r = scanText(m.scan.place, m.scan.text);
+    port.postMessage({ id: m.id, scanned: { triggered: r.triggered, findings: r.findings } });
+    return;
+  }
   switch (m.event?.mode) {
     case 'hang':
       for (;;) { /* never returns */ }
