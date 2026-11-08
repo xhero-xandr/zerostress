@@ -59,13 +59,15 @@ func cmdResultLine(id string, ok bool, errCode string) string {
 // Script says what the fake host does for a run. The zero value is a run that succeeds with no output.
 type Script struct {
 	PrepareDiskFail bool
-	NetUpFail       bool
-	StartFail       bool
-	Ready           string // "", "timeout" or "crash"
-	Lines           []string
-	LineDelay       time.Duration
-	Hang            bool // keep the stream open after the lines until the run is aborted
-	CrashAtLine     *int // the VM dies right before this line (index) is delivered
+	// Stuck, while true, keeps the VM's unit from ending when it is stopped (Gone is false)
+	Stuck       *atomic.Bool
+	NetUpFail   bool
+	StartFail   bool
+	Ready       string // "", "timeout" or "crash"
+	Lines       []string
+	LineDelay   time.Duration
+	Hang        bool // keep the stream open after the lines until the run is aborted
+	CrashAtLine *int // the VM dies right before this line (index) is delivered
 	// Session scripts: called for every command line the supervisor sends. Default: answer with cmd_result and end
 	// the stream on close.
 	OnCommand func(cmd map[string]any, vm *FakeVM)
@@ -262,6 +264,8 @@ func (v *FakeVM) Stop() {
 }
 
 func (v *FakeVM) Console() string { return "" }
+
+func (v *FakeVM) Gone() bool { return v.script.Stuck == nil || !v.script.Stuck.Load() }
 
 type FakeBackend struct {
 	scriptFor func(runID string) Script

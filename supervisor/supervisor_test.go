@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -631,4 +633,32 @@ func TestCore_VMDyingWhileShuttingDownIsRestartNotCrash(t *testing.T) {
 		t.Fatalf("reason %q", coreTReason(v))
 	}
 	h.Backend.AssertClean(t)
+}
+
+// A VM whose unit does not end when stopped keeps its slot: the next run waits in the queue (every VM of a slot runs
+// as the slot's user), health says so, and the slot comes back once the unit is gone (review E).
+func TestCore_AVMThatDoesNotEndKeepsItsSlot(t *testing.T) {
+	stuck := &atomic.Bool{}
+	stuck.Store(true)
+	h := newHarness(t, map[string]Script{"/a": {Stuck: stuck}, "*": {}}, func(c *Config) { c.Concurrency = 1 })
+	h.start(t)
+	a := h.submit(t, "/a")
+	h.finished(t, a)
+	b := h.submit(t, "/b")
+	time.Sleep(300 * time.Millisecond) // many sweeps (20 ms each): the slot must stay held
+	if st := h.state(b); st != StateQueued {
+		t.Fatalf("b is %s while a's VM is still there", st)
+	}
+	if hl := h.Sup.Health(); hl.OK || hl.Quarantined != 1 {
+		t.Fatalf("health with the only slot held: ok=%v quarantined=%d", hl.OK, hl.Quarantined)
+	}
+	stuck.Store(false)
+	h.finished(t, b)
+	if hl := h.Sup.Health(); !hl.OK || hl.Quarantined != 0 {
+		t.Fatalf("health after the VM is gone: ok=%v quarantined=%d", hl.OK, hl.Quarantined)
+	}
+	if !slices.ContainsFunc(h.Logs(), func(l string) bool { return strings.Contains(l, "slot is held") }) {
+		t.Fatal("holding the slot was not logged")
+	}
+	h.idle(t)
 }

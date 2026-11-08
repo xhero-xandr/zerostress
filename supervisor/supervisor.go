@@ -91,6 +91,7 @@ type Supervisor struct {
 	active      map[string]*activeRun
 	sessions    map[string]*SessionCommands // kept after the run ends (everything voided) so the totals stay readable
 	sessionRuns int
+	quarantined map[int]VM // slots whose VM did not end when stopped: kept from new runs until it is gone
 	listeners   map[string]map[*subscriber]struct{}
 	seqs        map[string]int
 
@@ -102,11 +103,12 @@ func NewSupervisor(d Deps) *Supervisor {
 	s := &Supervisor{
 		cfg: d.Config, store: d.Store, results: d.Results, artifacts: d.Artifacts, backend: d.Backend, log: d.Log,
 		now: d.Now, freeGB: d.FreeGB, imageSH: d.ImageSHA256, sweep: d.SweepEvery,
-		pool:      NewSlotPool(d.Config.Concurrency),
-		active:    map[string]*activeRun{},
-		sessions:  map[string]*SessionCommands{},
-		listeners: map[string]map[*subscriber]struct{}{},
-		seqs:      map[string]int{},
+		pool:        NewSlotPool(d.Config.Concurrency),
+		active:      map[string]*activeRun{},
+		sessions:    map[string]*SessionCommands{},
+		listeners:   map[string]map[*subscriber]struct{}{},
+		seqs:        map[string]int{},
+		quarantined: map[int]VM{},
 	}
 	if s.log == nil {
 		s.log = nullLogger
@@ -151,6 +153,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	s.mu.Unlock()
 
 	go s.every(bg, s.sweep, s.sweepQueue)
+	go s.every(bg, s.sweep, s.releaseGone)
 	go s.every(bg, 10*time.Minute, func() {
 		s.mu.Lock()
 		s.removeExpiredLocked()
@@ -400,16 +403,51 @@ type Health struct {
 	Running     int            `json:"running"`
 	Queued      int            `json:"queued"`
 	Sessions    SessionsHealth `json:"sessions"`
-	FreeGB      *int           `json:"free_gb"`
-	ImageSHA256 *string        `json:"image_sha256"`
+	// Quarantined counts the slots held back because their VM did not end; ok is false when none is left to run on
+	Quarantined int     `json:"quarantined"`
+	FreeGB      *int    `json:"free_gb"`
+	ImageSHA256 *string `json:"image_sha256"`
+}
+
+// releaseGone gives back the slots of quarantined VMs that have ended since, and starts what waits for them.
+func (s *Supervisor) releaseGone() {
+	s.mu.Lock()
+	held := make(map[int]VM, len(s.quarantined))
+	for slot, v := range s.quarantined {
+		held[slot] = v
+	}
+	s.mu.Unlock()
+	if len(held) == 0 {
+		return
+	}
+	var gone []int
+	for slot, v := range held {
+		if v.Gone() {
+			gone = append(gone, slot)
+		}
+	}
+	if len(gone) == 0 {
+		return
+	}
+	s.mu.Lock()
+	for _, slot := range gone {
+		delete(s.quarantined, slot)
+		s.pool.Release(slot)
+	}
+	s.pumpLocked()
+	s.mu.Unlock()
+	for _, slot := range gone {
+		s.log("info", "slot released: its VM is gone", map[string]any{"slot": slot})
+	}
 }
 
 func (s *Supervisor) Health() Health {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	h := Health{
-		OK: true, Version: version, Concurrency: s.cfg.Concurrency, Running: len(s.active), Queued: len(s.queue),
-		Sessions: SessionsHealth{Running: s.sessionRuns, Limit: s.cfg.SessionSlots},
+		OK: len(s.quarantined) < s.cfg.Concurrency, Version: version, Concurrency: s.cfg.Concurrency, Running: len(s.active),
+		Queued: len(s.queue), Sessions: SessionsHealth{Running: s.sessionRuns, Limit: s.cfg.SessionSlots},
+		Quarantined: len(s.quarantined),
 	}
 	if g := s.freeGB(); !math.IsInf(g, 0) {
 		v := int(math.Floor(g))

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -288,6 +289,21 @@ func (v *firecrackerVM) Console() string { return v.console.String() }
 // Stop stops the unit (SIGTERM; verified to end Firecracker in well under a second) and waits until the helper has
 // returned, which happens only after ExecStopPost has torn the slot's network down. The slot must not be reused
 // before that, or a late "zsnet down" could remove the network of the next VM on the same slot.
+func (v *firecrackerVM) Gone() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, "/usr/bin/systemctl", "show", "-p", "ActiveState", "--value", "zsvm-"+v.runID+".service")
+	c.Env = cleanEnv
+	out, err := c.Output()
+	if err != nil {
+		// systemd did not answer: judge by the helper as before, rather than hold every slot forever
+		return v.isDead()
+	}
+	// a collected unit is "inactive" too
+	st := strings.TrimSpace(string(out))
+	return st == "inactive" || st == "failed"
+}
+
 func (v *firecrackerVM) Stop() {
 	v.mu.Lock()
 	if v.stopped {

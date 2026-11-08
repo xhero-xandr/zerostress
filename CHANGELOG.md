@@ -14,6 +14,7 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 
 ### Security
 - Firecracker no longer runs as the supervisor's user. Each slot has a user of its own (`zerostress-vm0` to `zerostress-vm3`), which owns nothing but its run directory (handed to the slot's group by the supervisor before boot) and its tap; the microVM's unit shows it an empty `/zerostress` with only the binaries, the kernel and that directory, and `ProtectProc=invisible`. Before, an escape into the Firecracker process reached the supervisor's API (and could approve its own risky commands), other microVMs' directories, the supervisor's state and settings, and could signal the supervisor. `deploy/test/zsvm-isolation.sh` checks all of it from inside the very sandbox Firecracker gets; `./zs verify` checks the users.
+- A microVM whose unit does not end when stopped keeps its slot until it does: the next run of the slot (same user, since Firecracker runs as the slot's user) waits instead. `/v1/health` counts such slots (`quarantined`) and is no longer always `ok`; `./zs verify` checks it.
 
 ## [0.9.1] - 2026-11-08
 

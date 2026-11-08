@@ -405,7 +405,7 @@ func TestAPI_HealthReportsSlotsQueueAndImageChecksum(t *testing.T) {
 		_ = json.Unmarshal([]byte(text), &got)
 		want := map[string]any{
 			"ok": true, "version": version, "concurrency": 2.0, "running": 0.0, "queued": 0.0,
-			"sessions": map[string]any{"running": 0.0, "limit": 1.0}, "free_gb": 94.0, "image_sha256": "abc123",
+			"sessions": map[string]any{"running": 0.0, "limit": 1.0}, "quarantined": 0.0, "free_gb": 94.0, "image_sha256": "abc123",
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("health = %s", text)

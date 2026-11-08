@@ -130,6 +130,10 @@ type VM interface {
 	Exited() <-chan struct{}
 	// Stop ends the VM (SIGTERM, then SIGKILL after a short grace) and returns when it is gone.
 	Stop()
+	// Gone reports whether the VM's unit is really over. Stop gives up after its timeouts on a unit that does not
+	// end (a process stuck in the kernel); its slot must not go to the next VM before Gone, since every VM of a slot
+	// runs as the slot's user (review E).
+	Gone() bool
 	// Console returns the last bytes of the VM console (diagnostics only, untrusted).
 	Console() string
 }

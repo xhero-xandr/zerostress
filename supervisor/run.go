@@ -367,6 +367,8 @@ func (r *runExec) teardown() {
 	if r.vm != nil {
 		r.vm.Stop()
 	}
+	// a VM that is still there keeps its slot: the next VM of the slot would run as the same user (review E)
+	gone := r.vm == nil || r.vm.Gone()
 	bg := context.Background()
 	if r.netTouched {
 		if err := s.backend.NetDown(bg, r.slot, id); err != nil {
@@ -377,7 +379,11 @@ func (r *runExec) teardown() {
 		s.log("error", "removeRunDir failed", map[string]any{"run_id": id, "detail": clip(err.Error(), 200)})
 	}
 	s.mu.Lock()
-	s.pool.Release(r.slot)
+	if gone {
+		s.pool.Release(r.slot)
+	} else {
+		s.quarantined[r.slot] = r.vm
+	}
 	if r.rec.Session != nil {
 		s.sessionRuns--
 	}
@@ -390,6 +396,9 @@ func (r *runExec) teardown() {
 		rec.Events = s.seqs[id]
 	})
 	s.mu.Unlock()
+	if !gone {
+		s.log("error", "the VM did not end: its slot is held until it does", map[string]any{"run_id": id, "slot": r.slot})
+	}
 	s.log("info", "run finished", map[string]any{"run_id": id, "state": r.out.state, "reason": r.out.reason})
 	s.mu.Lock()
 	s.pumpLocked()

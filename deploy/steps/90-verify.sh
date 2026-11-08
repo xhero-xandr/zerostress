@@ -22,6 +22,7 @@ check "supervisor answers on run/supervisor.sock" curl -fsS --max-time 5 --unix-
 check "web service answers on 127.0.0.1:8080" curl -fsS --max-time 5 http://127.0.0.1:8080/healthz
 REL=$(tr -d '[:space:]' < "$S/VERSION")
 check "the running supervisor is of release $REL" bash -c "curl -fsS --max-time 5 --unix-socket '$S/run/supervisor.sock' http://localhost/v1/health | grep -Eq '\"version\": *\"${REL//./\\.}(-dev)?(\\+[^\"]*)?\"'"
+check "no slot is held back by a VM that did not end (the supervisor's health)" bash -c "curl -fsS --max-time 5 --unix-socket '$S/run/supervisor.sock' http://localhost/v1/health | grep -Eq '\"ok\": *true.*\"quarantined\": *0'"
 check "guest image is installed" test -s "$S/images/guest-rootfs.ext4"
 check "node is v$NODE_VERSION" bash -c "'$S/runtime/node/bin/node' --version | grep -qx v$NODE_VERSION"
 check "firecracker is $FC_VERSION" bash -c "'$S/bin/firecracker' --version | grep -q $FC_VERSION"
