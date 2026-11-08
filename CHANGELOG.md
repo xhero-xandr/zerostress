@@ -20,6 +20,9 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 - The injection detectors tell a text they could not inspect from one that spoke to a model. A thread that ran out of time or died, or a string or event too large to inspect, still keeps the text and the model apart (rules only), but it no longer counts as an injection attempt: no signal raises the verdict, and the report says that part of the page could not be checked, not that it addressed an automated reader. Findings of a thread that had to be replaced are kept.
 - Every text of ours that goes through the detectors (the dossier, the model's words, chat questions and answers, a second opinion's title) is scanned in a worker thread with a deadline, like the page's events; before, they were scanned in the web layer's own thread with no limit, where a runaway pattern could hold every request.
 
+### Changed
+- One vCPU per microVM by default (`SUP_VCPU=1`, was 2). Measured with the real collector on heavy sites: with three checks at once on the 2-vCPU host a check finishes 3 to 7 seconds sooner and boots faster, a single check on an idle host is 5 to 15% slower, and one guest can no longer take both host CPUs from the site and the other microVMs.
+
 ## [0.9.1] - 2026-11-08
 
 ### Added
