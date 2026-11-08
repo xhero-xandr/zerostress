@@ -35,7 +35,7 @@ export function Report({ status, tab }: { status: TaskStatus; tab: Tab }) {
   // while Cloudflare is being asked about a wall (on its own, by the server), the report is read again until it answers
   const report = useQuery({ queryKey: ['report', status.id], queryFn: () => getReport(status.id), staleTime: Infinity, refetchInterval: (q) => (q.state.data?.second_opinion_state === 'asking' ? 4000 : false) });
   const explain = useRef<{ open: () => void }>(null);
-  // the task key lives in the fragment (#k=...): every link between the sections carries it along
+  // a key still in the fragment (when this tab could not keep it, task-key.ts) goes along between the sections
   const { hash } = useLocation();
   if (report.isPending) return <Page><p className="sr-only" role="status">Loading…</p></Page>;
   if (report.isError) return <Message title={T.failedTitle} text={T.loadFailed} />;

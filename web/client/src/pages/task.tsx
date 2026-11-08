@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { useTaskKey } from '../task-key.ts';
 import { ApiError, getStatus, type TaskStatus } from '../api.ts';
 import type { LogEntry } from '../../../agent/agent-log.ts';
 import { asLogEntry, isTaskId } from '../logic.ts';
@@ -99,6 +100,8 @@ function Progress({ status }: { status: TaskStatus }) {
 
 export function Task() {
   const { id, tab: section } = useParams();
+  // the owner's key leaves the address as soon as the page opens (task-key.ts)
+  useTaskKey(isTaskId(id) ? id : '');
   // the summary lives at /r/:id only; /r/:id/summary is not an address (the server answers 404 for it as well)
   const tab = section ?? 'summary';
   const status = useQuery({

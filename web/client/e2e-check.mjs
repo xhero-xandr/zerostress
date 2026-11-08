@@ -127,7 +127,10 @@ try {
   await page.getByRole('button', { name: 'A fake sign-in page' }).click();
   check((await page.getByLabel(/Something suspicious/).inputValue()) === 'https://login.northwind-mail.example/start', 'an example fills the field');
   await page.getByRole('button', { name: 'Check link' }).click();
-  await page.waitForURL(/\/r\/[0-9a-f]{32}#k=/);
+  await page.waitForURL(/\/r\/[0-9a-f]{32}/);
+  // the owner's key leaves the address at once and stays with the tab (src/task-key.ts)
+  await page.waitForFunction(() => location.hash === '');
+  check(true, 'the key left the address');
   const reportUrl = page.url();
   const id = /\/r\/([0-9a-f]{32})/.exec(reportUrl)[1];
   await page.getByText('Checking the link').waitFor();
@@ -151,7 +154,7 @@ try {
   for (const [tab, heading] of [['Security', 'The domain'], ['Network', 'Servers it talked to'], ['Links', 'Links on the page'], ['Behavior', 'What the agent did']]) {
     await page.getByRole('link', { name: tab, exact: true }).click();
     await page.getByRole('heading', { name: heading }).waitFor();
-    check(new URL(page.url()).hash.startsWith('#k='), `${tab}: the key stays in the fragment`);
+    check(!new URL(page.url()).hash.includes('k='), `${tab}: no key in the address`);
     if (tab === 'Behavior') check(await page.getByText('Downloaded the file inside the sandbox, after your approval').isVisible(), 'the report says what came of the decision');
     await shot(page, `e2e-04-tab-${tab.toLowerCase()}`);
     await clean(page, `tab ${tab}`);

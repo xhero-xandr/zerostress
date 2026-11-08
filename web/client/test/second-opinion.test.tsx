@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { SecondOpinion } from '../src/pages/second-opinion.tsx';
 import { EVIL, ID, unread } from './fixtures.ts';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); });
 const KEY = 'k'.repeat(43);
 const OPINION = { source: 'submitted', scan_id: '11111111-2222-4333-8444-555555555555', scanned_at: '2026-11-07T12:00:00.000Z', final_host: 'www.decathlon.si', status: 200, title: `Decathlon ${EVIL}`, title_withheld: false, malicious: false, screenshot: true };
 const show = (hash: string, state: 'asking' | 'failed' = 'failed') => render(

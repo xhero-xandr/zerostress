@@ -2,16 +2,16 @@
 // key after "#k=") can ask; anyone with the report sees the answer. Every text in the answer came from a page: text only.
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useLocation } from 'react-router';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { ApiError, askSecondOpinion, secondOpinionShotUrl, type SecondOpinion as Opinion } from '../api.ts';
-import { fmtTime, keyFromHash } from '../logic.ts';
+import { fmtTime } from '../logic.ts';
+import { useTaskKey } from '../task-key.ts';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { btnPrimary, Card, Fact, Facts, LevelPill, Notice } from '../ui.tsx';
 
 export function SecondOpinion({ r, id }: { r: PublicReport; id: string }) {
-  const key = keyFromHash(useLocation().hash);
+  const key = useTaskKey(id);
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

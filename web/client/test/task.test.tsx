@@ -9,7 +9,7 @@ import { hostile, ID, status } from './fixtures.ts';
 import { Approval } from '../src/pages/approval.tsx';
 import { Task } from '../src/pages/task.tsx';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); });
 
 const json = (body: unknown, code = 200) => Promise.resolve(new Response(JSON.stringify(body), { status: code, headers: { 'content-type': 'application/json' } }));
 
@@ -110,5 +110,39 @@ describe("the owner's decision", () => {
     fireEvent.click(allow);
     expect(await screen.findByText('try later')).toBeTruthy();
     await waitFor(() => expect((allow as HTMLButtonElement).disabled).toBe(false));
+  });
+});
+
+describe("the owner's key", () => {
+  test('leaves the address at once and stays with the tab: a copied address carries no right to decide', async () => {
+    sessionStorage.clear();
+    vi.stubGlobal('fetch', () => json({ pending: [{ command_id: 'c1', command_sha256: 'a'.repeat(64), label: 'Download invoice.pdf' }] }));
+    const key = 'k'.repeat(32);
+    const router = createMemoryRouter([{ path: '/r/:id/:tab?', element: <Approval id={ID} /> }], { initialEntries: [`/r/${ID}#k=${key}`] });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><RouterProvider router={router} /></QueryClientProvider>);
+    expect(await screen.findByRole('button', { name: T.allow })).toBeTruthy();
+    await waitFor(() => expect(router.state.location.hash).toBe(''));
+    expect(router.state.location.pathname).toBe(`/r/${ID}`);
+    expect(sessionStorage.getItem(`zs-task-key:${ID}`)).toBe(key);
+
+    // the same tab opens the report again without the fragment: still the owner
+    cleanup();
+    const again = createMemoryRouter([{ path: '/r/:id/:tab?', element: <Approval id={ID} /> }], { initialEntries: [`/r/${ID}`] });
+    render(<QueryClientProvider client={new QueryClient()}><RouterProvider router={again} /></QueryClientProvider>);
+    expect(await screen.findByRole('button', { name: T.allow })).toBeTruthy();
+  });
+
+  test('a tab that cannot keep it leaves it in the address, so the owner does not lose it', async () => {
+    vi.stubGlobal('fetch', () => json({ pending: [{ command_id: 'c1', command_sha256: 'a'.repeat(64), label: 'Download invoice.pdf' }] }));
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage off'); });
+    try {
+      const router = createMemoryRouter([{ path: '/r/:id/:tab?', element: <Approval id={ID} /> }], { initialEntries: [`/r/${ID}#k=${'q'.repeat(32)}`] });
+      render(<QueryClientProvider client={new QueryClient()}><RouterProvider router={router} /></QueryClientProvider>);
+      expect(await screen.findByRole('button', { name: T.allow })).toBeTruthy();
+      expect(router.state.location.hash).toBe(`#k=${'q'.repeat(32)}`);
+    } finally {
+      setItem.mockRestore();
+    }
   });
 });

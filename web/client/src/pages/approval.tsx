@@ -1,15 +1,14 @@
-// The owner's decision (spec 007, 3.6). Only someone holding the task key (after "#k=") sees the buttons; the key is
+// The owner's decision (spec 007, 3.6). Only someone holding the task key (task-key.ts) sees the buttons; the key is
 // sent in the X-Task-Key header and nowhere else.
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useLocation } from 'react-router';
 import { ApiError, decide, getPending } from '../api.ts';
-import { keyFromHash } from '../logic.ts';
+import { useTaskKey } from '../task-key.ts';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary } from '../ui.tsx';
 
 export function Approval({ id }: { id: string }) {
-  const key = keyFromHash(useLocation().hash);
+  const key = useTaskKey(id);
   const pending = useQuery({ queryKey: ['pending', id], queryFn: () => getPending(id, key), enabled: key !== '', retry: false });
   const [result, setResult] = useState('');
   const [sent, setSent] = useState(false);
