@@ -250,7 +250,10 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
         // whole words in the text too: "purchase" does not name Chase
         const named = b.words.some((w) => word(w, title)) || (hasPassword && b.words.some((w) => word(w, body)));
         if (named && loginish && !belongsTo(b, here.hostname)) {
-          addOnce('brand_domain_mismatch', hasPassword ? 'high' : 'medium', `The page presents itself as ${b.words[0]!} but its address is ${sld(here.hostname)}.`, [v.at]);
+          const brand = b.words[0]!.charAt(0).toUpperCase() + b.words[0]!.slice(1);
+          addOnce('brand_domain_mismatch', hasPassword ? 'high' : 'medium', of('subject').some(([e]) => e.what === 'uploaded_file')
+            ? `The page presents itself as ${brand}, but it is a file someone sent, not ${brand}'s site.`
+            : `The page presents itself as ${brand} but its address is ${sld(here.hostname)}.`, [v.at]);
           break;
         }
       }
@@ -269,7 +272,9 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
     // a disguise such as "invoice.pdf.exe" ends in the executable extension, so the last one decides
     if (EXECUTABLE_EXTENSIONS.has(ext)) exec.push(i);
   }
-  if (exec.length) add('executable_download', 'high', 'A file that can run programs, or that is disguised as a document, was offered for download.', exec);
+  // a file handed over to be checked is judged by what is inside it (below), not as something a page offered
+  const uploaded = of('subject').some(([e]) => e.what === 'uploaded_file');
+  if (exec.length && !uploaded) add('executable_download', 'high', 'A file that can run programs, or that is disguised as a document, was offered for download.', exec);
 
   // ---- a file, as the collector read it inside the sandbox (guest/collector/lib/file.mjs) ----
   // Only the guest opened it; here are its findings, of a fixed set, each with the weight it carries.

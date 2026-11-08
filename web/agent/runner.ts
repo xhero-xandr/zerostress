@@ -601,12 +601,12 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       const seen = events.slice(v.start, v.end).filter((e) => !(isObj(e) && (e.kind === 'cmd_result' || e.kind === 'snapshot')));
       const pages = seen.filter((e): e is Ev => isObj(e) && e.kind === 'page');
       const final = typeof pages.at(-1)?.url === 'string' ? String(pages.at(-1)!.url) : v.url;
-      evs = [{ kind: 'nav', via: 'requested', from: '', to: v.url }, ...own, ...seen, { kind: 'summary', final_url: final, nav_error: null }];
+      evs = [{ kind: 'subject', what: 'uploaded_file' }, { kind: 'nav', via: 'requested', from: '', to: v.url }, ...own, ...seen, { kind: 'summary', final_url: final, nav_error: null }];
       const saved = new Set(artifacts.filter((a) => a.mime === 'image/png').map((a) => a.name));
       const file = seen.filter((e): e is Ev => isObj(e) && e.kind === 'artifact' && e.saved === true && e.mime === 'image/png').map((e) => String(e.file)).at(-1);
       shot = v.shot && file && saved.has(file) ? file : null;
     } else {
-      evs = [...own, { kind: 'summary', final_url: f.url, nav_error: read ? 'file' : 'not_opened' }];
+      evs = [{ kind: 'subject', what: 'uploaded_file' }, ...own, { kind: 'summary', final_url: f.url, nav_error: read ? 'file' : 'not_opened' }];
     }
     let png: Buffer | null = null;
     if (shot && deps.cfg.vision) { try { png = await deps.sup.artifact(runId, shot, SHOT_MAX); } catch { png = null; } }

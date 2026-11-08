@@ -27,7 +27,20 @@ export function noFindingsText(r: Pick<PublicReport, 'verdict' | 'mode' | 'secon
 export const seriousCount = (r: PublicReport): number => r.signals.filter((s) => s.level === 'high' || s.level === 'medium').length;
 
 /** The one sentence under the verdict. A warning by the site's own provider and the kinds of "could not check" each get their own. */
+/** a page our sandbox could not see, about which nothing known is bad: Google, Spamhaus and VirusTotal have nothing on
+ * it, and Cloudflare's scanner saw the page itself (HTTP 200) and found it clean. The verdict stays "could not check":
+ * only the words say what others know. */
+export function cleanElsewhere(r: PublicReport): boolean {
+  const p = r.reputation;
+  return r.verdict === 'unknown' && !!p && p.google !== null && p.google.length === 0 && p.spamhaus === 'clean' && !!p.virustotal && p.virustotal.malicious + p.virustotal.suspicious === 0
+    && r.second_opinion?.malicious === false && r.second_opinion.status === 200;
+}
+
+/** the report's headline */
+export const headline = (r: PublicReport): string => (cleanElsewhere(r) ? T.rep.cleanTitle : T.verdict[r.verdict]);
+
 export function verdictLine(r: PublicReport): string {
+  if (cleanElsewhere(r)) return T.rep.reassure;
   const has = (id: string) => r.signals.some((x) => x.id === id);
   if (has('provider_warning')) return T.providerWarning;
   if (r.verdict !== 'unknown') return T.verdictLine[r.verdict];

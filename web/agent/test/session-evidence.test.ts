@@ -113,3 +113,13 @@ test('sites contacted by a page the agent opened are not counted against the lin
   own.splice(3, 0, ...Array.from({ length: 12 }, (_, i) => ev('request', { url: `https://cdn${i}.paypal-assets.example/x.js`, resource_type: 'script', status: 200 })));
   assert.ok(analyze(own).signals.some((s) => s.id === 'many_third_parties'));
 });
+
+test('the model is told when the thing checked is a file someone handed over, and sees its findings, never its content', () => {
+  const file = ev('file', { filename: 'Invoice.docm', file_type: 'ooxml', bytes: 900, findings: [{ id: 'macros', detail: 'word/vbaProject.bin' }], links: ['https://t.evil.example/t.dotm'], ext_mismatch: false, double_extension: false });
+  const evs = [ev('subject', { what: 'uploaded_file' }), ev('download', { url: 'https://zerostress.space/f/x', filename: 'Invoice.docm', saved: true }), file, ev('summary', { final_url: 'https://zerostress.space/f/x', nav_error: 'file' })];
+  const d = buildDossier(evs, analyze(evs), 'text').json as { subject?: string; files: Array<{ type: string; findings: string[]; link_hosts: string[] }> };
+  assert.equal(d.subject, 'uploaded_file');
+  assert.deepEqual(d.files, [{ filename: 'Invoice.docm', type: 'ooxml', bytes: 900, name_hides_type: false, findings: ['macros'], link_hosts: ['t.evil.example'] }]);
+  assert.equal(JSON.stringify(d).includes('vbaProject'), false, 'a finding\'s detail is not shown');
+  assert.equal((buildDossier(evs.slice(1), analyze(evs.slice(1)), 'text').json as { subject?: string }).subject, undefined, 'a download in a deep check is not one');
+});

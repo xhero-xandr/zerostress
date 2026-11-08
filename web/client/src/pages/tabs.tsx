@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { shotUrl, type TaskStatus } from '../api.ts';
-import { agentLines, ageWords, confidenceWord, countryName, deadLinks, devicesSummary, findings, injectionText, noFindingsText, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
+import { agentLines, ageWords, headline, confidenceWord, countryName, deadLinks, devicesSummary, findings, injectionText, noFindingsText, redirects, seriousCount, serversLine, verdictLine } from '../logic.ts';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { SecondOpinion } from './second-opinion.tsx';
@@ -22,22 +22,15 @@ function VerdictCard({ r }: R) {
       <div className="flex flex-wrap items-center gap-3.5">
         <span className={`flex size-13 flex-none items-center justify-center rounded-2xl ${v.tile}`}><v.Icon className="size-7" aria-hidden /></span>
         <div className="flex flex-col gap-0.5">
-          <h1 id="verdict" className={`text-3xl leading-tight font-extrabold ${v.text}`}>{T.verdict[r.verdict]}</h1>
+          <h1 id="verdict" className={`text-3xl leading-tight font-extrabold ${v.text}`}>{headline(r)}</h1>
           {r.verdict !== 'unknown' && <span className="text-[15px] text-muted">{confidenceWord(r.confidence)}</span>}
         </div>
       </div>
       <p className="text-[17px] leading-relaxed">{verdictLine(r)}</p>
-      {cleanElsewhere(r) && <p className="text-[15px] leading-relaxed text-muted">{T.rep.reassure}</p>}
     </section>
   );
 }
 
-/** a page we could not see, about which nothing known is bad: Google, Spamhaus, VirusTotal and Cloudflare's scan */
-function cleanElsewhere(r: PublicReport): boolean {
-  const p = r.reputation;
-  return r.verdict === 'unknown' && !!p && p.google !== null && p.google.length === 0 && p.spamhaus === 'clean' && !!p.virustotal && p.virustotal.malicious + p.virustotal.suspicious === 0
-    && r.second_opinion?.malicious === false && r.second_opinion.status === 200;
-}
 
 function ReputationCard({ r }: R) {
   const p = r.reputation;

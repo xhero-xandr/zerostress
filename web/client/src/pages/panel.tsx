@@ -7,7 +7,7 @@ import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
 import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startEmailCheck, startTask, type Pending, type TaskStatus } from '../api.ts';
 import { EXTENSION_ORIGIN } from '../extension.ts';
-import { asLink, asLogEntry, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
+import { asLink, asLogEntry, headline, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
 import { linksToCheck, looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
 import { EmailLinks } from '../email-links.tsx';
@@ -254,7 +254,7 @@ export function Panel() {
           const serious = r.signals.filter((s) => s.level === 'high' || s.level === 'medium').slice(0, 4);
           return (
             <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
-              <p className={`font-bold ${r.verdict === 'malicious' ? 'text-danger' : r.verdict === 'benign' ? 'text-accent' : ''}`}>{P.verdictLead} {T.verdict[r.verdict]}</p>
+              <p className={`font-bold ${r.verdict === 'malicious' ? 'text-danger' : r.verdict === 'benign' ? 'text-accent' : ''}`}>{P.verdictLead} {headline(r)}</p>
               <p>{verdictLine(r)}</p>
               {serious.length > 0 && <ul className="mt-1.5 list-disc pl-5 text-[13px] text-muted">{serious.map((s) => <li key={s.id}>{s.text}</li>)}</ul>}
               {r.email && <div className="mt-2 text-[13px]"><p className="mb-1.5 text-faint">{T.mail.linksIntro(r.email.links.length)}</p><EmailLinks r={r} id={it.id} compact /></div>}

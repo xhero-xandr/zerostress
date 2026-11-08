@@ -55,7 +55,8 @@ export const T = {
     spamhausListed: (why: string) => `listed for ${why.replace(/^abused_/, '').replace('phish', 'phishing')}${why.startsWith('abused_') ? ' (an abused legitimate site)' : ''}`,
     vt: (bad: number, total: number) => (bad === 0 ? `no engine flags the domain (${total} checked)` : `${bad} of ${total} engines flag the domain`),
     intro: 'Asked without opening anything: the address, and the domain it led to. A listing raises our verdict; a clean record never lowers it.',
-    reassure: 'Our sandbox could not see the page, but nothing known speaks against it: Google, Spamhaus and VirusTotal have nothing on it, and Cloudflare’s own scan of it was clean.',
+    cleanTitle: 'Nothing known against it',
+    reassure: 'The site kept our sandbox out with a bot check, so we did not see the page ourselves. But nothing known speaks against it: Google, Spamhaus and VirusTotal have nothing on it, and Cloudflare’s scanner did see the page and found it clean. Still, check the address before you sign in.',
   },
   file: {
     open: 'Open in a sandbox',

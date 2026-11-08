@@ -144,8 +144,13 @@ test('what others know: each source in words, a listing marked; a wall nobody kn
   expect(card.textContent).toMatch(/not on Google’s lists/);
   expect(card.textContent).toMatch(/no engine flags the domain \(90 checked\)/);
   expect(document.body.textContent).toMatch(/nothing known speaks against it/);
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Nothing known against it');
+  expect(document.body.textContent).toMatch(/we did not see the page ourselves/);
   cleanup();
   // Cloudflare could not see it either (403): nothing is said that was not seen
+  render(<Summary r={{ ...walled, second_opinion: { ...walled.second_opinion!, status: 403 } }} status={status()} />);
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Could not check');
+  cleanup();
   render(<Summary r={{ ...walled, second_opinion: { ...walled.second_opinion!, status: 403 } }} status={status()} />);
   expect(document.body.textContent).not.toMatch(/nothing known speaks against it/);
   cleanup();

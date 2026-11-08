@@ -68,8 +68,11 @@ export function buildDossier(events: readonly unknown[], analysis: Analysis, mod
   const hidden = isObj(page?.hidden_text) && page.hidden_text.present === true;
   const meta = list(page?.meta).filter(isObj).slice(0, 10).map((m) => ({ name: cut(str(m.name), 40), content: cut(str(m.content), 200) }));
 
+  // a file someone handed over (runner.ts, judgeFile): no link led to it, and the sandbox fetched it from our own site
+  const uploaded = of('subject').some((e) => e.what === 'uploaded_file');
   const build = (textChars: number, linkCount: number): Record<string, unknown> => ({
     mode,
+    ...(uploaded ? { subject: 'uploaded_file' } : {}),
     requested_url: cut(requested, 300),
     final_url: cut(finalUrl, 300),
     chain,

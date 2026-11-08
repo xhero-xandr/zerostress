@@ -676,3 +676,16 @@ test('a file with nothing found is "nothing found", not "could not check"; an un
   assert.equal(a.verdict, 'benign');
   assert.equal(analyze([summary('https://x.example/', { nav_error: 'file' })]).verdict, 'unknown', 'no file read: nothing to say');
 });
+
+test('a file handed over is judged by what is inside it, not as a download a page offered; a brand page in it is no site', () => {
+  const up = [ev('subject', { what: 'uploaded_file' }), ...fileVisit({ filename: 'Invoice-2026-11.docm', file_type: 'ooxml', findings: [{ id: 'macros', detail: '' }] })];
+  const ids = analyze(up).signals.map((s) => s.id);
+  assert.ok(ids.includes('file_macros'));
+  assert.equal(ids.includes('executable_download'), false);
+  assert.ok(analyze(fileVisit({ filename: 'Invoice-2026-11.docm' })).signals.some((s) => s.id === 'executable_download'), 'a page that offers it: still a reason');
+  const url = 'https://zerostress.space/f/tok/view';
+  const page = (subject: boolean) => [...(subject ? [ev('subject', { what: 'uploaded_file' })] : []), nav(url, 'requested'), nav(url), page_(url), forms(form('https://collect.evil.example/p')), summary(url)];
+  const page_ = (u: string) => ev('page', { url: u, title: 'Microsoft 365 - Sign in', lang: 'en', text: 'Sign in', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] });
+  assert.match(has(page(true), 'brand_domain_mismatch')!.text, /as Microsoft, but it is a file someone sent, not Microsoft's site/);
+  assert.match(has(page(false), 'brand_domain_mismatch')!.text, /its address is zerostress/);
+});
