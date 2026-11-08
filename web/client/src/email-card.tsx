@@ -7,7 +7,7 @@ import { FileRow } from './file-check.tsx';
 
 const M = T.mail;
 
-export function EmailFindings({ mail, compact = false }: { mail: EmailCheck; compact?: boolean }) {
+export function EmailFindings({ mail, compact = false, onOpenFile }: { mail: EmailCheck; compact?: boolean; onOpenFile?: (data: Uint8Array, name: string, mime: string) => void }) {
   const small = compact ? 'text-[12.5px]' : 'text-sm';
   const rows: Array<[string, string]> = [];
   if (mail.from) rows.push([M.from, mail.from.name && mail.from.address ? `${mail.from.name} <${mail.from.address}>` : (mail.from.address ?? mail.from.name ?? '')]);
@@ -32,7 +32,7 @@ export function EmailFindings({ mail, compact = false }: { mail: EmailCheck; com
         <div className={`flex flex-col gap-2 ${small}`}>
           <p className="font-semibold">{M.attachments}</p>
           <ul className="flex flex-col gap-2">
-            {mail.attachments.map((a, i) => <FileRow key={`${i}${a.name}`} name={a.name} mime={a.type} data={a.data} />)}
+            {mail.attachments.map((a, i) => <FileRow key={`${i}${a.name}`} name={a.name} mime={a.type} data={a.data} onOpen={onOpenFile} />)}
           </ul>
           <p className="text-faint">{T.file.privacy}</p>
         </div>

@@ -26,6 +26,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
     sent.push({ url, method: init.method ?? 'GET', body: String(init.body ?? ''), key: new Headers(init.headers).get('x-task-key') });
     if (url === '/api/tasks') return new Response(JSON.stringify({ id: ID, key: KEY }), { status: 202 });
+    if (url === '/api/files') return new Response(JSON.stringify({ id: ID, key: KEY, name: 'x', bytes: 1, sha256: 'a'.repeat(64) }), { status: 202 });
+    if (url === '/api/file-hash') return new Response(JSON.stringify({ virustotal: { known: false, malicious: 0, suspicious: 0, total: 0, label: null, first_seen: null } }));
     if (url.endsWith('/pending')) return new Response(JSON.stringify({ pending: [{ command_id: 'c1', command_sha256: 'a'.repeat(64), label: 'Submit a form on the page' }] }));
     if (url.endsWith('/approvals')) return new Response(JSON.stringify({ message: 'ok' }), { status: 202 });
     if (url.endsWith('/report.json')) return new Response(JSON.stringify(hostile()));
@@ -244,4 +246,21 @@ test('a second link while a check is running is told to wait, not silently dropp
   fireEvent.click(screen.getByRole('button', { name: /^(Check|Send)$/ }));
   expect(document.body.textContent).toMatch(/One check at a time/);
   expect(sent.filter((x) => x.url === '/api/tasks')).toHaveLength(1);
+});
+
+test('a file dropped on the panel: read there, only its fingerprint goes out; opened, it is followed in the panel', async () => {
+  const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+  const { MemoryRouter } = await import('react-router');
+  render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><Panel /></MemoryRouter></QueryClientProvider>);
+  const form = screen.getByLabelText('Message to the agent').closest('form')!;
+  const doc = new File([new TextEncoder().encode('PK secret content')], 'Invoice.docm', { type: 'application/octet-stream' });
+  fireEvent.drop(form, { dataTransfer: { files: [doc] } });
+  await screen.findByText(/only its fingerprint goes out/);
+  await waitFor(() => expect(sent.some((x) => x.url === '/api/file-hash')).toBe(true));
+  expect(sent.some((x) => x.url === '/api/files')).toBe(false);
+  for (const x of sent) expect(x.body).not.toMatch(/secret content/);
+  fireEvent.click(screen.getByRole('button', { name: /Open in a sandbox/ }));
+  await waitFor(() => expect(sent.some((x) => x.url === '/api/files' && x.method === 'POST')).toBe(true));
+  expect(screen.getByText(/Open “Invoice.docm” in a sandbox/)).toBeTruthy();
+  await waitFor(() => expect(FakeSource.last?.url).toBe(`/api/tasks/${ID}/events`));
 });

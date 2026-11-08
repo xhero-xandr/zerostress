@@ -2,15 +2,17 @@
 // conversation about one link at a time: the check runs on ZeroStress as from the home page, the agent log shows what
 // happens in the microVM, a risky action waits for Allow / Don't allow, then the verdict, its explanation and questions.
 // Text from a page or the model is rendered as text by React, never as markup.
+import { Paperclip } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { LogEntry } from '../../../agent/agent-log.ts';
 import type { PublicReport } from '../../../agent/report-types.ts';
-import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startEmailCheck, startTask, type Pending, type TaskStatus } from '../api.ts';
+import { ApiError, askChat, askSecondOpinion, decide, getPending, getReport, getStatus, reportJsonUrl, shotUrl, startEmailCheck, startFileCheck, startTask, type Pending, type TaskStatus } from '../api.ts';
 import { EXTENSION_ORIGIN } from '../extension.ts';
 import { asLink, asLogEntry, headline, isTaskId, linkFromQuery, logLine, logTime, mailboxOf, panelFacts, verdictLine } from '../logic.ts';
 import { linksToCheck, looksLikeEmail, readEmail, type EmailCheck } from '../email.ts';
 import { EmailFindings } from '../email-card.tsx';
 import { EmailLinks } from '../email-links.tsx';
+import { FILE_MAX, FileCard, FileRow, sizeText } from '../file-check.tsx';
 import { ShotViewer } from '../shot-viewer.tsx';
 import { T } from '../text.ts';
 import { btnPrimary, btnSecondary } from '../ui.tsx';
@@ -22,6 +24,7 @@ type Item =
   | { kind: 'approval'; p: Pending; done: string | null }
   | { kind: 'verdict'; r: PublicReport; id: string; key: string; shots: TaskStatus['shots'] | null }
   | { kind: 'email'; mail: EmailCheck }
+  | { kind: 'file'; name: string; mime: string; data: Uint8Array }
 
 const P = T.panel;
 const errText = (e: unknown) => (e instanceof ApiError ? e.message : T.serverError);
@@ -126,6 +129,40 @@ export function Panel() {
       busy.current = false;
     }
   }
+
+  // a file: it goes to the sandbox only now, when the person asks; the check is followed here like any other
+  async function checkFile(data: Uint8Array, name: string, mime: string) {
+    if (busy.current) { say(P.oneAtATime); return; }
+    queued.current = [];
+    push({ kind: 'you', text: P.openFile(name) });
+    task.current?.es?.close();
+    busy.current = true;
+    try {
+      const { id, key } = await startFileCheck(data, name, mime);
+      if (!isTaskId(id) || !/^[A-Za-z0-9_-]{20,100}$/.test(key)) throw new ApiError(500, 'server', T.serverError);
+      task.current = { id, key, report: false, es: null };
+      asked.current = new Set();
+      say(P.starting);
+      follow(id, key);
+    } catch (e) {
+      say(errText(e));
+      busy.current = false;
+    }
+  }
+
+  // a file dropped, pasted or picked: an email file is read as an email; anything else is offered for the sandbox
+  async function takeFile(f: File) {
+    if (/\.eml$/i.test(f.name) || f.type === 'message/rfc822') {
+      const t = await f.text();
+      push({ kind: 'you', text: P.pastedEmail(t.length) });
+      push({ kind: 'email', mail: readEmail(t) });
+      return;
+    }
+    if (f.size > FILE_MAX) { push({ kind: 'you', text: f.name }); say(T.file.tooLarge); return; }
+    push({ kind: 'you', text: `${f.name} (${sizeText(f.size)})` });
+    push({ kind: 'file', name: f.name, mime: f.type, data: new Uint8Array(await f.arrayBuffer()) });
+  }
+  const picker = useRef<HTMLInputElement>(null);
 
   async function check(raw: string) {
     if (busy.current) { push({ kind: 'you', text: P.checkThis(raw.trim()) }); say(P.oneAtATime); return; }
@@ -235,7 +272,7 @@ export function Panel() {
           );
           if (it.kind === 'email') return (
             <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
-              <EmailFindings mail={it.mail} compact />
+              <EmailFindings mail={it.mail} compact onOpenFile={(d, n, m) => void checkFile(d, n, m)} />
               <p className="mt-3">{it.mail.links.length ? P.emailFound(it.mail.links.length) : `${P.emailRead} ${T.mail.noLinks}`}</p>
               {linksToCheck(it.mail.links).length > 1 && <button type="button" className={`${btnPrimary} mt-2`} onClick={() => void checkAll(linksToCheck(it.mail.links))}>{T.mail.checkAll(linksToCheck(it.mail.links).length)}</button>}
               <ul className="mt-2 flex flex-col gap-2">
@@ -250,6 +287,12 @@ export function Panel() {
               </ul>
             </div>
           );
+          if (it.kind === 'file') return (
+            <div key={i} className={`${bubble} self-start rounded-bl-sm border border-line bg-surface`}>
+              <p className="mb-2">{P.fileRead}</p>
+              <ul className="flex flex-col gap-2"><FileRow name={it.name} mime={it.mime} data={it.data} onOpen={(d, n, m) => void checkFile(d, n, m)} /></ul>
+            </div>
+          );
           const r = it.r;
           const serious = r.signals.filter((s) => s.level === 'high' || s.level === 'medium').slice(0, 4);
           return (
@@ -257,6 +300,7 @@ export function Panel() {
               <p className={`font-bold ${r.verdict === 'malicious' ? 'text-danger' : r.verdict === 'benign' ? 'text-accent' : ''}`}>{P.verdictLead} {headline(r)}</p>
               <p>{verdictLine(r)}</p>
               {serious.length > 0 && <ul className="mt-1.5 list-disc pl-5 text-[13px] text-muted">{serious.map((s) => <li key={s.id}>{s.text}</li>)}</ul>}
+              {r.file && <div className="mt-2 text-[13px]"><FileCard r={r} /></div>}
               {r.email && <div className="mt-2 text-[13px]"><p className="mb-1.5 text-faint">{T.mail.linksIntro(r.email.links.length)}</p><EmailLinks r={r} id={it.id} compact /></div>}
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12.5px]">
                 {panelFacts(r).map(([k, v]) => [<dt key={`${k}-t`} className="text-faint">{k}</dt>, <dd key={`${k}-d`} className="[overflow-wrap:anywhere]">{v}</dd>])}
@@ -283,11 +327,18 @@ export function Panel() {
         })}
         <div ref={end} />
       </main>
-      <form onSubmit={submit} className="flex flex-col gap-2 border-t border-line bg-surface px-4 pt-2.5 pb-3.5">
+      <form onSubmit={submit} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void takeFile(f); }}
+        className="flex flex-col gap-2 border-t border-line bg-surface px-4 pt-2.5 pb-3.5">
+        <input ref={picker} type="file" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void takeFile(f); e.target.value = ''; }} />
         <label className="flex items-start gap-2 text-[12.5px] text-muted"><input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-0.5" /> {P.deep}</label>
         <div className="flex gap-2">
+          <button type="button" aria-label={P.addFile} title={P.addFile} onClick={() => picker.current?.click()}
+            className="inline-flex size-10 flex-none items-center justify-center self-end rounded-xl border border-line-strong bg-canvas text-muted hover:text-fg">
+            <Paperclip className="size-4" aria-hidden />
+          </button>
           {/* a textarea, not an input: an input drops the line breaks of a pasted email, and its source needs them */}
           <textarea aria-label={P.message} value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" spellCheck={false}
+            onPaste={(e) => { const f = e.clipboardData.files[0]; if (f) { e.preventDefault(); void takeFile(f); } }}
             rows={Math.min(6, Math.max(1, text.split('\n').length))}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
             placeholder={task.current?.report ? P.askPlaceholder : P.linkPlaceholder}

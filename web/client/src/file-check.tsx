@@ -31,7 +31,7 @@ export function vtText(v: FileVerdict | null | undefined): { text: string; level
 }
 
 /** One file, before it is checked: what VirusTotal knows of its hash, and the button that opens it in the sandbox. */
-export function FileRow({ name, mime, data, note }: { name: string; mime: string; data: Uint8Array | null; note?: string }) {
+export function FileRow({ name, mime, data, note, onOpen }: { name: string; mime: string; data: Uint8Array | null; note?: string; onOpen?: (data: Uint8Array, name: string, mime: string) => void }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +41,8 @@ export function FileRow({ name, mime, data, note }: { name: string; mime: string
   const said = vt.isSuccess ? vtText(vt.data.virustotal) : null;
   const open = async () => {
     if (!data) return;
+    // in the side panel the check is followed there, not on another page
+    if (onOpen) { onOpen(data, name, mime); return; }
     setError('');
     setBusy(true);
     try {
