@@ -7,7 +7,7 @@ export const T = {
   brand: 'ZeroStress',
   heroBadge: 'Every check runs in its own disposable micro-VM',
   heroTitle: 'What happens if you open it?',
-  heroText: 'Paste a suspicious link. We open it in a real browser far from your device, watch what the page does, and show you the evidence.',
+  heroText: 'Paste a suspicious link or email, or drop a file. We open it in a disposable sandbox far from your device, watch what it does, and show you the evidence.',
   inputLabel: 'Link to check',
   ext: {
     nav: 'Extension',
@@ -57,6 +57,18 @@ export const T = {
     intro: 'Asked without opening anything: the address, and the domain it led to. A listing raises our verdict; a clean record never lowers it.',
     cleanTitle: 'Nothing known against it',
     reassure: 'The site kept our sandbox out with a bot check, so we did not see the page ourselves. But nothing known speaks against it: Google, Spamhaus and VirusTotal have nothing on it, and Cloudflare’s scanner did see the page and found it clean. Still, check the address before you sign in.',
+  },
+  box: {
+    label: 'Something suspicious? A link, an email or a file',
+    placeholder: 'Paste a link or a whole email (its text, or “Show original” for the most detail), or drop a file here',
+    addFile: 'Add a file',
+    clear: 'Remove',
+    detected: 'Understood as:',
+    isLink: 'a link. It will be opened in a disposable sandbox.',
+    isEmail: (links: number, attachments: number, source: boolean) => `${source ? 'an email (its source)' : 'an email or a message'}: ${links === 1 ? '1 link' : `${links} links`}${attachments ? `, ${attachments === 1 ? '1 attachment' : `${attachments} attachments`}` : ''}. Read here, in your browser.`,
+    isFile: (name: string, size: string) => `a file, ${size}. Only its fingerprint is sent until you open it in the sandbox.`,
+    isText: 'text without a link in it.',
+    noLinks: 'There is no link in this text. Paste the whole email, or its source, to see where its links really go.',
   },
   file: {
     open: 'Open in a sandbox',

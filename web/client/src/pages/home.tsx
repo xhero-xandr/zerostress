@@ -1,26 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { Copy, Download, Monitor, PanelRight, ScanSearch, ShieldHalf } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Copy, Download, Monitor, PanelRight, ShieldHalf } from 'lucide-react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, getDemos, startEmailCheck, startTask } from '../api.ts';
 import { asLink, isTaskId, linkFromQuery, mailboxOf } from '../logic.ts';
-import { linksToCheck, readEmail, type EmailCheck } from '../email.ts';
-import { EmailFindings } from '../email-card.tsx';
-import { FilePicker } from '../file-check.tsx';
+import { CheckBox } from '../check-box.tsx';
 import { T } from '../text.ts';
 import { extensionZip, RELEASE, releasePage } from '../version.ts';
 import { btnPrimary, SiteFooter, SiteHeader } from '../ui.tsx';
 
 export function Home() {
   const navigate = useNavigate();
-  const input = useRef<HTMLInputElement>(null);
   // "/?u=<link>" (the browser extension, a bookmark) fills the field; the person still presses the button
   const given = linkFromQuery(useLocation().search);
-  const [url, setUrl] = useState(given);
-  const [mode, setMode] = useState<'link' | 'email' | 'file'>('link');
-  const [email, setEmail] = useState('');
-  const [mail, setMail] = useState<EmailCheck | null>(null);
-  const [deep, setDeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const demos = useQuery({ queryKey: ['demos'], queryFn: getDemos, staleTime: Infinity });
@@ -38,7 +30,7 @@ export function Home() {
       setBusy(false);
     }
   };
-  const start = async (typed: string) => {
+  const start = async (typed: string, deep: boolean) => {
     setError('');
     const target = asLink(typed);
     const mailbox = mailboxOf(target);
@@ -53,7 +45,6 @@ export function Home() {
       setBusy(false);
     }
   };
-  const submit = (e: React.FormEvent) => { e.preventDefault(); void start(url); };
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-fg">
@@ -73,89 +64,8 @@ export function Home() {
           <h1 id="hero" className="max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl">{T.heroTitle}</h1>
           <p className="max-w-2xl text-lg leading-relaxed text-muted">{T.heroText}</p>
 
-          <div role="tablist" aria-label={T.modeLabel} className="mt-3 inline-flex rounded-xl border border-line bg-surface p-1">
-            {(['link', 'email', 'file'] as const).map((m) => (
-              <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(''); }}
-                className={`h-9 rounded-lg px-4 text-[15px] ${mode === m ? 'bg-accent text-white' : 'text-muted hover:text-fg'}`}>
-                {m === 'link' ? T.modeLink : m === 'email' ? T.modeEmail : T.modeFile}
-              </button>
-            ))}
-          </div>
-
-          {mode === 'file' && <FilePicker />}
-
-          {mode === 'email' && (
-            <div className="flex w-full max-w-3xl flex-col gap-2.5 text-left">
-              <label htmlFor="email" className="text-sm font-semibold text-muted">{T.emailLabel}</label>
-              <textarea id="email" value={email} onChange={(e) => { setEmail(e.target.value); setMail(null); }} rows={8} maxLength={300_000}
-                spellCheck={false} placeholder={T.emailPlaceholder}
-                className="min-h-40 w-full rounded-xl border border-line-strong bg-surface p-4 font-mono text-sm text-fg outline-none placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/25" />
-              <p className="text-sm text-faint">{T.emailPrivacy}</p>
-              <button type="button" className={`${btnPrimary} self-start`} disabled={!email.trim()} onClick={() => setMail(readEmail(email))}>{T.emailFind}</button>
-              {mail !== null && <EmailFindings mail={mail} />}
-              {mail !== null && (mail.links.length === 0 ? <p className="text-muted">{mail.source ? T.mail.noLinks : T.emailNone}</p> : (
-                <div className="flex flex-col gap-2">
-                  {linksToCheck(mail.links).length > 1 && (
-                    <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-3">
-                      <button type="button" className={`${btnPrimary} self-start`} disabled={busy} onClick={() => void startAll(linksToCheck(mail.links))}>{busy ? T.checking : T.mail.checkAll(linksToCheck(mail.links).length)}</button>
-                      <p className="text-sm text-faint">{T.mail.checkAllHint}</p>
-                    </div>
-                  )}
-                  <p className="text-[15px] text-muted">{T.emailFound(mail.links.length)}</p>
-                  <ul aria-label={T.emailFound(mail.links.length)} className="flex flex-col gap-2">
-                    {mail.links.map((l) => (
-                      <li key={l.url} className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3">
-                        <div className="flex min-w-0 flex-[999_1_320px] flex-col gap-1">
-                          <span className="font-mono text-[15px] font-semibold [overflow-wrap:anywhere]">{l.host}</span>
-                          <span className="font-mono text-xs text-faint [overflow-wrap:anywhere]">{l.url.length > 140 ? `${l.url.slice(0, 140)}…` : l.url}</span>
-                          {l.shown && <span className="text-sm text-danger">{T.emailShown(l.shown)}</span>}
-                          {l.wrapper && <span className="text-sm text-muted">{T.emailWrapped(l.wrapper)}</span>}
-                        </div>
-                        <button type="button" className={`${btnPrimary} flex-[1_1_auto]`} disabled={busy} onClick={() => void start(l.url)}>{busy ? T.checking : T.emailCheck}</button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-              <label className="flex items-start gap-2.5 text-[15px]">
-                <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-1 size-4 accent-[var(--zs-accent)]" />
-                <span><span className="font-semibold">{T.deepLabel}</span><br /><span className="text-sm text-faint">{T.deepHint}</span></span>
-              </label>
-              {error && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-2.5 text-[15px] text-danger">{error}</p>}
-            </div>
-          )}
-
-          {mode === 'link' && <form className="flex w-full max-w-3xl flex-col gap-2.5 text-left" onSubmit={submit} noValidate>
-            <label htmlFor="url" className="text-sm font-semibold text-muted">{T.inputLabel}</label>
-            <div className="flex flex-wrap gap-2.5">
-              <input
-                ref={input} id="url" name="url" type="text" inputMode="url" autoComplete="off" autoCapitalize="off" spellCheck={false}
-                maxLength={2048} required placeholder={T.inputPlaceholder} value={url} onChange={(e) => setUrl(e.target.value)}
-                aria-invalid={error !== '' || undefined} aria-describedby={error ? 'url-error' : undefined}
-                className="h-13 min-w-0 flex-[999_1_420px] rounded-xl border border-line-strong bg-surface px-4 font-mono text-base text-fg outline-none placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/25"
-              />
-              <button type="submit" disabled={busy} className={`${btnPrimary} h-13 flex-[1_1_160px] px-6`}>
-                <ScanSearch className="size-5" aria-hidden /> {busy ? T.checking : T.check}
-              </button>
-            </div>
-            <label className="flex items-start gap-2.5 text-[15px]">
-              <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-1 size-4 accent-[var(--zs-accent)]" />
-              <span><span className="font-semibold">{T.deepLabel}</span><br /><span className="text-sm text-faint">{T.deepHint}</span></span>
-            </label>
-            {error && <p id="url-error" role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-2.5 text-[15px] text-danger">{error}</p>}
-          </form>}
-
-          {mode === 'link' && (demos.data?.demos.length ?? 0) > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <span className="text-sm text-faint">{T.tryTitle}</span>
-              {demos.data!.demos.map((d) => (
-                <button key={d.url} type="button" onClick={() => { setUrl(d.url); setDeep(d.deep === true); input.current?.focus(); }}
-                  className="h-9 rounded-full border border-line bg-surface px-3.5 text-sm text-muted hover:border-line-strong hover:text-fg">
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <CheckBox busy={busy} error={error} initial={given} demos={demos.data?.demos ?? []}
+            onLink={(u, d) => void start(u, d)} onEmail={(urls) => void startAll(urls)} />
         </section>
 
         <section id="how" aria-labelledby="how-title" className="mx-auto max-w-6xl px-4 pb-14 sm:px-6">
