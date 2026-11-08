@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"syscall"
 	"testing"
@@ -24,17 +25,24 @@ func TestHandToSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	g, lookErr := user.LookupGroup(slotGroup(2))
+	member := false
+	gid := -1
+	if lookErr == nil {
+		gid, _ = strconv.Atoi(g.Gid)
+		groups, _ := os.Getgroups()
+		member = slices.Contains(groups, gid) || os.Getegid() == gid
+	}
 	err := handToSlot(dir, 2)
-	if lookErr != nil {
+	if !member {
+		// the supervisor is a member of every slot's group; the builder and CI are not, and must be refused
 		if err == nil {
-			t.Fatal("handed over without the slot's group on this host")
+			t.Fatal("handed over by a process outside the slot's group")
 		}
-		t.Skipf("no %s on this host (it is made by deploy/steps/10-host.sh): only the refusal is checked", slotGroup(2))
+		t.Skipf("not a member of %s here (the supervisor is): only the refusal is checked", slotGroup(2))
 	}
 	if err != nil {
 		t.Fatalf("hand over as a member of %s: %v", g.Name, err)
 	}
-	gid, _ := strconv.Atoi(g.Gid)
 	for path, mode := range map[string]os.FileMode{dir: 0o770, disk: 0o660} {
 		st, err := os.Lstat(path)
 		if err != nil {
