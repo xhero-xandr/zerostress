@@ -239,7 +239,7 @@ test('a text of ours is scanned in the thread with the deadline: a hang never ho
   const timer = new Promise<void>((resolve) => setTimeout(() => { late = Date.now() - t0 - 50; resolve(); }, 50));
   const hung = g.scan('model', 'hang');
   await timer;
-  assert.ok(late >= 0 && late < 150, `a timer of the main thread was ${late} ms late`);
+  assert.ok(late < 150, `a timer of the main thread was ${late} ms late`); // a timer may fire a millisecond early by Date.now
   const r = await hung;
   assert.ok(Date.now() - t0 < 5000);
   assert.equal(r.triggered, true, 'an unfinished scan is not a pass');
