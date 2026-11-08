@@ -369,7 +369,15 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];
       if (!isObj(e) || e.kind !== 'links' || e.snap !== g.snap || !Array.isArray(e.links)) continue;
-      for (const l of e.links) if (isObj(l) && typeof l.ref === 'string' && typeof l.href === 'string' && parseUrl(l.href)?.href === url) return l.ref;
+      // a link is as the page wrote it: "/f/…" on our own page is the same address as "https://…/f/…"
+      const page = events.slice(0, i).reverse().find((x): x is Ev => isObj(x) && x.kind === 'page');
+      const base = typeof page?.url === 'string' ? page.url : input.url;
+      for (const l of e.links) {
+        if (!isObj(l) || typeof l.ref !== 'string' || typeof l.href !== 'string') continue;
+        let abs = '';
+        try { abs = new URL(l.href, base).href; } catch { continue; }
+        if (abs === url) return l.ref;
+      }
       return null;
     }
     return null;

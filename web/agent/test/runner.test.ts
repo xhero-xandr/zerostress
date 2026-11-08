@@ -325,7 +325,8 @@ test('a file: fetched once into this microVM from our page, read there; an attac
     ev('page', { url: PAGE, title: 'a file', lang: 'en', text: 'The file', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
     ev('forms', { forms: [], total: 0, loose_password_fields: 0 }),
     ev('snapshot', { snap, text: '- list', lines: 1, truncated: false }),
-    ev('links', { snap, links: [{ ref: 'e1', text: 'The file', href: FILE, origin_differs: false }, { ref: 'e2', text: 'The attached page', href: VIEW, origin_differs: false }] }),
+    // as our page writes them: relative to it
+    ev('links', { snap, links: [{ ref: 'e1', text: 'The file', href: '/f/tok', origin_differs: false }, { ref: 'e2', text: 'The attached page', href: '/f/tok/view', origin_differs: false }] }),
     ev('summary', { final_url: PAGE, nav_error: null }),
   ];
   const done = (id: string, evidence: any[]) => {
