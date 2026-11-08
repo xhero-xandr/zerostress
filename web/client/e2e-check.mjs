@@ -125,7 +125,7 @@ try {
   await shot(page, 'e2e-01-home-light');
   await clean(page, 'home');
   await page.getByRole('button', { name: 'A fake sign-in page' }).click();
-  check((await page.getByLabel('Link to check').inputValue()) === 'https://login.northwind-mail.example/start', 'an example fills the field');
+  check((await page.getByLabel(/Something suspicious/).inputValue()) === 'https://login.northwind-mail.example/start', 'an example fills the field');
   await page.getByRole('button', { name: 'Check link' }).click();
   await page.waitForURL(/\/r\/[0-9a-f]{32}#k=/);
   const reportUrl = page.url();
