@@ -17,7 +17,7 @@ die() { echo "release: $*" >&2; exit 1; }
 SEMVER='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
 # every file that carries the version: VERSION itself, the extension, and the npm packages with their lock files
-PACKAGES=(web web/client guest/collector)
+PACKAGES=(web web/client guest/collector mcp)
 current() { tr -d '[:space:]' < "$S/VERSION"; }
 json_version() { sed -n 's/^  "version": *"\([^"]*\)".*/\1/p' "$1" | head -1; }
 lock_root_version() { awk '/^    "": \{/ { on = 1 } on && /"version":/ { gsub(/.*"version": *"|".*/, ""); print; exit }' "$1"; }

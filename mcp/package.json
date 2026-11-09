@@ -1,0 +1,11 @@
+{
+  "name": "zerostress-mcp",
+  "version": "0.9.1",
+  "description": "An MCP server that lets an AI agent check a link, an email's links or a file in ZeroStress's disposable sandbox before anything is opened. It can ask; it can never approve.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": { "zerostress-mcp": "server.mjs" },
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test --test-concurrency=1 test/*.test.mjs" }
+}

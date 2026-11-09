@@ -14,7 +14,7 @@ fresh() {
   local f
   for f in CHANGELOG.md VERSION deploy/release.sh web/extension/public/manifest.json \
            web/package.json web/package-lock.json web/client/package.json web/client/package-lock.json \
-           guest/collector/package.json guest/collector/package-lock.json; do
+           guest/collector/package.json guest/collector/package-lock.json mcp/package.json mcp/package-lock.json; do
     mkdir -p "$(dirname "$T/r/$f")"; cp "$S/$f" "$T/r/$f"
   done
   git -C "$T/r" -c user.name=t -c user.email=t@t add -A >/dev/null; git -C "$T/r" -c user.name=t -c user.email=t@t commit -qm test --allow-empty
@@ -33,7 +33,7 @@ fresh; sed -i "s/\"version\": \"$v\"/\"version\": \"0.0.1\"/" "$T/r/web/extensio
 refuses "an extension of another version" bash "$T/r/deploy/release.sh" check "$v"
 fresh; echo 0.0.1 > "$T/r/VERSION"
 refuses "VERSION saying another version" bash "$T/r/deploy/release.sh" check "$v"
-for p in web web/client guest/collector; do
+for p in web web/client guest/collector mcp; do
   fresh; sed -i "0,/\"version\": \"$v\"/s//\"version\": \"0.0.1\"/" "$T/r/$p/package.json"
   refuses "$p/package.json of another version" bash "$T/r/deploy/release.sh" check "$v"
   fresh; sed -i "0,/\"version\": \"$v\"/s//\"version\": \"0.0.1\"/" "$T/r/$p/package-lock.json"

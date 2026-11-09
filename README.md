@@ -16,6 +16,7 @@ Paste a link, an email or a file, and the report shows:
 - **A human in the loop.** A risky step the agent proposes inside the sandbox, such as downloading a file, waits for the explicit approval of the person who started the check; submitting a form is not a step it can propose at all.
 - **Email and files, not only links.** An email is read in your browser and never sent; a file is read only inside a micro-VM.
 - **A browser extension** (Chrome, Edge, Brave): right-click a link and check it in a sandbox from a side panel.
+- **A tool for AI agents** ([MCP server](mcp/README.md)): an agent checks a link, an email's links or a file in the sandbox before it opens them. It can ask; it can never approve.
 - **An "Explain" chat** that can only talk about the evidence already in the report.
 
 All of it in detail: [docs/features.md](docs/features.md).

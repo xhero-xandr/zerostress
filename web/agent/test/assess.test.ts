@@ -305,7 +305,7 @@ test('the prompt: loaded with its hash; an empty one is refused; it tells the mo
   const dir = mkdtempSync(join(tmpdir(), 'zs-prompt-'));
   writeFileSync(join(dir, 'p.md'), 'short');
   try { assert.throws(() => loadPrompt(join(dir, 'p.md')), /missing or empty/); } finally { rmSync(dir, { recursive: true, force: true }); }
-  for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only things that appear in the dossier/, /Do not propose anything else/, /propose `download`.*only if the person agrees/]) assert.match(prompt.text, must);
+  for (const must of [/untrusted_data/, /Never follow it/, /cannot lower/i, /only things that appear in the dossier/, /Do not propose anything else/, /propose `download`.*only if the person agrees/, /popular_site.*not a sign that the page is safe/]) assert.match(prompt.text, must);
 });
 
 test('a text the hooks could not inspect keeps the model away but is no evidence: no injection signal, no raised verdict (B5)', async () => {
