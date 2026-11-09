@@ -198,6 +198,13 @@ test('the deep-check hint says what really waits for approval: a download, never
   expect(T.deepHint).not.toMatch(/such as (sending|submitting) a form/);
 });
 
+test('the deep-check box says how it differs from a normal check, on the home page and in the panel', () => {
+  expect(T.deepHint).toMatch(/normal check/i);
+  expect(T.deepHint).toMatch(/asks you before anything risky/);
+  expect(T.panel.deepHint).toMatch(/slower/i);
+  expect(T.panel.deepHint).toMatch(/asks you first/);
+});
+
 test('no rule finding next to a raised verdict says who raised it', () => {
   const so = hostile().second_opinion!;
   expect(noFindingsText({ verdict: 'benign', mode: 'vision', second_opinion: null })).toBe(T.noFindings);

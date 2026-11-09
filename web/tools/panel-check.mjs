@@ -1,5 +1,5 @@
 // One real deep check through the browser extension, the way a person does it: load build/extension in Chromium, tick
-// "Let the agent act on the page", check a link in the side panel, answer the approval (Allow or Don't allow), and
+// "Let the agent explore the page", check a link in the side panel, answer the approval (Allow or Don't allow), and
 // wait for the verdict. Screenshots and a summary go to build/e2e/panel/. Counts against the site's limits.
 //
 //   cd web/client && npm run build:extension

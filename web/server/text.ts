@@ -4,7 +4,7 @@
 import { GATE_TEXT, type GateReason } from './gate.ts';
 import type { Stage } from './store.ts';
 
-/** an example under the address field; `deep` also ticks "Let the agent act on the page" */
+/** an example under the address field; `deep` also ticks the deep-check box ("Let the agent explore the page") */
 export interface Demo { label: string; url: string; deep?: true }
 
 export const T = {

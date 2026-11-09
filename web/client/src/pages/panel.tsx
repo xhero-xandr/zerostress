@@ -332,7 +332,7 @@ export function Panel() {
       <form onSubmit={submit} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void takeFile(f); }}
         className="flex flex-col gap-2 border-t border-line bg-surface px-4 pt-2.5 pb-3.5">
         <input ref={picker} type="file" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void takeFile(f); e.target.value = ''; }} />
-        <label className="flex items-start gap-2 text-[12.5px] text-muted"><input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-0.5" /> {P.deep}</label>
+        <label className="flex items-start gap-2 text-[12.5px] text-muted"><input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} className="mt-0.5" /> <span><span className="font-semibold text-fg">{P.deep}</span><br /><span className="text-faint">{P.deepHint}</span></span></label>
         <div className="flex gap-2">
           <button type="button" aria-label={P.addFile} title={P.addFile} onClick={() => picker.current?.click()}
             className="inline-flex size-10 flex-none items-center justify-center self-end rounded-xl border border-line-strong bg-canvas text-muted hover:text-fg">
