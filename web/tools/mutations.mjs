@@ -100,6 +100,11 @@ export const MUTATIONS = [
   ["file: one keyboard function weighs as much as a hook for stealing", "agent/signals.ts", "say('file_keyboard_api', 'low',", "say('file_keyboard_api', 'high',", SIGNALS],
   ["file: a miner is not reported", "agent/signals.ts", "if (found('miner_strings')) say(", "if (false) say(", SIGNALS],
   ["file: a miner's pool weighs as little as a word", "agent/signals.ts", "/^stratum/i.test(detail('miner_strings')) ? 'high' : 'medium'", "'medium'", SIGNALS],
+  // the host's measure of the microVM's processor (supervisor/cpu.go), read by the runner into the log
+  ["the processor measure is never read", "agent/runner.ts", "if (state === 'done' || state === 'failed') {\n      try {\n        const v = await deps.sup.get(runId);", "if (false) {\n      try {\n        const v = await deps.sup.get(runId);", RUN],
+  ["a processor measure that is not whole is logged", "agent/runner.ts", "typeof x === 'number' && Number.isInteger(x) && x >= 0", "typeof x === 'number' && x >= 0", RUN],
+  ["a negative processor measure is logged", "agent/runner.ts", "Number.isInteger(x) && x >= 0 && x < 1e9", "Number.isInteger(x) && x < 1e9", RUN],
+  ["a partial processor measure is logged", "agent/runner.ts", "whole(c.total_ms) && whole(c.wall_ms) && whole(c.tail_ms) && whole(c.tail_wall_ms)", "whole(c.total_ms)", RUN],
   // the verdict by the rules (agent/signals.ts, spec 008)
   ["a password form to another site passes", "agent/readings.ts", "if (stated && here) return registrable(stated.hostname) !== registrable(here.hostname);", "if (stated && here) return false;", ['agent/test/agreement.test.ts', 'agent/test/signals.test.ts']],
   ["the collector's flag is ignored", "agent/readings.ts", "return f.origin_differs === true;", "return false;", ['agent/test/agreement.test.ts', 'agent/test/signals.test.ts']],

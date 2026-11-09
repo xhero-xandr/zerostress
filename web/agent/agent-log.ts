@@ -7,6 +7,7 @@ export const LOG_CODES = [
   'submitted', // the supervisor took the run (position in the queue)
   'vm_state', // the run's state at the supervisor
   'vm_booting', // a microVM is booting: slot, vCPUs, memory, image
+  'vm_cpu', // what the host measured of the microVM's processor time (total and last three seconds, in ms and wall ms)
   'nav_requested', // the browser was sent to the address given
   'redirect', // the server sent the browser on (from, to, status)
   'scheduled', // the page itself scheduled a navigation (meta refresh, timer)
@@ -45,6 +46,7 @@ type Shape = 'host' | 'token' | 'int' | 'bool' | 'hex' | 'model';
 const KEYS: Readonly<Record<string, Shape>> = {
   host: 'host', from: 'host', to: 'host',
   position: 'int', slot: 'int', vcpu: 'int', mem_mib: 'int', delay_s: 'int', status: 'int', count: 'int', requests: 'int',
+  total_ms: 'int', wall_ms: 'int', tail_ms: 'int', tail_wall_ms: 'int',
   hosts: 'int', n: 'int', bytes: 'int', blocked: 'int', ms: 'int', tokens: 'int', step: 'int', inspected: 'int', findings: 'int',
   password: 'bool', saved: 'bool', by_session: 'bool', malicious: 'bool', publish: 'bool', auto: 'bool',
   state: 'token', reason: 'token', mode: 'token', verdict: 'token', next: 'token', action: 'token', risk: 'token',

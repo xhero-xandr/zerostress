@@ -541,6 +541,28 @@ test('with no model the session is closed at once', async () => {
   assert.equal(r.assessment.verdict, 'benign');
 });
 
+test('the host\'s measure of the microVM\'s processor is read when the run is over and goes into the log, whole numbers only', async () => {
+  const { sup, deps } = await setup();
+  sup.vmCpu = { total_ms: 4200, wall_ms: 9000, tail_ms: 150, tail_wall_ms: 3000 };
+  sup.onCommand = (cmd, s) => { if (cmd.cmd === 'close') finish(s); };
+  begin(sup, plain(), true);
+  const r = await run(runTask({ url: 'http://page.test/', session: {} }, deps));
+  const e = r.log.filter((x) => x.code === 'vm_cpu');
+  assert.equal(e.length, 1);
+  assert.deepEqual(e[0]!.d, { total_ms: 4200, wall_ms: 9000, tail_ms: 150, tail_wall_ms: 3000 });
+});
+
+test('no measure of the processor, or one that is not whole numbers, puts nothing in the log', async () => {
+  for (const vmCpu of [null, { total_ms: 'lots', wall_ms: 9000, tail_ms: 150, tail_wall_ms: 3000 }, { total_ms: 4200.5, wall_ms: 9000, tail_ms: 150, tail_wall_ms: 3000 }, { total_ms: 4200, wall_ms: 9000, tail_ms: -1, tail_wall_ms: 3000 }, { total_ms: 4200 }]) {
+    const { sup, deps } = await setup();
+    sup.vmCpu = vmCpu;
+    sup.onCommand = (cmd, s) => { if (cmd.cmd === 'close') finish(s); };
+    begin(sup, plain(), true);
+    const r = await run(runTask({ url: 'http://page.test/', session: {} }, deps));
+    assert.equal(r.log.some((x) => x.code === 'vm_cpu'), false, JSON.stringify(vmCpu));
+  }
+});
+
 test('a result that came before the receipt is not undone by it', async () => {
   const { sup, deps } = await setup({}, (_s, n) => chat(answer({ next: n === 1 ? { action: 'snapshot' } : { action: 'none' } })));
   sup.onCommand = (cmd, s) => {

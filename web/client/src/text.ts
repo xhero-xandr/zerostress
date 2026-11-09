@@ -422,6 +422,7 @@ export const T = {
     } as Readonly<Record<string, string>>,
     stateOther: (state: string) => `The run is now “${state}”`,
     failedBecause: (reason: string) => `The run stopped (${reason.replace(/_/g, ' ')})`,
+    vmCpu: (total: number, wall: number, tail: number, tailWall: number) => `The host measured the microVM's processor: ${(total / 1000).toFixed(1)} s of processor time in ${(wall / 1000).toFixed(1)} s${tailWall > 0 ? `, and ${Math.round((tail / tailWall) * 100)}% of one processor in the last ${(tailWall / 1000).toFixed(1)} s` : ''}`,
     booting: (vcpu: number, mem: number, slot: number, image: string) => `Booting a fresh Firecracker microVM: ${plural(vcpu, 'vCPU', 'vCPUs')}, ${mem} MiB, network slot ${slot}${image ? `, guest image ${image}` : ''}`,
     navRequested: (host: string) => `The sandboxed browser opens ${host}`,
     redirect: (from: string, to: string, status: number | null) => `${from} sent the browser on to ${to}${status ? ` (HTTP ${status})` : ''}`,

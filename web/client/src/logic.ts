@@ -119,6 +119,7 @@ export function logLine(e: LogEntry): string {
       if (st === 'failed' && str('reason')) return L.failedBecause(str('reason'));
       return L.state[st] ?? L.stateOther(st);
     }
+    case 'vm_cpu': return L.vmCpu(num('total_ms') ?? 0, num('wall_ms') ?? 0, num('tail_ms') ?? 0, num('tail_wall_ms') ?? 0);
     case 'vm_booting': return L.booting(num('vcpu') ?? 0, num('mem_mib') ?? 0, num('slot') ?? 0, str('image'));
     case 'nav_requested': return L.navRequested(str('host'));
     case 'redirect': return L.redirect(str('from'), str('to'), num('status'));

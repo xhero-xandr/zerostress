@@ -27,6 +27,8 @@ test('an entry keeps only our codes and values of their own shape', () => {
   const e = cleanEntry({ t: 1, code: 'page', d: { host: page, title: page, reason: page, model: 'm', count: '3', password: 'yes' } });
   assert.deepEqual(e?.d, { model: 'm' }, 'words of a page fit no field: not the host, not a token, not an unknown key');
   assert.deepEqual(cleanEntry({ t: 1, code: 'vm_booting', d: { slot: 0, vcpu: 2, mem_mib: 1024, image: '7e016b2b2375' } })?.d, { slot: 0, vcpu: 2, mem_mib: 1024, image: '7e016b2b2375' });
+  assert.deepEqual(cleanEntry({ t: 1, code: 'vm_cpu', d: { total_ms: 4200, wall_ms: 9000, tail_ms: 150, tail_wall_ms: 3000 } })?.d, { total_ms: 4200, wall_ms: 9000, tail_ms: 150, tail_wall_ms: 3000 });
+  assert.deepEqual(cleanEntry({ t: 1, code: 'vm_cpu', d: { total_ms: 'lots', wall_ms: 1.5 } })?.d, {}, 'words and fractions fit no number');
   assert.deepEqual(cleanEntry({ t: 1, code: 'redirect', d: { from: 'a.example', to: 'xn--80ak6aa92e.com', status: 302 } })?.d, { from: 'a.example', to: 'xn--80ak6aa92e.com', status: 302 });
 });
 

@@ -659,6 +659,17 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     }
     finished = true;
     for (const id of [...waiters.keys()]) wake(id);
+    // what the host measured of the microVM's processor time (the supervisor reads it, the guest cannot say otherwise)
+    if (state === 'done' || state === 'failed') {
+      try {
+        const v = await deps.sup.get(runId);
+        const c = isObj(v) && isObj(v.vm_cpu) ? v.vm_cpu : null;
+        const whole = (x: unknown) => typeof x === 'number' && Number.isInteger(x) && x >= 0 && x < 1e9;
+        if (c && whole(c.total_ms) && whole(c.wall_ms) && whole(c.tail_ms) && whole(c.tail_wall_ms)) {
+          note('vm_cpu', { total_ms: c.total_ms, wall_ms: c.wall_ms, tail_ms: c.tail_ms, tail_wall_ms: c.tail_wall_ms });
+        }
+      } catch { /* the log can do without it */ }
+    }
     if (driving) await driving.catch(() => notes.push('the session driver failed'));
     const email = input.links ? await judgeEmail(input.links) : null;
     const file = input.file ? await judgeFile(input.file) : null;

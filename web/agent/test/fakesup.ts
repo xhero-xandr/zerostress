@@ -17,6 +17,8 @@ export interface FakeSup {
   /** what to do once a command is approved */
   onApprove: (commandId: string, sup: FakeSup) => void;
   cancelled: number;
+  /** what the fake reports as the host's processor measure of the VM (the run's view); none by default */
+  vmCpu: Record<string, unknown> | null;
   eventRequests: Array<{ lastEventId: string | undefined }>;
   artifactRequests: string[];
   /** pushes one event to everybody who listens (and keeps it for those who come later) */
@@ -40,7 +42,7 @@ export async function startFakeSup(): Promise<FakeSup> {
   const open = new Set<ServerResponse>();
   let ended = false;
   const sup: FakeSup = {
-    url: '', submits: [], commands: [], approvals: [], onApprove: () => undefined, cancelled: 0, eventRequests: [], artifactRequests: [], artifacts: new Map(),
+    url: '', submits: [], commands: [], approvals: [], onApprove: () => undefined, cancelled: 0, vmCpu: null, eventRequests: [], artifactRequests: [], artifacts: new Map(),
     emit(type, data) {
       const ev = { seq: log.length + 1, type, data: typeof data === 'string' ? data : JSON.stringify(data) };
       log.push(ev);
@@ -113,7 +115,7 @@ export async function startFakeSup(): Promise<FakeSup> {
       res.writeHead(200, { 'content-type': 'image/png', 'content-length': bytes.length });
       return void res.end(bytes);
     }
-    if (req.method === 'GET' && url.pathname === `/v1/runs/${RUN_ID}`) return send(res, 200, { run_id: RUN_ID, state: 'running' });
+    if (req.method === 'GET' && url.pathname === `/v1/runs/${RUN_ID}`) return send(res, 200, { run_id: RUN_ID, state: 'running', ...(sup.vmCpu ? { vm_cpu: sup.vmCpu } : {}) });
     send(res, 404, { error: 'not found' });
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
