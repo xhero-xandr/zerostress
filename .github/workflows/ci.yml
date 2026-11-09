@@ -58,7 +58,7 @@ jobs:
           "$(go env GOPATH)/bin/gosec" -quiet -tests=false -exclude=G104,G204,G302,G304 ./...
 
   go-mutations:
-    name: go mutations (artifact hand-over)
+    name: go mutations and constants
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,7 +66,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
+      # not root here: the two mutations whose tests need root are reported as skipped; on the server run it as root
       - run: SRC="$GITHUB_WORKSPACE" bash deploy/test/mutate-artifacts.sh
+      # values several parts repeat (slots, ports, session limits, sizes, deadlines) must agree, and the check must be able to fail
+      - run: bash deploy/test/constants-check.sh && bash deploy/test/constants-check.sh --controls
 
   web:
     runs-on: ubuntu-24.04
