@@ -660,6 +660,14 @@ test('each finding in a file is a reason of its own weight', () => {
     [{ findings: [{ id: 'html_form_elsewhere', detail: 'evil.example' }] }, 'file_html_form_elsewhere', 'medium'],
     [{ findings: [{ id: 'html_obfuscated_script', detail: '' }] }, 'file_obfuscated', 'medium'],
     [{ findings: [{ id: 'html_redirect', detail: '' }] }, 'file_redirect', 'medium'],
+    [{ findings: [{ id: 'macro_shell', detail: 'WScript.Shell' }] }, 'file_macro_shell', 'high'],
+    [{ findings: [{ id: 'macro_download', detail: 'URLDownloadToFile' }] }, 'file_macro_download', 'high'],
+    [{ findings: [{ id: 'macro_hotkey', detail: 'Application.OnKey' }] }, 'file_macro_hotkey', 'medium'],
+    [{ findings: [{ id: 'macro_keystrokes', detail: 'SendKeys' }] }, 'file_macro_keystrokes', 'medium'],
+    [{ findings: [{ id: 'pe_injection_api', detail: 'VirtualAllocEx, WriteProcessMemory' }] }, 'file_injection_api', 'high'],
+    [{ findings: [{ id: 'pe_keyboard_api', detail: 'GetAsyncKeyState' }] }, 'file_keyboard_api', 'low'],
+    [{ findings: [{ id: 'miner_strings', detail: 'stratum+tcp://pool.example:3333' }] }, 'file_miner', 'high'],
+    [{ findings: [{ id: 'miner_strings', detail: 'xmrig' }] }, 'file_miner', 'medium'],
   ];
   for (const [f, id, level] of cases) {
     const s = analyze(fileVisit(f)).signals.find((x) => x.id === id);

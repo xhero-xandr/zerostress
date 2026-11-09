@@ -108,6 +108,13 @@ export const T = {
       html_redirect: 'It is a page that sends you on to a site on the internet.',
       html_smuggling: 'It is a page that builds a file in your browser and hands it to you as a download.',
       svg_script: 'It is an image (SVG) with code that runs when opened.',
+      macro_shell: 'Its macros can start programs.',
+      macro_download: 'Its macros can fetch files from the internet.',
+      macro_hotkey: 'Its macros bind keys (hotkeys) in the program it opens in.',
+      macro_keystrokes: 'Its macros can type keystrokes into other windows.',
+      pe_injection_api: 'The program names functions that write into other running programs.',
+      pe_keyboard_api: 'The program names functions that watch the keyboard or set hotkeys (many honest programs do).',
+      miner_strings: 'It names a cryptocurrency miner: its pool or its algorithm.',
     } as Readonly<Record<string, string>>,
   },
   mail: {

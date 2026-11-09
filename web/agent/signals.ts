@@ -291,6 +291,14 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
     if (found('html_password_form')) say('file_html_password', 'high', 'The attached page asks for a password: a sign-in form inside a file is how credential phishing travels by email.');
     if (found('html_form_elsewhere')) say('file_html_form_elsewhere', 'medium', `The attached page sends its form to a site on the internet${detail('html_form_elsewhere') ? ` (${detail('html_form_elsewhere')})` : ''}.`);
     if (found('html_obfuscated_script')) say('file_obfuscated', 'medium', 'The file hides code in encoded form, to be decoded only when it runs.');
+    if (found('macro_shell')) say('file_macro_shell', 'high', `The macros can start programs${detail('macro_shell') ? ` (${detail('macro_shell')})` : ''}.`);
+    if (found('macro_download')) say('file_macro_download', 'high', `The macros can fetch files from the internet${detail('macro_download') ? ` (${detail('macro_download')})` : ''}.`);
+    if (found('macro_hotkey')) say('file_macro_hotkey', 'medium', 'The macros bind keys (hotkeys) in the program the document opens in.');
+    if (found('macro_keystrokes')) say('file_macro_keystrokes', 'medium', 'The macros can type keystrokes into other windows.');
+    if (found('pe_injection_api')) say('file_injection_api', 'high', `The program names functions that write into other running programs${detail('pe_injection_api') ? ` (${detail('pe_injection_api')})` : ''}.`);
+    // one keyboard function is in many honest programs, games and tools among them: told, not counted
+    if (found('pe_keyboard_api')) say('file_keyboard_api', 'low', `The program names functions that watch the keyboard or set hotkeys${detail('pe_keyboard_api') ? ` (${detail('pe_keyboard_api')})` : ''}.`);
+    if (found('miner_strings')) say('file_miner', /^stratum/i.test(detail('miner_strings')) ? 'high' : 'medium', `The file names a cryptocurrency miner${detail('miner_strings') ? ` (${detail('miner_strings')})` : ''}.`);
     if (found('html_redirect')) say('file_redirect', 'medium', 'The attached page sends the visitor on to a site on the internet.');
   }
   const fvt = opts.fileReputation?.virustotal;

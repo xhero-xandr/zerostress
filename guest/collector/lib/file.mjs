@@ -42,10 +42,12 @@ export const FINDING_IDS = Object.freeze([
   'archive_executable', 'archive_encrypted', 'nested_archive',
   'html_password_form', 'html_form_elsewhere', 'html_obfuscated_script', 'html_redirect', 'html_smuggling',
   'svg_script', 'executable', 'script_file', 'shortcut', 'disk_image',
+  // what a macro can do (read from its source, never run), what a program names in its imports, and a miner's own words
+  'macro_hotkey', 'macro_shell', 'macro_download', 'macro_keystrokes', 'pe_keyboard_api', 'pe_injection_api', 'miner_strings',
 ]);
 
 const words = (s) => new Set(s.split(' '));
-const SCRIPT_EXT = words('js jse vbs vbe wsf hta ps1 bat cmd sh');
+const SCRIPT_EXT = words('js jse vbs vbe wsf hta ps1 bat cmd sh ahk au3');
 const EXEC_EXT = new Set([...SCRIPT_EXT, ...words('exe scr com pif cpl dll msi msp wsh psm1 jar reg chm lnk url scf iso img vhd vhdx appx msix appxbundle xll')]);
 const ARCHIVE_EXT = words('zip rar 7z gz tgz tar bz2 xz cab arj ace lzh z zst');
 const DECOY_EXT = words('pdf doc docx docm xls xlsx xlsm ppt pptx rtf txt csv odt ods jpg jpeg png gif bmp tif tiff mp3 mp4 wav avi mov htm html zip rar eml msg');
@@ -103,6 +105,7 @@ export function analyzeFile({ name, mime, data } = {}) {
     out.double_extension = isDoubleExtension(filename);
     ctx.type = detectType(buf, ext);
     ANALYZERS[ctx.type]?.(buf, ctx, ext);
+    if (MINER_TYPES.has(ctx.type)) guard(ctx, () => scanMiner(buf, ctx));
   } catch {
     ctx.truncated = true;
   }
@@ -556,10 +559,25 @@ function odfParts(buf, list, ctx) {
 const AUTO_EXEC = /(?:^|[^A-Za-z0-9_])(Auto_?Open|AutoExec|AutoNew|Auto_?Close|Document_(?:Open|New|Close)|Workbook_(?:Open|Activate|BeforeClose))(?![A-Za-z0-9_])/i;
 const OVBA_MARK = Buffer.from('\0Attribut', 'latin1');
 
-/** Auto-run procedure names in a macro container: in plain text (p-code tables) or in the compressed VBA source. */
+// What a macro can do, by the names it uses. The source is read, never run. Hotkeys: Application.OnKey binds a key in
+// the program the document opens in; SendKeys types into other windows.
+const MACRO_HOTKEY = /(?<![\w.])Application\s*\.\s*OnKey\b/i;
+const MACRO_SHELL = /WScript\s*\.\s*Shell|\bShellExecute|\bpowershell\b|\bcmd(?:\.exe)?\s+\/[ck]\b|(?<![\w.])Shell\s*\(?\s*["\w]/i;
+const MACRO_DOWNLOAD = /\b(?:URLDownloadToFile|MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Net\.WebClient|Invoke-WebRequest|DownloadFile|ADODB\.Stream)\b/i;
+const MACRO_KEYS = /\bSendKeys\b/i;
+const MACRO_WORDS = [['macro_hotkey', MACRO_HOTKEY], ['macro_shell', MACRO_SHELL], ['macro_download', MACRO_DOWNLOAD], ['macro_keystrokes', MACRO_KEYS]];
+function scanMacroText(text, ctx) {
+  const auto = AUTO_EXEC.exec(text);
+  if (auto) ctx.add('auto_exec', auto[1]);
+  for (const [id, re] of MACRO_WORDS) {
+    const m = re.exec(text);
+    if (m) ctx.add(id, m[0]);
+  }
+}
+
+/** Auto-run names and the words of what a macro can do, in a macro container: in plain text (p-code tables) or in the compressed VBA source. */
 function scanAutoExec(buf, ctx) {
-  const raw = AUTO_EXEC.exec(buf.toString('latin1'));
-  if (raw) return ctx.add('auto_exec', raw[1]);
+  scanMacroText(buf.toString('latin1'), ctx);
   // A compressed module source starts with 0x01, a chunk header and a flag byte of 0 before "Attribute VB_Name".
   let p = 0;
   for (let tries = 0; tries < FILE_LIMITS.ovbaContainers; tries++) {
@@ -572,8 +590,7 @@ function scanAutoExec(buf, ctx) {
     if (room <= 0) break;
     const src = ovbaDecompress(buf, start, room);
     ctx.ovbaOut += src.length;
-    const m = AUTO_EXEC.exec(src);
-    if (m) return ctx.add('auto_exec', m[1]);
+    scanMacroText(src, ctx);
   }
   ctx.truncated = true;
 }
@@ -1081,6 +1098,28 @@ function analyzePe(buf, ctx) {
   if (!at(buf, pe, 'PE\0\0')) return ctx.add('executable', 'DOS executable');
   const kind = u16(buf, pe + 24) === 0x20b ? 'PE32+' : 'PE32';
   ctx.add('executable', `${kind} ${u16(buf, pe + 22) & 0x2000 ? 'DLL' : 'executable'}`);
+  scanImports(ctx, buf);
+}
+
+// Names of Windows functions that a program imports (they stand as plain text in its import tables). One keyboard function
+// is common in games and tools: it is named, not judged. Writing into another program takes several of them together.
+const KEYBOARD_API = ['SetWindowsHookExA', 'SetWindowsHookExW', 'GetAsyncKeyState', 'GetKeyboardState', 'RegisterHotKey', 'keybd_event'];
+const INJECTION_API = ['VirtualAllocEx', 'WriteProcessMemory', 'CreateRemoteThread', 'NtUnmapViewOfSection', 'QueueUserAPC', 'SetThreadContext'];
+function scanImports(ctx, buf) {
+  const named = (list) => list.filter((n) => buf.includes(Buffer.from(n, 'latin1')));
+  const keys = named(KEYBOARD_API);
+  if (keys.length) ctx.add('pe_keyboard_api', keys.join(', '));
+  const inject = named(INJECTION_API);
+  if (inject.length >= 2) ctx.add('pe_injection_api', inject.join(', '));
+}
+
+// A cryptocurrency miner states its pool and its algorithm. Read only in what can run (programs, scripts, pages): a
+// document that merely talks about miners is not one.
+const MINER_WORDS = /stratum\+(?:tcp|ssl):\/\/[^\s"']{3,80}|\b(?:xmrig|cryptonight|coinhive|coin-hive|cryptoloot|minero\.cc|nicehash|randomx|webminerpool|deepminer)\b/i;
+const MINER_TYPES = new Set(['pe', 'elf', 'macho', 'script', 'html', 'svg']);
+function scanMiner(buf, ctx) {
+  const m = MINER_WORDS.exec(buf.toString('latin1'));
+  if (m) ctx.add('miner_strings', m[0]);
 }
 
 function analyzeLnk(buf, ctx) {

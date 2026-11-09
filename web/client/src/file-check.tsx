@@ -78,7 +78,9 @@ const FINDING_LEVEL: Readonly<Record<string, 'high' | 'medium' | 'low'>> = {
   archive_executable: 'high', html_smuggling: 'high', svg_script: 'high', html_password_form: 'high',
   macros: 'medium', ole_object: 'medium', 'pdf_javascript': 'medium', pdf_open_action: 'medium', pdf_embedded_file: 'medium', pdf_submit_form: 'medium',
   archive_encrypted: 'medium', disk_image: 'medium', html_form_elsewhere: 'medium', html_obfuscated_script: 'medium', html_redirect: 'medium',
-  nested_archive: 'low', pdf_encrypted: 'low',
+  macro_shell: 'high', macro_download: 'high', pe_injection_api: 'high', miner_strings: 'high',
+  macro_hotkey: 'medium', macro_keystrokes: 'medium',
+  nested_archive: 'low', pdf_encrypted: 'low', pe_keyboard_api: 'low',
 };
 
 /** The file in its report: what it is, what was found inside it in the sandbox, and what VirusTotal knows of it. */

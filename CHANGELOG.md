@@ -12,6 +12,10 @@ Versions 0.1.0 to 0.8.0 were tagged afterwards, on 7 November 2026, on the commi
 
 ## [Unreleased]
 
+### Added
+
+- A file's own words are read for what it can do, without running it: a macro that starts programs, fetches files from the internet, binds keys or types keystrokes; a program that names functions to write into other programs or to watch the keyboard; a miner's pool or algorithm in a program, script or page; AutoHotkey and AutoIt files count as scripts. Each is a signal of its own weight in the report.
+
 ### Security
 - The guest image is attached read-only and shared by every microVM; a run writes only to an empty scratch disk of its own (`SUP_SCRATCH_MIB`, 1024 by default), which the guest lays over the image at boot (`zerostress-init`, overlayfs) and which is deleted with the run. Before, every run copied the 5 GiB image and could write up to about 3.5 GiB to the host; now a run writes at most its scratch disk, and starts faster with no copy. `containment-e2e.sh` fills the disk to the end. The installed image is replaced by a rename, never in place.
 - The guest image is built reproducibly: packages from a pinned snapshot of the Ubuntu archive (`GUEST_UBUNTU_SNAPSHOT`, the installed list kept as `packages.txt`), Chrome Headless Shell checked against a pinned hash, and every build step in namespaces of its own with a private `/dev` of a few devices instead of the host's.

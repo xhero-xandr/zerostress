@@ -90,6 +90,16 @@ export const MUTATIONS = [
   ["a form action is not compared by site", "agent/readings.ts", "const target = parseUrl(str(f.action));\n  if (target && here) return registrable(target.hostname) !== registrable(here.hostname);", "const target = null as URL | null;\n  if (target && here) return false;", ['agent/test/agreement.test.ts']],
   ["facts take the collector's flag for the form", "agent/facts.ts", "cross_origin: formCrossesSites(f, parseUrl(land?.url)),", "cross_origin: f.origin_differs === true,", ['agent/test/agreement.test.ts']],
   ["the dossier takes the collector's flag for the form", "agent/dossier.ts", "cross_origin: formCrossesSites(f, parseUrl(now?.url)),", "cross_origin: f.origin_differs === true,", ['agent/test/agreement.test.ts']],
+  // what a file's own words and imports say (guest/collector/lib/file.mjs findings, agent/signals.ts)
+  ["file: macros that start programs are not reported", "agent/signals.ts", "if (found('macro_shell')) say(", "if (false) say(", SIGNALS],
+  ["file: macros that fetch files are not reported", "agent/signals.ts", "if (found('macro_download')) say(", "if (false) say(", SIGNALS],
+  ["file: macros that bind keys are not reported", "agent/signals.ts", "if (found('macro_hotkey')) say(", "if (false) say(", SIGNALS],
+  ["file: macros that type keystrokes are not reported", "agent/signals.ts", "if (found('macro_keystrokes')) say(", "if (false) say(", SIGNALS],
+  ["file: a program that writes into others is not reported", "agent/signals.ts", "if (found('pe_injection_api')) say(", "if (false) say(", SIGNALS],
+  ["file: a program that names keyboard functions is not told", "agent/signals.ts", "if (found('pe_keyboard_api')) say(", "if (false) say(", SIGNALS],
+  ["file: one keyboard function weighs as much as a hook for stealing", "agent/signals.ts", "say('file_keyboard_api', 'low',", "say('file_keyboard_api', 'high',", SIGNALS],
+  ["file: a miner is not reported", "agent/signals.ts", "if (found('miner_strings')) say(", "if (false) say(", SIGNALS],
+  ["file: a miner's pool weighs as little as a word", "agent/signals.ts", "/^stratum/i.test(detail('miner_strings')) ? 'high' : 'medium'", "'medium'", SIGNALS],
   // the verdict by the rules (agent/signals.ts, spec 008)
   ["a password form to another site passes", "agent/readings.ts", "if (stated && here) return registrable(stated.hostname) !== registrable(here.hostname);", "if (stated && here) return false;", ['agent/test/agreement.test.ts', 'agent/test/signals.test.ts']],
   ["the collector's flag is ignored", "agent/readings.ts", "return f.origin_differs === true;", "return false;", ['agent/test/agreement.test.ts', 'agent/test/signals.test.ts']],
