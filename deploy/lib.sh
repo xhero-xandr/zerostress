@@ -43,25 +43,38 @@ own_code() {
   code_find -exec chown -h "$CODE_USER:$CODE_USER" {} +
 }
 
-# The person who works in the checkout over SSH (VS Code, a shell) is not CODE_USER and must not need root for it:
-# ADMIN_USER, else whoever ran sudo. Git's author for the repository is the project's, set once and only if unset.
+# The people who work in the checkout over SSH (VS Code, a shell) are not CODE_USER, and the default login differs from
+# machine to machine (rocky, vcuser, linuxuser...), so no name is guessed: they are the administrators the system itself
+# knows, the human members of the group wheel (RHEL) or sudo (Debian), or exactly ADMIN_USER when that is set.
+# Git's author for the repository is the project's, set once and only if unset.
 GIT_NAME=${GIT_NAME:-xhero-xandr}
 GIT_EMAIL=${GIT_EMAIL:-devp.xandr@gmail.com}
-admin_user() { local u=${ADMIN_USER:-${SUDO_USER:-}}; [[ -n $u && $u != root ]] && id "$u" >/dev/null 2>&1 && echo "$u"; }
+admin_users() {
+  local u
+  if [[ -n ${ADMIN_USER:-} ]]; then id "$ADMIN_USER" >/dev/null 2>&1 && echo "$ADMIN_USER"; return 0; fi
+  for u in $(getent group wheel sudo | cut -d: -f4 | tr ',' '\n' | sort -u); do
+    [[ $u != root && $(id -u "$u" 2>/dev/null || echo 0) -ge 1000 ]] && echo "$u"
+  done
+  return 0
+}
 
-# admin_access: rwX on the checkout for the admin user by ACL (the files stay CODE_USER's, so verify stays happy; the
-# ones the admin makes become theirs until own_code, which ./zs install and update run), git's safe.directory for them,
-# and the repository's author. The places of OWN_PLACES (root's and the services') are left out on purpose.
+# admin_access: rwX on the checkout for each administrator by ACL (the files stay CODE_USER's, so verify stays happy; the
+# ones an administrator makes become theirs until own_code, which ./zs install and update run), git's safe.directory
+# for them, and the repository's author. The places of OWN_PLACES (root's and the services') are left out on purpose.
 admin_access() {
-  local u p prune=() ; u=$(admin_user) || { say "admin: no ADMIN_USER and nobody ran sudo: the checkout stays closed to people"; return 0; }
+  local users u p prune=()
+  users=$(admin_users)
+  [[ -n $users ]] || { say "admin: no administrator (group wheel or sudo) and no ADMIN_USER: the checkout stays closed to people"; return 0; }
   command -v setfacl >/dev/null || dnf install -y acl >/dev/null
   for p in "${OWN_PLACES[@]}"; do prune+=(-o -path "$S/$p"); done
-  find "$S" \( "${prune[@]:1}" \) -prune -o -user "$CODE_USER" -exec setfacl -m "u:$u:rwX" {} +
-  find "$S" \( "${prune[@]:1}" \) -prune -o -user "$CODE_USER" -type d -exec setfacl -d -m "u:$u:rwX" {} +
-  runuser -u "$u" -- git config --global --get-all safe.directory 2>/dev/null | grep -qx "$S" || runuser -u "$u" -- git config --global --add safe.directory "$S"
+  for u in $users; do
+    find "$S" \( "${prune[@]:1}" \) -prune -o -user "$CODE_USER" -exec setfacl -m "u:$u:rwX" {} +
+    find "$S" \( "${prune[@]:1}" \) -prune -o -user "$CODE_USER" -type d -exec setfacl -d -m "u:$u:rwX" {} +
+    runuser -u "$u" -- git config --global --get-all safe.directory 2>/dev/null | grep -qx "$S" || runuser -u "$u" -- git config --global --add safe.directory "$S"
+  done
   as_builder git -C "$S" config user.name >/dev/null 2>&1 || as_builder git -C "$S" config user.name "$GIT_NAME"
   as_builder git -C "$S" config user.email >/dev/null 2>&1 || as_builder git -C "$S" config user.email "$GIT_EMAIL"
-  say "admin: $u may work in the checkout; git author $(as_builder git -C "$S" config user.name)"
+  say "admin: $(echo $users) may work in the checkout; git author $(as_builder git -C "$S" config user.name)"
 }
 
 # has_ssh_key: somebody other than root can come back in by key, so closing passwords and root over SSH cannot lock

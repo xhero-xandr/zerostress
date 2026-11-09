@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The host (spec 001, 010): users and groups, the project's directories with their owners and SELinux types, the
-# settings files, /dev/kvm, log rotation, the kernel parameter, the admin's access to the checkout, and SSH (keys only,
+# settings files, /dev/kvm, log rotation, the kernel parameter, the administrators' access to the checkout, and SSH (keys only,
 # no root) when somebody besides root has a key. Idempotent. Does not touch swap or services.
 source "$(dirname "$0")/../lib.sh"
 need_root
