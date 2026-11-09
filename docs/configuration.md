@@ -65,6 +65,7 @@ Both empty turns it off. One without the other, or a value of the wrong shape, s
 | `WEB_DEMOS` | example.com, Google's phishing test page, `/demo/shared-file` (deep) | example buttons under the address field, `label\|url;label\|url\|deep`; `deep` also ticks "Let the agent explore the page" |
 | `WEB_PUBLIC_URL` | `https://zerostress.space` | this site's public address: the sandbox opens an email's list of links at `<WEB_PUBLIC_URL>/x/<id>` |
 | `GEO_DIR` | `<root>/data/geo` | DB-IP Lite tables; without them no countries are shown |
+| `TRANCO_DIR` | `<root>/data/tranco` | the top 100,000 of the [Tranco](https://tranco-list.eu) list; without it the report says nothing about how widely visited a site is |
 | `WEB_RDAP` | empty | `off` stops domain-age lookups |
 
 ### Limits

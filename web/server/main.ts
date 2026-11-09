@@ -9,6 +9,7 @@
 //   SUP_SOCKET        the supervisor's socket (default <root>/run/supervisor.sock)
 //   WEB_DEMOS         "label|url;label|url" for the buttons under the input
 //   GEO_DIR           DB-IP Lite files (default <root>/data/geo); without them no place is named
+//   TRANCO_DIR        the top of the Tranco list (default <root>/data/tranco); without it nothing is said about popularity
 //   WEB_RDAP          off: the age of a domain is not looked up
 //   WEB_LIMIT_*       PER_HOUR, PER_DAY, ACTIVE, STREAMS, DAILY_CAP, CHAT_PER_HOUR, CHAT_PER_REPORT
 //   INFERENCE_*, AGENT_*   see agent/config.ts
@@ -22,6 +23,7 @@ import { describeConfig, loadAgentConfig, loadScannerConfig } from '../agent/con
 import { createUrlScanClient } from '../agent/urlscan.ts';
 import { loadChatPrompt, reply as chatReply } from '../agent/chat.ts';
 import { loadGeo } from '../agent/geo.ts';
+import { loadPopularity } from '../agent/popularity.ts';
 import { createModelClient } from '../agent/model.ts';
 import { createRdap } from '../agent/rdap.ts';
 import { createReputation } from '../agent/reputation.ts';
@@ -58,6 +60,8 @@ const demos: Demo[] = parseDemos(env.WEB_DEMOS ?? DEFAULT_DEMOS);
 
 const geo = loadGeo(env.GEO_DIR ?? `${ROOT}data/geo`);
 console.log(geo ? 'geo: DB-IP tables loaded' : 'geo: no tables, the report names no countries');
+const popularity = loadPopularity(env.TRANCO_DIR ?? `${ROOT}data/tranco`);
+console.log(popularity ? 'popularity: Tranco top list loaded' : 'popularity: no list, nothing is said about how widely visited a site is');
 const rdap = env.WEB_RDAP === 'off' ? undefined : createRdap();
 const reputation = createReputation({ safeBrowsing: env.SAFE_BROWSING_API_KEY || undefined, virustotal: env.VIRUSTOTAL_API_KEY || undefined, spamhausDqs: env.SPAMHAUS_DQS_KEY || undefined, urlscan: env.URLSCAN_API_KEY || undefined });
 
@@ -76,7 +80,7 @@ const limiter = createLimiter({
 const app = createApp({
   ...(urlscan ? { urlscan } : {}),
   clientDir: (env.WEB_CLIENT_DIR ?? `${ROOT}build/client`).replace(/\/?$/, '/'),
-  run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, rdap, reputation, limits: { totalMs: 240_000 } }),
+  run: (input, onProgress) => runTask(input, { sup, cfg, prompt, model, budget, onProgress, geo, popularity, rdap, reputation, limits: { totalMs: 240_000 } }),
   fetchShot: (runId, name) => sup.artifact(runId, name, 4 * 1024 * 1024),
   approve: (runId, commandId, sha) => sup.approve(runId, commandId, sha),
   reject: (runId, commandId) => sup.reject(runId, commandId),

@@ -9,6 +9,7 @@ Paste a link, and the report shows:
 - **A verdict** (benign / suspicious / malicious) with a confidence level, built from deterministic rules first; a model may only raise that verdict, never lower it.
 - **Network evidence**: the redirect chain and why each hop happened, the TLS certificate, every request with its IP, country and network (ASN), third-party hosts.
 - **The domain's age** (via RDAP) — a domain registered days ago is treated differently from one registered a decade ago.
+- **How widely visited the site is** (the top 100,000 of the [Tranco](https://tranco-list.eu) list, kept on the host, so no address is sent anywhere) — a remark, never a reason to lower a verdict: it says whose address it is, not that this page is safe. Only a site's own address counts, not a name on it (`docs.google.com`, a file on `s3.amazonaws.com`) or on a free hosting service.
 - **Forms and what they ask for** (password, card number, one-time code, ...) and where the data actually goes, in plain words, not the page's own.
 - **A phone and a tablet view**, captured next to the desktop one — some pages serve a password prompt or a different site only to a mobile device.
 - **A screenshot**, as proof of what the browser actually saw.

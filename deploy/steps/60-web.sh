@@ -25,6 +25,10 @@ as_builder bash -c "cd '$S/web/client' && npm run build:extension >/dev/null"
 # here is not fatal: the report then names no countries.
 if node "$S/web/tools/fetch-geo.mjs" "$S/data/geo"; then chown -R zerostress-web:zerostress-web "$S/data/geo"; else say "geo: tables not updated"; fi
 
+# how widely visited a site is: the top of the Tranco list, refreshed when older than 6 days. A failure here is not
+# fatal either: the report then says nothing about popularity.
+if node "$S/web/tools/fetch-tranco.mjs" "$S/data/tranco"; then chown -R zerostress-web:zerostress-web "$S/data/tranco"; else say "tranco: list not updated"; fi
+
 # Caddy's configuration from its template: only Cloudflare's own address ranges may say who the visitor is
 V4=$(curl -fsS --max-time 15 https://www.cloudflare.com/ips-v4 | tr '\n' ' ')
 V6=$(curl -fsS --max-time 15 https://www.cloudflare.com/ips-v6 | tr '\n' ' ')

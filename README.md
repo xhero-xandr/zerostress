@@ -85,3 +85,4 @@ One version for the whole project, in [VERSION](VERSION); it stays below 1.0.0 u
 MIT — see [LICENSE](LICENSE).
 
 Country and network data comes from [DB-IP Lite](https://db-ip.com/db/lite.php) (CC BY 4.0); the report credits it as "IP Geolocation by DB-IP".
+How widely visited a site is comes from the top of the [Tranco](https://tranco-list.eu) list (Le Pochat et al., NDSS 2019), fetched by the installer and kept on the host; it is not redistributed here.

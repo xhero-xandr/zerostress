@@ -251,6 +251,7 @@ test('an email: every link opened in this one microVM from our list, each judged
   const LIST = 'https://zerostress.test/x/0123';
   const L = ['https://good.test/', 'https://phish.test/login', 'https://gone.test/'];
   const { sup, deps } = await setup();
+  deps.popularity = (host) => (host === 'good.test' ? 5 : null);
   let snap = 1;
   // the list page in front of the agent; the third link is not on it, so it can never be opened
   const list = () => [
@@ -303,6 +304,7 @@ test('an email: every link opened in this one microVM from our list, each judged
     [L[0], L[0], null, 'shot-1.png'], [L[1], L[1], null, 'shot-2.png'], [L[2], L[2], 'not_reached', null]]);
   assert.equal(links[0]!.verdict, 'benign');
   assert.notEqual(links[1]!.verdict, 'benign');
+  assert.ok(links[0]!.signals.includes('popular_site') && !links[1]!.signals.includes('popular_site'), 'each link is told on its own address');
   assert.equal(links[1]!.password, true);
   assert.equal(links[2]!.verdict, 'unknown');
   // the report above the list is the worst link, never our own list page
@@ -681,6 +683,31 @@ test('the domain is asked about by name only, once, from the start; its age is a
   assert.ok(r.assessment.rules.signals.some((s) => s.id === 'young_domain'));
   assert.deepEqual(r.facts.domain, { name: 'page.test', created: '2026-11-01T00:00:00.000Z', age_days: 4, registrar: 'Some Registrar' });
   assert.deepEqual(r.facts.servers[0], { ip: '93.184.216.34', country: 'US', asn: 15133, org: 'EdgeCast', hosts: ['page.test'], requests: 1 });
+});
+
+test('how widely visited the site is: said in the one-link check and in the deep check, from the start', async () => {
+  const known = (host: string) => (host === 'page.test' ? 1234 : null);
+  const one = await setup();
+  one.deps.popularity = known;
+  begin(one.sup, plain(), false);
+  finish(one.sup);
+  const r = await run(runTask({ url: 'http://page.test/' }, one.deps));
+  assert.match(r.assessment.rules.signals.find((s) => s.id === 'popular_site')?.text ?? '', /among the 10,000 most visited/);
+
+  let calls = 0;
+  const deep = await setup({}, () => {
+    calls++;
+    return chat(calls === 1 ? answer({ verdict: 'benign', next: { action: 'open_link', ref: refOfPlain() } }) : answer({ verdict: 'benign', next: { action: 'none' } }));
+  });
+  deep.deps.popularity = known;
+  deep.sup.onCommand = (cmd, s) => {
+    if (cmd.cmd === 'open_link') nextPage(s, cmd, 2, ['e1']);
+    if (cmd.cmd === 'close') { s.evidence(ev('cmd_result', { id: cmd.id, ok: true })); finish(s); }
+  };
+  begin(deep.sup, plain().filter((e) => e.kind !== 'summary'), true);
+  const d = await run(runTask({ url: 'http://page.test/', session: { idle_s: 30, max_s: 120 } }, deep.deps));
+  assert.ok(calls >= 2);
+  assert.ok(d.assessment.rules.signals.some((s) => s.id === 'popular_site'), 'every judgement of a deep check says it too');
 });
 
 test('in a deep check the domain asked about is the one the link led to, not a page the agent opened', async () => {

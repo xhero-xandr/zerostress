@@ -8,6 +8,7 @@ import { hidesText } from './hiding.ts';
 import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } from './lists.ts';
 import { domainToUnicode } from 'node:url';
 import type { FileVerdict, Reputation } from './reputation.ts';
+import { rankStep, type PopularityLookup } from './popularity.ts';
 import { isIpHost, mixedScripts, onSharedHost, parseUrl, registrable, sld, skeleton } from './domain.ts';
 import { type Ev, isObj, str, list } from './guard.ts';
 import { formCrossesSites, isBlocked, thirdPartyHosts } from './readings.ts';
@@ -47,6 +48,8 @@ export interface Options {
   reputation?: Reputation | null;
   /** what VirusTotal knows about a file the sandbox fetched, by its SHA-256 (reputation.ts) */
   fileReputation?: { virustotal: FileVerdict | null } | null;
+  /** how widely visited a site is (popularity.ts); it is mentioned, it never lowers a verdict */
+  popularity?: PopularityLookup | null;
 }
 
 const origin = (u: unknown): string => parseUrl(u)?.origin ?? '';
@@ -135,6 +138,9 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   }
   if (onHost.length) add('brand_on_shared_host', 'medium', `The address puts the name ${hostBrand} on a free hosting service, where anyone can pick any name; ${hostBrand} does not run its site there.`, onHost);
   if (odd.length) add('lookalike_host', 'medium', 'A site in the chain has an address of the kind used to imitate another (encoded or mixed-alphabet name, a bare number address, an unusual port).', odd);
+
+  const rank = finalParsed ? opts.popularity?.(finalParsed.hostname) ?? null : null;
+  if (rank !== null) add('popular_site', 'info', `The final address is the home of a widely visited website (among the ${rankStep(rank).toLocaleString('en-US')} most visited in the world). That says whose address it is, not that this page is safe: anyone can post pages on some big sites.`, []);
 
   if (finalParsed?.protocol === 'http:') add('no_tls', 'low', 'The final page was loaded without encryption.', page ? [page[1]] : []);
 

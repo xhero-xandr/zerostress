@@ -11,6 +11,7 @@ import { buildDossier } from './dossier.ts';
 import { parseAnswer, type Answer, type Message, type ModelClient } from './model.ts';
 import { analyze, raise, type Signal, type Verdict } from './signals.ts';
 import type { FileVerdict, Reputation } from './reputation.ts';
+import type { PopularityLookup } from './popularity.ts';
 import type { TaskHooks } from './task-hooks.ts';
 import { RULESET_SHA256 } from '../hooks/rules.ts';
 
@@ -62,6 +63,8 @@ export interface AssessDeps {
   /** a fresh, unguessable string per request; tests fix it */
   nonce?: () => string;
   now?: () => number;
+  /** how widely visited the final site is (popularity.ts) */
+  popularity?: PopularityLookup | null;
 }
 
 export interface AssessInput {
@@ -89,7 +92,7 @@ function isPng(b: Uint8Array): boolean {
 
 export async function assess(input: AssessInput, deps: AssessDeps): Promise<Assessment> {
   const nowMs = (deps.now ?? Date.now)();
-  const rules = analyze(input.events, { injection: input.hooks.injection, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null, fileReputation: input.fileReputation ?? null });
+  const rules = analyze(input.events, { injection: input.hooks.injection, now: nowMs, domainAgeDays: input.domainAgeDays, reputation: input.reputation ?? null, fileReputation: input.fileReputation ?? null, popularity: deps.popularity ?? null });
   const notes: string[] = [];
   const result: Assessment = {
     verdict: rules.verdict,

@@ -8,6 +8,7 @@ const GATE = ['agent/test/gatekeeper.test.ts'];
 const RUN = ['agent/test/runner.test.ts'];
 const REPORT = ['agent/test/report.test.ts'];
 const MODEL = ['agent/test/model.test.ts', 'agent/test/assess.test.ts'];
+const POP = ['agent/test/popularity.test.ts'];
 
 export const MUTATIONS = [
   // normalisation
@@ -452,6 +453,23 @@ export const MUTATIONS = [
   ["client: a finding is written as markup", "client/src/pages/tabs.tsx", "<span className=\"min-w-0 [overflow-wrap:anywhere]\">{s.text}</span>", "<span className=\"min-w-0 [overflow-wrap:anywhere]\" dangerouslySetInnerHTML={{ __html: s.text }} />", ['client/test/tabs.test.tsx']],
   ["client: markup is written and the source scan must say so", "client/src/pages/tabs.tsx", "<span className=\"min-w-0 [overflow-wrap:anywhere]\">{s.text}</span>", "<span className=\"min-w-0 [overflow-wrap:anywhere]\" dangerouslySetInnerHTML={{ __html: s.text }} />", ['client/test/source.test.ts']],
   ["client: the task key travels in the address", "client/src/api.ts", "fetch(`/api/tasks/${id}/pending`, { headers: { 'x-task-key': key } })", "fetch(`/api/tasks/${id}/pending?k=${key}`)", ['client/test/source.test.ts']],
+  // how widely visited a site is (popularity.ts): a remark, never a reason to lower a verdict, and only for a site's own address
+  ["popularity: a name on a site counts as the site", "agent/popularity.ts", "if (h !== site && h !== `www.${site}`) return null;", "", POP],
+  ["popularity: www is not the site", "agent/popularity.ts", "h !== `www.${site}`", "true", POP],
+  ["popularity: an address counts", "agent/popularity.ts", "if (isIpHost(h)) return null;", "", POP],
+  ["popularity: the case of the name matters", "agent/popularity.ts", "const h = host.toLowerCase().replace(/\\.$/, '');", "const h = host.replace(/\\.$/, '');", POP],
+  ["popularity: a name is kept at its last place", "agent/popularity.ts", "if (NAME.test(name) && !ranks.has(name))", "if (NAME.test(name))", POP],
+  ["popularity: more than 100,000 lines are read", "agent/popularity.ts", "const lines = text.split('\\n', MAX_ROWS);", "const lines = text.split('\\n');", POP],
+  ["popularity: a short file is a list", "agent/popularity.ts", "ranks.size >= 1000 ?", "ranks.size >= 0 ?", POP],
+  ["popularity: the 1,000 step ends before 1,000", "agent/popularity.ts", "rank <= 1000 ?", "rank < 1000 ?", POP],
+  ["popularity: the 10,000 step ends before 10,000", "agent/popularity.ts", "rank <= 10_000 ?", "rank < 10_000 ?", POP],
+  ["popularity: the remark is never made", "agent/signals.ts", "opts.popularity?.(finalParsed.hostname) ?? null", "null", POP],
+  ["popularity: the remark costs points", "agent/signals.ts", "add('popular_site', 'info',", "add('popular_site', 'low',", POP],
+  ["popularity: assess does not pass the list", "agent/assess.ts", "popularity: deps.popularity ?? null", "popularity: null", ['agent/test/runner.test.ts']],
+  ["popularity: a judgement of a deep check or of an email link does not pass the list", "agent/runner.ts", "budget: deps.budget, popularity: deps.popularity }", "budget: deps.budget }", ['agent/test/runner.test.ts'], 2],
+  ["zip: a file too large is read", "agent/zip-first.ts", "if (size > maxBytes) throw", "if (false) throw", POP],
+  ["zip: the size in the archive is not compared", "agent/zip-first.ts", "if (out.length !== size) throw", "if (false) throw", POP],
+  ["zip: a cut archive is read", "agent/zip-first.ts", "if (start + packed > b.length) throw", "if (false) throw", POP],
 // a sixth element, a number, says the text occurs in that many copies of the same code (the runner drives a session for a
 // link, an email and a file): each copy is broken on its own, and the count must match
 ].map(([label, file, from, to, tests, copies]) => ({ label, file, from, to, tests: tests ?? HOOKS, ...(copies ? { copies } : {}) }));

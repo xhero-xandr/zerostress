@@ -19,6 +19,7 @@ import { pickShots, type Shots } from './devices.ts';
 import { isIpHost, parseUrl, registrable } from './domain.ts';
 import { buildFacts, type Facts } from './facts.ts';
 import type { GeoLookup } from './geo.ts';
+import type { PopularityLookup } from './popularity.ts';
 import type { DomainInfo } from './rdap.ts';
 import { createGatekeeper, type Reason } from './gatekeeper.ts';
 import type { ModelClient } from './model.ts';
@@ -154,6 +155,8 @@ export interface RunnerDeps {
   hooks?: () => GuardedHooks;
   /** country and network of an address (geo.ts); without it the report names no places */
   geo?: GeoLookup | null;
+  /** how widely visited a site is (popularity.ts); without it the report says nothing about it */
+  popularity?: PopularityLookup | null;
   /** when a domain was registered (rdap.ts); without it the age is simply not known */
   rdap?: (domain: string) => Promise<DomainInfo | null>;
   /** what others already know about an address (reputation.ts); without it nobody is asked */
@@ -272,7 +275,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
     const finalUrl = String(events.filter(isObj).filter((e) => e.kind === 'summary').at(-1)?.final_url ?? landingView(events)?.url ?? input.url);
     const reputation = await reputationFor([input.url, finalUrl], finalHost());
     if (reputation) lastReputation = reputation;
-    const a = await assess({ events: [...events], hooks: task, screenshot: shot, domainAgeDays: (await domainNow())?.age_days ?? null, reputation }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget });
+    const a = await assess({ events: [...events], hooks: task, screenshot: shot, domainAgeDays: (await domainNow())?.age_days ?? null, reputation }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget, popularity: deps.popularity });
     if (a.mode === 'rules_only') note('rules_only', { reason: a.mode_reason ?? 'no_model_configured', verdict: a.rules.verdict, step });
     else note('model_answered', { ms: Date.now() - t0, tokens: a.usage?.total ?? 0, verdict: a.model?.verdict ?? a.verdict, next: (live && a.next?.action) || 'none', mode: a.mode, step });
     return a;
@@ -425,7 +428,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       if (v.shot && deps.cfg.vision) { try { png = await deps.sup.artifact(runId, v.shot, SHOT_MAX); } catch { png = null; } }
       const age = (await Promise.race([domainFor(parseUrl(v.final)?.hostname ?? ''), new Promise<null>((r) => setTimeout(() => r(null), 6000).unref())]))?.age_days ?? null;
       const a = v.st.error === null
-        ? await assess({ events: v.evs, hooks: task, screenshot: png, domainAgeDays: age, reputation: await reputationFor([v.st.url, v.final], parseUrl(v.final)?.hostname ?? '') }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget })
+        ? await assess({ events: v.evs, hooks: task, screenshot: png, domainAgeDays: age, reputation: await reputationFor([v.st.url, v.final], parseUrl(v.final)?.hostname ?? '') }, { cfg: deps.cfg, prompt: deps.prompt, client: deps.model, budget: deps.budget, popularity: deps.popularity })
         : null;
       const verdict: Verdict = a ? a.verdict : 'unknown';
       note('email_link_verdict', { n: i + 1, verdict, by: a?.mode ?? 'rules_only', host: hostOf(v.final) });
