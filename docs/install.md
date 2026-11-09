@@ -37,7 +37,7 @@ Code changes go through git, settings through `./zs config`; the rest is filled 
 ## A new server
 1. A Vultr VM with KVM (Firecracker does not work without `/dev/kvm`; the `host` step checks it first), Rocky Linux 10.
 2. `git clone https://github.com/xhero-xandr/zerostress /zerostress && cd /zerostress`
-3. `sudo ./zs install host`, then `./zs config web` (the model key), and reboot if the step asks for it (kernel parameter).
+3. Make sure you can log in over SSH with a key as a user besides root (the `host` step closes SSH passwords and root login, but only when such a user has an authorized key). Then `sudo ./zs install host`, then `./zs config web` (the model key), and reboot if the step asks for it (kernel parameter).
 4. `sudo ./zs install` (about 15 minutes, most of it the guest image).
 5. `./zs verify --live`, then point DNS at the host.
 
