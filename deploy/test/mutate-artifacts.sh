@@ -10,9 +10,16 @@ backup=$(mktemp)
 current=""
 trap '[[ -n $current ]] && cp "$backup" "$S/$current"; rm -f "$backup"' EXIT
 
-mut() { # file  sed-expression  directory  go-test-regex  label
-  local file=$1 expr=$2 dir=$3 re=$4 label=$5
+skipped=0
+mut() { # file  sed-expression  directory  go-test-regex  label  [root]
+  local file=$1 expr=$2 dir=$3 re=$4 label=$5 needs=${6:-}
+  if [[ $needs == root && $EUID -ne 0 ]]; then
+    echo "SKIPPED (its tests need root; run this as root on the server): $label"; skipped=$((skipped + 1)); return
+  fi
   total=$((total + 1))
+  # a mutation that lets the job's processes live leaves some of the test user's behind, and the next test of that kind
+  # then SKIPS (the uid is not free) and passes: clear them before and after every mutation
+  [[ $EUID -eq 0 ]] && pkill -9 -u 64999 2>/dev/null
   current=$file
   cp "$S/$file" "$backup"
   sed -i "$expr" "$S/$file"
@@ -27,6 +34,8 @@ mut() { # file  sed-expression  directory  go-test-regex  label
   fi
   cp "$backup" "$S/$file"
   current=""
+  [[ $EUID -eq 0 ]] && pkill -9 -u 64999 2>/dev/null
+  return 0
 }
 
 mut supervisor/artifacts.go 's/if sum\[:16\] != m\[1\] {/if false {/' supervisor 'TestArtifact|TestPng|TestBinary' "hash check off"
@@ -61,5 +70,22 @@ mut supervisor/vsock.go 's/if len(line) > maxLine {/if false {/' supervisor 'Tes
 mut supervisor/api.go 's/if len(b) > maxBody {/if false {/' supervisor 'TestAPI_BodyLimitBoundary' "request body limit off"
 mut supervisor/run.go 's/r.hard = time.AfterFunc(hardFor,/r.hard = time.AfterFunc(hardFor+24*365*time.Hour,/' supervisor 'TestCore_HardTimeoutDestroysHungVM|TestSessions_SupervisorCeilingEndsSessionThatIgnoresCloseAndTimeLimit' "no hard timeout"
 
-echo "mutations: $total, problems: $fails"
+# ---- the guest agent's other protective steps (added 9 Nov 2026): process groups, killing, caps, deadlines, environment ----
+mut guest/agent/agent.go 's/Setpgid: true, Credential: a.cred/Setpgid: false, Credential: a.cred/' guest/agent 'TestTimeoutKillsWholeProcessGroup|TestClientGoneKillsJob' "the job has no process group of its own"
+# the group is killed twice, on cancel and again after the wait (the second catches stragglers): one alone changes nothing
+mut guest/agent/agent.go 's/syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)/syscall.Kill(cmd.Process.Pid, syscall.SIGKILL)/;s/_ = syscall.Kill(-pgid, syscall.SIGKILL) \/\/ stragglers in the same process group/_ = pgid/' guest/agent 'TestTimeoutKillsWholeProcessGroup|TestClientGoneKillsJob' "nothing kills the job's other processes in its group"
+mut guest/agent/agent.go 's/a.killJobUser()  *\/\/ and any that left it/_ = 0/' guest/agent 'TestEveryProcessOfTheJobUserIsKilled|TestTimeoutHoldsWhenAProcessLeavesTheGroupAndKeepsTheOutput' "processes that left the group (setsid) survive" root
+mut guest/agent/proc.go 's/_ = syscall.Kill(pid, syscall.SIGKILL)/_ = syscall.Kill(pid, 0)/' guest/agent 'TestEveryProcessOfTheJobUserIsKilled|TestTimeoutHoldsWhenAProcessLeavesTheGroupAndKeepsTheOutput' "killUser kills nobody" root
+mut guest/agent/agent.go 's/if s > a.cfg.SessionMax {/if false {/' guest/agent 'TestSessionMaxIsCappedByTheAgent' "a session may ask for any length"
+mut guest/agent/agent.go 's/timeout = s + a.cfg.SessionGrace/timeout = s + 100*time.Hour/' guest/agent 'TestSessionTimeoutComesFromMaxS|TestSessionMaxIsCappedByTheAgent' "the session deadline is far away"
+mut guest/agent/agent.go 's/_ = conn.SetReadDeadline(time.Now().Add(a.cfg.ReadJobTimeout))/_ = 0/' guest/agent 'TestNoNewlineTimesOut' "no deadline for reading the job"
+mut guest/agent/agent.go 's/stop(reasonOversize)/_ = reasonOversize/' guest/agent 'TestOversizeIsCappedAndKilled' "no cap on the output"
+mut guest/agent/agent.go 's/^\t\t\t_ = out.Close()$/\t\t\t_ = 0/' guest/agent 'TestTimeoutHoldsWhenAProcessLeavesTheGroupAndKeepsTheOutput' "the output stays open after the job ended"
+mut guest/agent/agent.go 's/cmd.Env = a.cfg.Env/cmd.Env = nil/' guest/agent 'TestMinimalEnvironment' "the job inherits the agent's environment"
+mut guest/agent/agent.go 's/if !a.busy.CompareAndSwap(false, true) {/if false {/' guest/agent 'TestBusyWhileJobRuns|TestSessionSlotIsBusyWhileTheSessionRuns' "two jobs at once"
+mut guest/agent/agent.go 's/needNL := last != .\\n./needNL := last != 0 \&\& false/' guest/agent 'TestStatusOnOwnLineWhenOutputHasNoNewline|TestCollectorCannotForgeFinalStatus' "the final status can share a line with the output"
+mut guest/agent/agent.go 's/if len(body) > a.cfg.MaxCmd || body\[0\] != .{. || !json.Valid(body) {/if false {/' guest/agent 'TestBadCommandEndsTheJobAndKillsTheCollector' "any line is a command"
+mut guest/agent/agent.go 's/if count > a.cfg.MaxCmds {/if false {/' guest/agent 'TestTooManyCommands' "no limit on the number of commands"
+
+echo "mutations: $total, problems: $fails${skipped:+, skipped for lack of root: $skipped}"
 exit $((fails > 0))
