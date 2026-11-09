@@ -85,7 +85,7 @@ these checks refuses what it should.
 - On your own machine: `git clone`, `cp config/web.env.example config/web.env` (the key is optional), `./zs dev`. Without KVM no real link checks run (there is no supervisor), but the interface, the report and the chat work.
 
 ## Tests
-Without KVM (these also run in CI): `npm test` and `npm run typecheck` in `web/` and `web/client/` (the client's typecheck covers the extension's sources), `node --test extension/test/*.mjs` and `npm run build:extension`, `npm run e2e` in `web/client/` (a browser check of the CSP, Chromium as a regular user), `npm test` in `guest/collector/`, `supervisor/build.sh` and `guest/agent/build.sh` (tests with `-race`), `deploy/test/mutate-artifacts.sh`. Mutation testing of the web layer: `npm run mutate` in `web/` (about 40 minutes).
+Without KVM (these also run in CI): `npm test` and `npm run typecheck` in `web/` and `web/client/` (the client's typecheck covers the extension's sources), `node --test extension/test/*.mjs` and `npm run build:extension`, `npm run e2e` in `web/client/` (a browser check of the CSP, Chromium as a regular user), `npm test` in `guest/collector/`, `supervisor/build.sh` and `guest/agent/build.sh` (tests with `-race`), `deploy/test/mutate-artifacts.sh` (29 mutations of the Go code: artifact hand-over, approvals bound to the command hash and their expiry, which commands are risky, command size and fields, slot quarantine, session slots, the hard timeout, request and guest line limits, run ids; about 40 seconds). Mutation testing of the web layer: `npm run mutate` in `web/` (about 40 minutes).
 
 On real microVMs (on the server only, as `root`; everything they create they clean up; they target `/zerostress`):
 ```
