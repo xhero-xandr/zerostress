@@ -26,6 +26,10 @@ CODE_USER=zerostress
 # the git-ignored places that keep their own owners (root, a service): own_code leaves them alone
 OWN_PLACES=(bin runtime images data logs run config/web.env config/supervisor.env config/Caddyfile)
 
+# System libraries the Playwright Chromium needs on a Rocky host (found missing on a fresh one, 8 Nov 2026): the browser
+# of web/tools/panel-check.mjs and web/client's e2e check. Its own download is by the owner of the checkout (60-web.sh).
+CHROMIUM_LIBS=(atk at-spi2-atk at-spi2-core alsa-lib libXcomposite libXdamage libXfixes libXrandr)
+
 # code_find FIND-ACTION...: the files of the checkout that are not CODE_USER's, outside OWN_PLACES
 code_find() {
   local prune=() p

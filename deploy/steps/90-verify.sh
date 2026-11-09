@@ -31,6 +31,10 @@ check "config/Caddyfile validates" "$S/bin/caddy" validate --config "$S/config/C
 for b in zsvm zsnet zerostress-supervisor firecracker caddy; do check "bin/$b is root's and nobody else may change it" bash -c "[[ \$(stat -c '%U %a' '$S/bin/$b') =~ ^root\ 7[0-5][0-5]$ ]]"; done
 check "the code is $CODE_USER's" test "$(stat -c %U "$S")" = "$CODE_USER"
 check "$CODE_USER has no sudo and no login" bash -c "! sudo -l -U '$CODE_USER' 2>/dev/null | grep -q 'may run' && [[ \$(getent passwd '$CODE_USER' | cut -d: -f7) == */nologin ]]"
+for p in "${CHROMIUM_LIBS[@]}"; do check "package $p (Chromium's library) is installed" rpm -q "$p"; done
+chrome=$(compgen -G "$(getent passwd "$CODE_USER" | cut -d: -f6)/.cache/ms-playwright/chromium-*/chrome-linux64/chrome" | head -1 || true)
+check "Playwright's Chromium is installed and finds all its libraries" bash -c "[[ -x '$chrome' ]] && ! ldd '$chrome' | grep -q 'not found'"
+check "the extension is built (build/extension)" test -s "$S/build/extension/manifest.json"
 no_foreign_code() { [[ -z $(code_find -print -quit) ]]; }
 check "every file of the code is $CODE_USER's (./zs install and update give them back)" no_foreign_code
 check "the logs are root's only (they hold visitors' addresses)" bash -c "[[ -z \$(find '$S/logs' -name '*.log*' ! -perm 0600 -print -quit) ]]"

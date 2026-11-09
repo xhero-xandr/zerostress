@@ -15,6 +15,12 @@ as_builder bash -c "cd '$S/web' && npm ci --ignore-scripts --no-audit --no-fund 
 as_builder bash -c "cd '$S/web/client' && npm ci --ignore-scripts --no-audit --no-fund >/dev/null && npx vite build >/dev/null"
 [[ -f $S/build/client/index.html ]] || { echo "client: the build made no index.html" >&2; exit 1; }
 
+# The browser check of the whole thing: the collector's Playwright (pinned by its lock file), its Chromium (the owner's
+# home, not the system's), and the extension build that web/tools/panel-check.mjs loads. Nothing here runs in the service.
+as_builder bash -c "cd '$S/guest/collector' && npm ci --ignore-scripts --no-audit --no-fund >/dev/null && npx playwright install chromium >/dev/null"
+as_builder bash -c "cd '$S/web/client' && npm run build:extension >/dev/null"
+[[ -f $S/build/extension/manifest.json ]] || { echo "extension: the build made no manifest.json" >&2; exit 1; }
+
 # country and network of an address: DB-IP Lite tables (CC BY 4.0), refreshed when older than 20 days. A failure
 # here is not fatal: the report then names no countries.
 if node "$S/web/tools/fetch-geo.mjs" "$S/data/geo"; then chown -R zerostress-web:zerostress-web "$S/data/geo"; else say "geo: tables not updated"; fi

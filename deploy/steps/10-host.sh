@@ -11,6 +11,10 @@ need_root_dir
 # (mkfs.ext4, unshare, zip, zstd) was already there on a plain Rocky 10 Vultr instance (checked on a fresh one, 8 Nov 2026).
 command -v unsquashfs >/dev/null || { command -v dnf >/dev/null && dnf install -y squashfs-tools || { echo "need unsquashfs (package squashfs-tools): guest/image/build.sh unpacks the CI root filesystem with it" >&2; exit 1; }; }
 
+# The libraries Chromium needs for web/tools/panel-check.mjs and the client's browser check (installed in 60-web.sh).
+missing=(); for p in "${CHROMIUM_LIBS[@]}"; do rpm -q "$p" >/dev/null 2>&1 || missing+=("$p"); done
+((${#missing[@]} == 0)) || { command -v dnf >/dev/null && dnf install -y "${missing[@]}" || { echo "need these packages for Chromium: ${missing[*]}" >&2; exit 1; }; }
+
 # guest/image/build.sh runs as root over a checkout owned by $CODE_USER; git refuses that ("dubious ownership") unless
 # told it is fine, root's repo_commit in the image manifest would silently read "unknown" otherwise.
 git config --global --get-all safe.directory 2>/dev/null | grep -qx "$ROOT" || git config --global --add safe.directory "$ROOT"
