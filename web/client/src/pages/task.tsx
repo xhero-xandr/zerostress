@@ -59,7 +59,10 @@ function Progress({ status }: { status: TaskStatus }) {
       } catch { /* not ours */ }
     });
     // the agent waits for the owner, or stopped waiting: the status says which
-    es.addEventListener('approval', () => void qc.invalidateQueries({ queryKey: ['status', status.id] }));
+    es.addEventListener('approval', () => {
+      void qc.invalidateQueries({ queryKey: ['status', status.id] });
+      void qc.invalidateQueries({ queryKey: ['pending', status.id] });
+    });
     es.addEventListener('final', () => {
       es.close();
       void qc.invalidateQueries({ queryKey: ['status', status.id] });

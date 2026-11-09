@@ -11,21 +11,25 @@ export function Approval({ id }: { id: string }) {
   const key = useTaskKey(id);
   const pending = useQuery({ queryKey: ['pending', id], queryFn: () => getPending(id, key), enabled: key !== '', retry: false });
   const [result, setResult] = useState('');
-  const [sent, setSent] = useState(false);
-  const p = pending.data?.pending[0];
+  const [sending, setSending] = useState(false);
+  // answered questions stay hidden even while the list still carries them; the next one waiting is shown in turn
+  const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
+  const p = pending.data?.pending.find((x) => !answered.has(x.command_id));
 
   if (!key) return <p className="text-[15px] text-muted">{T.approvalOnlyOwner}</p>;
-  // decided: the answer stays, even when nothing is waiting any more
-  if (sent && result) return <p role="status" className="rounded-2xl border border-line bg-surface p-5 text-muted">{result}</p>;
-  if (!p) return null;
+  // nothing is waiting now: the last answer stays
+  if (!p) return result ? <p role="status" className="rounded-2xl border border-line bg-surface p-5 text-muted">{result}</p> : null;
   const choose = async (allow: boolean) => {
-    setSent(true);
+    setSending(true);
     try {
-      setResult((await decide(id, key, p, allow)).message);
+      const done = await decide(id, key, p, allow);
+      setAnswered((cur) => new Set(cur).add(p.command_id));
+      setResult(done.message);
     } catch (e) {
       // nothing was decided: the buttons come back so the owner can try again
       setResult(e instanceof ApiError ? e.message : T.serverError);
-      setSent(false);
+    } finally {
+      setSending(false);
     }
   };
   return (
@@ -34,8 +38,8 @@ export function Approval({ id }: { id: string }) {
       <p>{T.approvalText}</p>
       <p className="font-semibold">{p.label}</p>
       <div className="flex flex-wrap gap-2.5">
-        <button type="button" disabled={sent} onClick={() => void choose(true)} className={btnPrimary}>{T.allow}</button>
-        <button type="button" disabled={sent} onClick={() => void choose(false)} className={btnSecondary}>{T.deny}</button>
+        <button type="button" disabled={sending} onClick={() => void choose(true)} className={btnPrimary}>{T.allow}</button>
+        <button type="button" disabled={sending} onClick={() => void choose(false)} className={btnSecondary}>{T.deny}</button>
       </div>
       <p role="status" className="text-muted">{result}</p>
     </section>

@@ -92,6 +92,48 @@ describe('the decision during a live check', () => {
   });
 });
 
+describe('a second decision in the same check', () => {
+  const running = { stage: 'opening' as const, label: 'Loading example.com', at: 1, has_report: false };
+  const item = (n: number, label: string) => ({ command_id: `c${n}`, command_sha256: String(n).repeat(64), label });
+  const setup = (lists: () => unknown[]) => {
+    const decisions: string[] = [];
+    vi.stubGlobal('EventSource', LiveStream);
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      if (url === `/api/tasks/${ID}`) return json(status({ ...running, awaiting: lists().length > 0 }));
+      if (url.endsWith('/pending')) return json({ pending: lists() });
+      if (url.endsWith('/approvals')) { decisions.push(JSON.parse(String(init?.body)).command_id as string); return json({ message: 'Sent.' }, 202); }
+      return json({}, 404);
+    });
+    return decisions;
+  };
+
+  test('the question that comes after an answered one is shown, not the old answer', async () => {
+    let waiting = [item(1, 'Submit a form on the page')];
+    const decisions = setup(() => waiting);
+    show(`/r/${ID}#k=${'k'.repeat(32)}`);
+    fireEvent.click(await screen.findByRole('button', { name: T.allow }));
+    await waitFor(() => expect(decisions).toEqual(['c1']));
+    waiting = [item(2, 'Download a file from the page')];
+    LiveStream.last!.send('approval', { waiting: true });
+    expect(await screen.findByText('Download a file from the page')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: T.allow }));
+    await waitFor(() => expect(decisions).toEqual(['c1', 'c2']));
+  });
+
+  test('two questions waiting at once are answered one after the other, none is skipped', async () => {
+    let waiting = [item(1, 'Submit a form on the page'), item(2, 'Download a file from the page')];
+    const decisions = setup(() => waiting);
+    show(`/r/${ID}#k=${'k'.repeat(32)}`);
+    expect(await screen.findByText('Submit a form on the page')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: T.deny }));
+    await waitFor(() => expect(decisions).toEqual(['c1']));
+    expect(await screen.findByText('Download a file from the page')).toBeTruthy();
+    waiting = [item(2, 'Download a file from the page')];
+    fireEvent.click(screen.getByRole('button', { name: T.allow }));
+    await waitFor(() => expect(decisions).toEqual(['c1', 'c2']));
+  });
+});
+
 describe('addresses', () => {
   test('/r/:id/summary is not an address, as on the server', async () => {
     vi.stubGlobal('fetch', (url: string) => (url === `/api/tasks/${ID}` ? json(status()) : url === `/api/reports/${ID}` ? json(hostile()) : json({}, 404)));
