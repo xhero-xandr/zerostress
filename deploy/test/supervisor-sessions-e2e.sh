@@ -5,6 +5,10 @@
 # (guest/image/build.sh + install.sh), SUP_CONCURRENCY=2 and the default SUP_SESSION_SLOTS=1.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-e2e.sh"
+# the service logs to this file, not to the journal (StandardOutput=append: in the unit); only the lines of this run count
+SLOG=/zerostress/logs/supervisor.log
+SLOG0=$(wc -l <"$SLOG")
+slog() { tail -n +$((SLOG0 + 1)) "$SLOG"; }
 
 JSON=(-H 'content-type: application/json')
 post_session() { # url [session-json]
@@ -208,9 +212,9 @@ check "health shows no sessions" "$(api http://localhost/v1/health)" '"sessions"
 host_clean "supervisor killed in a session"
 
 echo "== the service log keeps no URLs with queries and no typed-in values"
-check "no URL with a query string in the journal" "$(journalctl -u zerostress-supervisor --no-pager 2>/dev/null | grep -c 'example.com/?')" '^0$'
-check "the typed-in value never reached the journal" "$(journalctl -u zerostress-supervisor --no-pager 2>/dev/null | grep -c SECRETVALUE123)" '^0$'
-check "control: the journal does contain command log lines" "$(journalctl -u zerostress-supervisor --no-pager 2>/dev/null | grep -c '"msg":"command"')" '^[1-9][0-9]*$'
+check "no URL with a query string in the log" "$(slog | grep -c 'example.com/?')" '^0$'
+check "the typed-in value never reached the log" "$(slog | grep -c SECRETVALUE123)" '^0$'
+check "control: the log does contain command log lines" "$(slog | grep -c '"msg":"command"')" '^[1-9][0-9]*$'
 
 [[ $fail == 0 ]] && echo "SUPERVISOR SESSIONS E2E OK" || echo "SUPERVISOR SESSIONS E2E FAILED"
 exit $fail

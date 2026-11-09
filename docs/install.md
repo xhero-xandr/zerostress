@@ -93,6 +93,7 @@ deploy/test/image-smoke.sh            image: overlay, boot, guest agent over vso
 deploy/test/image-net-isolation.sh    network isolation between two guests
 deploy/test/image-collector.sh        the real collector in a microVM against example.com
 deploy/test/image-session.sh          guest agent sessions over real vsock
+deploy/test/supervisor-suite.sh       the next three in one run: lays the stub collector over the image, sets SUP_CONCURRENCY=2 and SUP_SESSION_SLOTS=1 temporarily, and always puts everything back (about 8 minutes; the site answers with test results meanwhile)
 deploy/test/supervisor-e2e.sh         the supervisor service with real microVMs (47 checks; image with a stub collector)
 deploy/test/supervisor-sessions-e2e.sh  commands, approvals, idle time, slots (about 3 minutes)
 deploy/test/supervisor-timeouts.sh    time limits (about 2 minutes; changes the unit temporarily)
