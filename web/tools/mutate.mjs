@@ -95,13 +95,21 @@ try {
       failed = testsFail(m.tests, { ZS_OFF: m.ruleOff });
     } else {
       const text = original(m.file);
-      const at = text.indexOf(m.from);
-      if (at < 0 || text.indexOf(m.from, at + 1) >= 0) {
-        bad.push(`NOT APPLIED (found ${at < 0 ? 'zero' : 'several'} times): ${m.label}`);
+      const places = [];
+      for (let at = text.indexOf(m.from); at >= 0; at = text.indexOf(m.from, at + 1)) places.push(at);
+      if (places.length !== (m.copies ?? 1)) {
+        bad.push(`NOT APPLIED (found ${places.length} times, expected ${m.copies ?? 1}): ${m.label}`);
         continue;
       }
-      writeFileSync(join(root, m.file), text.slice(0, at) + m.to + text.slice(at + m.from.length));
-      failed = testsFail(m.tests);
+      // every copy is broken on its own: a copy no test notices is a hole in the tests
+      const missed = [];
+      for (const [k, at] of places.entries()) {
+        writeFileSync(join(root, m.file), text.slice(0, at) + m.to + text.slice(at + m.from.length));
+        if (!testsFail(m.tests)) missed.push(k + 1);
+        restore();
+      }
+      failed = missed.length === 0;
+      if (!failed) m.label += places.length > 1 ? ` (copy ${missed.join(', ')} of ${places.length} unnoticed)` : '';
     }
     restore();
     if (failed) caught++;
