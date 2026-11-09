@@ -24,6 +24,7 @@ import { checkAddress } from './gate.ts';
 import { clientBucket, type Limiter } from './limits.ts';
 import type { Stage, Store, Task } from './store.ts';
 import { errorText, T, type Demo } from './text.ts';
+import type { ChatAnswer, EmailCheckStarted, FileCheckStarted, FileHashAnswer, PendingList, TaskStarted, TaskStatus } from '../shared/api-types.ts';
 
 export interface AppDeps {
   run(input: TaskInput, onProgress: (p: Progress) => void): Promise<TaskResult>;
@@ -251,7 +252,8 @@ export function createApp(deps: AppDeps): Hono {
       if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
       return fail(c, 503, 'supervisor_unavailable');
     }
-    return json(c, 202, { id: task.id, key });
+    const started: TaskStarted = { id: task.id, key };
+    return json(c, 202, started);
   });
 
   // ---- an email's sender: only its domain comes here (sender.ts); a few asks a minute per address ----
@@ -298,7 +300,8 @@ export function createApp(deps: AppDeps): Hono {
       if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
       return fail(c, 503, 'supervisor_unavailable');
     }
-    return json(c, 202, { id: task.id, key, links: task.links.length, skipped: links.length - task.links.length });
+    const started: EmailCheckStarted = { id: task.id, key, links: task.links.length, skipped: links.length - task.links.length };
+    return json(c, 202, started);
   });
 
   // the page the sandbox opens for an email: the gated links and nothing else, while the check runs
@@ -335,7 +338,8 @@ export function createApp(deps: AppDeps): Hono {
       if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
       return fail(c, 503, 'supervisor_unavailable');
     }
-    return json(c, 202, { id: task.id, key, name: held.file.name, bytes: held.file.bytes, sha256: held.file.sha256 });
+    const started: FileCheckStarted = { id: task.id, key, name: held.file.name, bytes: held.file.bytes, sha256: held.file.sha256 };
+    return json(c, 202, started);
   });
 
   // what VirusTotal knows about a file the browser has hashed: only the hash comes here, never the file
@@ -353,7 +357,8 @@ export function createApp(deps: AppDeps): Hono {
       if (recent.length >= 20) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
       hashAsks.set(who, [...recent, t]);
       if (hashAsks.size > 10_000) hashAsks.clear();
-      return json(c, 200, { virustotal: await ask(sha) });
+      const answer: FileHashAnswer = { virustotal: await ask(sha) };
+      return json(c, 200, answer);
     });
   }
 
@@ -453,7 +458,7 @@ export function createApp(deps: AppDeps): Hono {
     const task = deps.store.get(c.req.param('id'));
     if (!task) return fail(c, 404, 'not_found');
     const r = task.result;
-    return json(c, 200, {
+    const status: TaskStatus = {
       id: task.id,
       stage: task.stage,
       label: task.pending.length > 0 ? T.waitingForOwner : task.stage === 'queued' ? T.queued(task.position) : T.stageNow[task.stage],
@@ -464,7 +469,8 @@ export function createApp(deps: AppDeps): Hono {
       awaiting: task.pending.length > 0,
       checked_at: task.createdAt,
       shots: { desktop: !!r && shotName(r, 'desktop') !== null, tablet: !!r && shotName(r, 'tablet') !== null, mobile: !!r && shotName(r, 'mobile') !== null },
-    });
+    };
+    return json(c, 200, status);
   });
 
   const SECTIONS = new Set(['security', 'network', 'links', 'behavior', 'agent']);
@@ -526,7 +532,10 @@ export function createApp(deps: AppDeps): Hono {
 
     const task = deps.store.get(c.req.param('id') ?? '');
     if (!task?.result || task.stage !== 'done') return fail(c, 404, 'not_found');
-    const done = (r: ChatReply) => json(c, 200, { text: r.text, source: r.source, note: r.reason ? chatNote(r.reason) : null });
+    const done = (r: ChatReply) => {
+      const answer: ChatAnswer = { text: r.text, source: r.source, note: r.reason ? chatNote(r.reason) : null };
+      return json(c, 200, answer);
+    };
 
     if (kind === 'explain') {
       const kept = explained.get(task.id);
@@ -679,7 +688,8 @@ export function createApp(deps: AppDeps): Hono {
     const t = owned(c);
     if (t instanceof Response) return t;
     const pending = t.pending.map((p) => ({ command_id: p.command_id, command_sha256: p.sha256, label: T.actions[p.cmd] ?? T.actionOther }));
-    return json(c, 200, { pending });
+    const list: PendingList = { pending };
+    return json(c, 200, list);
   });
 
   app.post('/api/tasks/:id/approvals', async (c) => {

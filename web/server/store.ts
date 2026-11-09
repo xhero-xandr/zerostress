@@ -7,7 +7,8 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, wri
 import { join } from 'node:path';
 import type { TaskResult } from '../agent/runner.ts';
 
-export type Stage = 'queued' | 'starting' | 'opening' | 'analysing' | 'done' | 'failed';
+import type { Stage } from '../shared/api-types.ts';
+export type { Stage };
 
 export interface TaskEvent {
   seq: number;

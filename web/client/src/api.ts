@@ -1,28 +1,10 @@
 // Every request the client makes, all to its own address (CSP connect-src 'self'). The task key only ever travels in
 // the X-Task-Key header: never in an address, a parameter or storage.
 import type { PublicReport } from '../../agent/report-types.ts';
+import type { ChatAnswer, Demo, EmailCheckStarted, FileCheckStarted, FileHashAnswer, Pending, PendingList, SenderInfo, TaskStarted, TaskStatus } from '../../shared/api-types.ts';
 import { T } from './text.ts';
 
-export type Stage = 'queued' | 'starting' | 'opening' | 'analysing' | 'done' | 'failed';
-
-export interface TaskStatus {
-  id: string;
-  stage: Stage;
-  /** our sentence for the stage (the server's text table) */
-  label: string;
-  /** index of the step in the tracker: 0..3 */
-  at: number;
-  position: number | null;
-  /** the host of the submitted address (the submitter's text) */
-  host: string;
-  has_report: boolean;
-  /** the agent waits for the owner's decision on a risky action; the run is live meanwhile */
-  awaiting: boolean;
-  checked_at: number;
-  shots: { desktop: boolean; tablet: boolean; mobile: boolean };
-}
-
-export interface Demo { label: string; url: string; deep?: true }
+export type { ChatAnswer, Demo, EmailCheckStarted, FileCheckStarted, FileHashAnswer, FileVerdict, Pending, PendingList, SenderInfo, Stage, TaskStarted, TaskStatus } from '../../shared/api-types.ts';
 
 /** An answer of ours that is not a success: the server's code and its sentence. */
 export class ApiError extends Error {
@@ -51,32 +33,28 @@ export const getStatus = (id: string): Promise<TaskStatus> => fetch(`/api/tasks/
 export const getReport = (id: string): Promise<PublicReport> => fetch(`/r/${id}/report.json`).then((r) => read<PublicReport>(r));
 export const getDemos = (): Promise<{ demos: Demo[] }> => fetch('/api/demos').then((r) => read<{ demos: Demo[] }>(r));
 
-export const startTask = (url: string, deep: boolean): Promise<{ id: string; key: string }> =>
-  fetch('/api/tasks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ url, deep }) }).then((r) => read<{ id: string; key: string }>(r));
+export const startTask = (url: string, deep: boolean): Promise<TaskStarted> =>
+  fetch('/api/tasks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ url, deep }) }).then((r) => read<TaskStarted>(r));
 
-export const startEmailCheck = (links: string[]): Promise<{ id: string; key: string; links: number; skipped: number }> =>
-  fetch('/api/email-checks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ links }) }).then((r) => read<{ id: string; key: string; links: number; skipped: number }>(r));
+export const startEmailCheck = (links: string[]): Promise<EmailCheckStarted> =>
+  fetch('/api/email-checks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ links }) }).then((r) => read<EmailCheckStarted>(r));
 
-export interface FileVerdict { known: boolean; malicious: number; suspicious: number; total: number; label: string | null; first_seen: string | null }
 /** what VirusTotal knows about a file: only its SHA-256 is sent */
-export const getFileHash = (sha256: string): Promise<{ virustotal: FileVerdict | null }> =>
-  fetch('/api/file-hash', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ sha256 }) }).then((r) => read<{ virustotal: FileVerdict | null }>(r));
+export const getFileHash = (sha256: string): Promise<FileHashAnswer> =>
+  fetch('/api/file-hash', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ sha256 }) }).then((r) => read<FileHashAnswer>(r));
 /** the file itself, to be opened in the sandbox: held in memory until the sandbox has fetched it, then gone */
-export const startFileCheck = (data: Uint8Array, name: string, mime: string): Promise<{ id: string; key: string; name: string; bytes: number; sha256: string }> =>
-  fetch('/api/files', { method: 'POST', headers: { 'content-type': mime || 'application/octet-stream', 'x-file-name': encodeURIComponent(name) }, body: data as Uint8Array<ArrayBuffer> }).then((r) => read<{ id: string; key: string; name: string; bytes: number; sha256: string }>(r));
+export const startFileCheck = (data: Uint8Array, name: string, mime: string): Promise<FileCheckStarted> =>
+  fetch('/api/files', { method: 'POST', headers: { 'content-type': mime || 'application/octet-stream', 'x-file-name': encodeURIComponent(name) }, body: data as Uint8Array<ArrayBuffer> }).then((r) => read<FileCheckStarted>(r));
 
-export interface SenderInfo { domain: string; age_days: number | null; created: string | null; dmarc: 'reject' | 'quarantine' | 'none' | null; spf: boolean; mx: boolean; brand: string | null; lookalike: string | null; freemail: boolean; spamhaus: string | null; virustotal: { malicious: number; suspicious: number; total: number } | null }
 /** what is known about the domain an email came from: only the domain is sent */
 export const getSender = (domain: string): Promise<{ sender: SenderInfo }> =>
   fetch('/api/sender', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ domain }) }).then((r) => read<{ sender: SenderInfo }>(r));
 
-export interface ChatAnswer { text: string; source: 'model' | 'rules'; note: string | null }
 export const askChat = (id: string, payload: { kind: 'explain' } | { kind: 'ask'; message: string }): Promise<ChatAnswer> =>
   fetch(`/api/reports/${id}/chat`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) }).then((r) => read<ChatAnswer>(r));
 
-export interface Pending { command_id: string; command_sha256: string; label: string }
-export const getPending = (id: string, key: string): Promise<{ pending: Pending[] }> =>
-  fetch(`/api/tasks/${id}/pending`, { headers: { 'x-task-key': key } }).then((r) => read<{ pending: Pending[] }>(r));
+export const getPending = (id: string, key: string): Promise<PendingList> =>
+  fetch(`/api/tasks/${id}/pending`, { headers: { 'x-task-key': key } }).then((r) => read<PendingList>(r));
 
 export const decide = (id: string, key: string, p: Pending, allow: boolean): Promise<{ message: string }> =>
   fetch(`/api/tasks/${id}/approvals`, {

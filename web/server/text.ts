@@ -4,8 +4,8 @@
 import { GATE_TEXT, type GateReason } from './gate.ts';
 import type { Stage } from './store.ts';
 
-/** an example under the address field; `deep` also ticks the deep-check box ("Let the agent explore the page") */
-export interface Demo { label: string; url: string; deep?: true }
+import type { Demo } from '../shared/api-types.ts';
+export type { Demo };
 
 export const T = {
   queued: (n: number | null) => (n && n > 1 ? `Waiting in line (${n - 1} ahead of you)` : 'Waiting for a free sandbox'),

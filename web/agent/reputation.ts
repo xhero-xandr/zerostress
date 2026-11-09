@@ -6,6 +6,7 @@
 import { resolve4 } from 'node:dns/promises';
 import { registrable } from './domain.ts';
 import { isObj } from './guard.ts';
+import type { FileVerdict } from '../shared/api-types.ts';
 
 export interface Reputation {
   /** Google's threat types for the address or where it led; [] when Google knows nothing bad; null when not asked */
@@ -18,18 +19,7 @@ export interface Reputation {
   urlscan?: { malicious: boolean; scanned_at: string } | null;
 }
 
-/** what VirusTotal knows about one file, by its SHA-256 */
-export interface FileVerdict {
-  /** VirusTotal has seen this very file before */
-  known: boolean;
-  malicious: number;
-  suspicious: number;
-  total: number;
-  /** VirusTotal's name for what it is ("trojan.agenttesla"), when the engines agree on one */
-  label: string | null;
-  /** when anyone first sent it there, ISO time */
-  first_seen: string | null;
-}
+export type { FileVerdict };
 
 export interface ReputationKeys { safeBrowsing?: string; virustotal?: string; spamhausDqs?: string; urlscan?: string }
 export interface ReputationDeps {

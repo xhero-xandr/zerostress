@@ -7,26 +7,9 @@ import { BRANDS } from '../agent/lists.ts';
 import { registrable, skeleton, sld } from '../agent/domain.ts';
 import type { DomainInfo } from '../agent/rdap.ts';
 import type { ReputationClient } from '../agent/reputation.ts';
+import type { SenderInfo } from '../shared/api-types.ts';
 
-export interface SenderInfo {
-  domain: string;
-  age_days: number | null;
-  created: string | null;
-  /** the receiving servers are told what to do with mail that fails the checks: reject it, quarantine it, or nothing */
-  dmarc: 'reject' | 'quarantine' | 'none' | null;
-  spf: boolean;
-  mx: boolean;
-  /** the brand this domain belongs to, by its name (paypal.com), or null */
-  brand: string | null;
-  /** the brand this domain imitates (paypa1.com, paypal-secure.com), or null */
-  lookalike: string | null;
-  /** a free mailbox service: anyone can have an address there */
-  freemail: boolean;
-  /** why Spamhaus lists the domain, "clean", or null when not asked */
-  spamhaus: string | null;
-  /** how many antivirus engines on VirusTotal flag the domain, of how many; null when not asked */
-  virustotal: { malicious: number; suspicious: number; total: number } | null;
-}
+export type { SenderInfo };
 
 const FREEMAIL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'ymail.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'gmx.com', 'gmx.net', 'gmx.de', 'web.de', 'mail.com', 'zoho.com', 'yandex.ru', 'yandex.com', 'ya.ru', 'mail.ru', 'bk.ru', 'inbox.ru', 'list.ru', 'rambler.ru', 'qq.com', '163.com', 'tutanota.com', 'tuta.io']);
 export const DOMAIN = /^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;

@@ -11,6 +11,7 @@ import { MAX_RUN_LOG } from '../../agent/agent-log.ts';
 import { createApp, MAX_BODY, type AppDeps } from '../app.ts';
 import { createLimiter, DEFAULT_LIMITS, type LimitConfig } from '../limits.ts';
 import { createStore } from '../store.ts';
+import type { TaskStatus } from '../../shared/api-types.ts';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]);
 const EVIL = '"><img src=x onerror=alert(1)><script>alert(1)</script>';
@@ -259,7 +260,9 @@ test('while it runs the state says which step it is at; afterwards that there is
   assert.deepEqual({ stage: end.stage, has_report: end.has_report }, { stage: 'done', has_report: true });
   assert.deepEqual(end.shots, { desktop: true, tablet: false, mobile: false });
   assert.equal(typeof end.checked_at, 'number');
-  assert.deepEqual(Object.keys(end).sort(), ['at', 'awaiting', 'checked_at', 'has_report', 'host', 'id', 'label', 'position', 'shots', 'stage'], 'the state says nothing more');
+  // every field of the shared type, and no other (shared/api-types.ts): a field added there fails the type check here
+  const FIELDS = { id: true, stage: true, label: true, at: true, position: true, host: true, has_report: true, awaiting: true, checked_at: true, shots: true } satisfies Record<keyof TaskStatus, true>;
+  assert.deepEqual(Object.keys(end).sort(), Object.keys(FIELDS).sort(), 'the state says nothing more');
 });
 
 test('the pages carry no report text: the same static index for every section, whatever the page said', async () => {
