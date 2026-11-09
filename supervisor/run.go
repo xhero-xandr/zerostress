@@ -43,6 +43,12 @@ type runExec struct {
 	hard          *time.Timer
 	sess          *SessionCommands
 
+	// the host's measure of the VM's processor time (cpu.go)
+	cpu     cpuMeter
+	cpuStop chan struct{}
+	cpuOnce sync.Once
+	cpuWG   sync.WaitGroup
+
 	// the stream: a line that may be the agent's final status is held back until the next line arrives
 	held          *string
 	evidence      int
@@ -63,6 +69,7 @@ func (s *Supervisor) execute(ctx context.Context, rec RunRecord, slot int, cance
 		s: s, rec: rec, id: rec.ID, slot: slot, runDir: filepath.Join(s.cfg.RunsDir, rec.ID), cancel: cancel,
 		out:     outcome{state: StateFailed, reason: ReasonInternal},
 		artSeen: map[string]bool{},
+		cpuStop: make(chan struct{}),
 	}
 	r.startTimers()
 	r.startSession()
@@ -145,6 +152,8 @@ func (r *runExec) steps(ctx context.Context) error {
 		return r.failed(ctx, err, ReasonBootTimeout)
 	}
 	r.vmForCommands.Store(&vmBox{vm: v})
+	r.cpuWG.Add(1)
+	go r.sampleCPU(ctx, v)
 
 	s.setState(id, StateRunning, nil)
 	// The guest gets only the total time. Idle time belongs to the supervisor (it alone knows when a human is
@@ -210,6 +219,9 @@ func (r *runExec) flushHeld() {
 // finishStream decides the outcome once the stream has ended. Only the LAST line decides: a "status" line forged by
 // the collector earlier in the stream is plain evidence.
 func (r *runExec) finishStream(ctx context.Context, exitHandled <-chan struct{}) error {
+	if r.vm != nil {
+		r.takeCPU(r.vm) // the VM is still up: its counter ends with the unit
+	}
 	status := ""
 	if r.held != nil {
 		status = parseStatus(*r.held)
@@ -360,6 +372,8 @@ func (r *runExec) teardown() {
 	r.fetches.Wait() // the guest is still there; a cancelled run aborts its fetches at once, a normal one waits a moment
 	r.hard.Stop()
 	r.destroying.Store(true)
+	r.cpuOnce.Do(func() { close(r.cpuStop) })
+	r.cpuWG.Wait()
 	if r.sess != nil {
 		r.sess.End() // open commands are voided and published before the run leaves the session
 	}
@@ -392,6 +406,7 @@ func (r *runExec) teardown() {
 		rec.Reason = r.out.reason
 		rec.AgentStatus = r.out.agentStatus
 		rec.Partial = r.out.state == StateFailed && r.evidence > 0
+		rec.VMCPU = r.cpu.summary()
 		rec.FinishedAt = ptr(s.now())
 		rec.Events = s.seqs[id]
 	})

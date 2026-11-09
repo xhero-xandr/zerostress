@@ -78,6 +78,8 @@ type Script struct {
 	// off by the run's context fails like the real one.
 	Artifacts  map[string][]byte
 	FetchDelay time.Duration
+	// CPURate is the processor time the fake unit uses, in CPU seconds per wall second; 0 means it cannot be read.
+	CPURate float64
 }
 
 type pushItem struct {
@@ -88,6 +90,7 @@ type pushItem struct {
 type FakeVM struct {
 	b       *FakeBackend
 	script  Script
+	born    time.Time
 	exited  chan struct{}
 	dead    atomic.Bool
 	killing sync.Once
@@ -267,6 +270,13 @@ func (v *FakeVM) Console() string { return "" }
 
 func (v *FakeVM) Gone() bool { return v.script.Stuck == nil || !v.script.Stuck.Load() }
 
+func (v *FakeVM) CPUUsage() (time.Duration, bool) {
+	if v.script.CPURate <= 0 {
+		return 0, false
+	}
+	return time.Duration(float64(time.Since(v.born)) * v.script.CPURate), true
+}
+
 type FakeBackend struct {
 	scriptFor func(runID string) Script
 
@@ -338,7 +348,7 @@ func (b *FakeBackend) Start(_ context.Context, o StartOptions) (VM, error) {
 	if script.StartFail {
 		return nil, newRunError(ReasonFcAPI, "PUT /boot-source returned 400")
 	}
-	vm := &FakeVM{b: b, script: script, exited: make(chan struct{}), pushes: make(chan pushItem, 1024)}
+	vm := &FakeVM{b: b, script: script, born: time.Now(), exited: make(chan struct{}), pushes: make(chan pushItem, 1024)}
 	b.mu.Lock()
 	b.vms[vm] = true
 	b.vmByRun[o.RunID] = vm
@@ -480,7 +490,7 @@ func newHarnessIn(t testing.TB, dir string, scripts map[string]Script, mutate fu
 		h.logs = append(h.logs, string(b))
 		h.logMu.Unlock()
 	}
-	deps := Deps{Config: cfg, Store: store, Results: results, Backend: h.Backend, Log: log, SweepEvery: 20 * time.Millisecond}
+	deps := Deps{Config: cfg, Store: store, Results: results, Backend: h.Backend, Log: log, SweepEvery: 20 * time.Millisecond, CPUEvery: 10 * time.Millisecond}
 	for _, f := range tweak {
 		f(&deps)
 	}

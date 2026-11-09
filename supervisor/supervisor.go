@@ -52,6 +52,8 @@ type Deps struct {
 	ImageSHA256 func() string
 	// SweepEvery is the interval of the stale-queue sweep; tests shorten it.
 	SweepEvery time.Duration
+	// CPUEvery is how often the VM's processor time is read while a run lasts (default one second); tests shorten it.
+	CPUEvery time.Duration
 }
 
 type subscriber struct {
@@ -84,6 +86,7 @@ type Supervisor struct {
 	freeGB    func() float64
 	imageSH   func() string
 	sweep     time.Duration
+	cpuEvery  time.Duration
 
 	mu          sync.Mutex // guards everything below
 	pool        *SlotPool
@@ -102,7 +105,7 @@ type Supervisor struct {
 func NewSupervisor(d Deps) *Supervisor {
 	s := &Supervisor{
 		cfg: d.Config, store: d.Store, results: d.Results, artifacts: d.Artifacts, backend: d.Backend, log: d.Log,
-		now: d.Now, freeGB: d.FreeGB, imageSH: d.ImageSHA256, sweep: d.SweepEvery,
+		now: d.Now, freeGB: d.FreeGB, imageSH: d.ImageSHA256, sweep: d.SweepEvery, cpuEvery: d.CPUEvery,
 		pool:        NewSlotPool(d.Config.Concurrency),
 		active:      map[string]*activeRun{},
 		sessions:    map[string]*SessionCommands{},
@@ -121,6 +124,9 @@ func NewSupervisor(d Deps) *Supervisor {
 	}
 	if s.imageSH == nil {
 		s.imageSH = func() string { return "" }
+	}
+	if s.cpuEvery == 0 {
+		s.cpuEvery = time.Second
 	}
 	if s.sweep == 0 {
 		s.sweep = time.Second
@@ -265,6 +271,8 @@ type RunView struct {
 	ExpiresAt   string         `json:"expires_at"`
 	Session     *SessionView   `json:"session,omitempty"`
 	Commands    *CommandCounts `json:"commands,omitempty"`
+	// VMCPU is the processor time the microVM used, measured by the host (cpu.go); absent when it could not be read.
+	VMCPU *VMCPU `json:"vm_cpu,omitempty"`
 }
 
 func isoTime(ms int64) string { return time.UnixMilli(ms).UTC().Format("2006-01-02T15:04:05.000Z") }
@@ -277,7 +285,7 @@ func (s *Supervisor) Get(id string) (RunView, bool) {
 	s.mu.Lock()
 	v := RunView{
 		RunID: rec.ID, State: rec.State, CreatedAt: isoTime(rec.CreatedAt), Partial: rec.Partial, ExpiresAt: isoTime(rec.ExpiresAt),
-		Events: rec.Events,
+		Events: rec.Events, VMCPU: rec.VMCPU,
 	}
 	if seq, ok := s.seqs[rec.ID]; ok {
 		v.Events = seq

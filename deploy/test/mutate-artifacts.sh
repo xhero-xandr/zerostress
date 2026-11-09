@@ -104,5 +104,17 @@ mut supervisor/store.go 's/if strings.HasSuffix(name, ".tmp") {/if false {/' sup
 mut supervisor/store.go 's/os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)/os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)/' supervisor 'TestStore_RecordsStayPrivateAndAreReplacedByRename' "a record is readable by everybody"
 mut supervisor/store.go 's/if err := os.MkdirAll(dir, 0o700); err != nil {/if err := os.MkdirAll(dir, 0o755); err != nil {/' supervisor 'TestStore_RecordsStayPrivateAndAreReplacedByRename' "the records directory is open to everybody"
 
+# ---- the host's measure of the microVM's processor time (supervisor/cpu.go, added 9 Nov 2026) ----
+mut supervisor/cpu.go 's/ (atMs < m.samples\[n-1\].atMs || cpu < m.samples\[n-1\].cpu)/ false/' supervisor 'TestCPU_AClockOrACounterThatGoesBackIsNotBelieved' "a counter that goes back is believed"
+mut supervisor/cpu.go 's/if len(m.samples) >= cpuSamplesMax {/if false {/' supervisor 'TestCPU_SamplesAreCapped' "the samples have no cap"
+mut supervisor/cpu.go 's/if n < 2 {/if n < 1 {/' supervisor 'TestCPU_NoSummaryWithoutTwoSamples' "a summary from one sample"
+mut supervisor/cpu.go 's/last.atMs-m.samples\[i\].atMs >= cpuTail.Milliseconds()/last.atMs-m.samples[i].atMs > cpuTail.Milliseconds()/' supervisor 'TestCPU_SummaryTotalsAndTheLastThreeSeconds' "the tail is a little longer than three seconds"
+mut supervisor/cpu.go 's/TotalMs:    (last.cpu - first.cpu).Milliseconds(),/TotalMs:    last.cpu.Milliseconds(),/' supervisor 'TestCPU_SummaryTotalsAndTheLastThreeSeconds|TestCPU_SummaryOfARunShorterThanTheTailIsTheWholeRun' "the total counts the boot too"
+mut supervisor/cpu.go 's/TailWallMs: last.atMs - from.atMs,/TailWallMs: last.atMs - first.atMs,/' supervisor 'TestCPU_SummaryTotalsAndTheLastThreeSeconds' "the tail's wall time is the whole run's"
+mut supervisor/firecracker.go 's/if err != nil || n < 0 {/if err != nil {/' supervisor 'TestCPU_SystemctlAnswerIsANumberOfNanosecondsOrUnknown' "a negative reading is believed"
+mut supervisor/run.go 's/rec.VMCPU = r.cpu.summary()/rec.VMCPU = nil/' supervisor 'TestCore_TheHostMeasuresTheVMsProcessorTime' "the measure is not kept in the record"
+mut supervisor/cpu.go 's/^\t\tr.cpu.add(r.s.now(), cpu)$/\t\t_ = cpu/' supervisor 'TestCore_TheHostMeasuresTheVMsProcessorTime|TestCore_TheLastReadingIsTakenBeforeTheVMStops' "the readings are thrown away"
+mut supervisor/run.go 's/^\t\tr.takeCPU(r.vm) \/\/ the VM is still up: its counter ends with the unit$/\t\t_ = r.vm/' supervisor 'TestCore_TheLastReadingIsTakenBeforeTheVMStops' "no last reading before the VM stops"
+
 echo "mutations: $total, problems: $fails${skipped:+, skipped for lack of root: $skipped}"
 exit $((fails > 0))

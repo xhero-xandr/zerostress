@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -304,6 +305,30 @@ func (v *firecrackerVM) Gone() bool {
 	// a collected unit is "inactive" too
 	st := strings.TrimSpace(string(out))
 	return st == "inactive" || st == "failed"
+}
+
+// CPUUsage reads the unit's processor time (systemd's CPUUsageNSec) the way Gone reads its state; "[not set]" when the
+// accounting is off is not a number, so it reads as unknown.
+func (v *firecrackerVM) CPUUsage() (time.Duration, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, "/usr/bin/systemctl", "show", "-p", "CPUUsageNSec", "--value", "zsvm-"+v.runID+".service")
+	c.Env = cleanEnv
+	out, err := c.Output()
+	if err != nil {
+		return 0, false
+	}
+	return parseCPUUsage(out)
+}
+
+// parseCPUUsage reads systemctl's CPUUsageNSec: a count of nanoseconds, or "[not set]" and the like when the accounting
+// is off or the unit is gone, which is unknown, not zero.
+func parseCPUUsage(out []byte) (time.Duration, bool) {
+	n, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return time.Duration(n), true
 }
 
 func (v *firecrackerVM) Stop() {

@@ -94,6 +94,8 @@ type RunRecord struct {
 	Events      int            `json:"events"`
 	ExpiresAt   int64          `json:"expires_at"`
 	Session     *SessionLimits `json:"session,omitempty"`
+	// VMCPU is the processor time the microVM used, measured by the host (cpu.go); nil when it could not be read.
+	VMCPU *VMCPU `json:"vm_cpu,omitempty"`
 	// Seq orders runs that were created in the same millisecond.
 	Seq int64 `json:"seq"`
 }
@@ -134,6 +136,9 @@ type VM interface {
 	// end (a process stuck in the kernel); its slot must not go to the next VM before Gone, since every VM of a slot
 	// runs as the slot's user (review E).
 	Gone() bool
+	// CPUUsage is the processor time the VM's unit has used so far, from systemd's accounting of its cgroup: read by the
+	// host, so a guest cannot say otherwise. false when it cannot be read.
+	CPUUsage() (time.Duration, bool)
 	// Console returns the last bytes of the VM console (diagnostics only, untrusted).
 	Console() string
 }
