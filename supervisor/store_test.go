@@ -566,3 +566,41 @@ func TestStore_AFailedWriteLeavesTheRecordAsItWas(t *testing.T) {
 		t.Fatalf("memory took a change the disk did not: %+v", got)
 	}
 }
+
+// A record holds the address a visitor sent, so what is on disk is private to the service, and a record is replaced
+// whole by a rename (a reader or a crash never sees half a file), not rewritten in place.
+func TestStore_RecordsStayPrivateAndAreReplacedByRename(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "records") // the store makes it, so its own mode shows
+	s := storeTOpen(t, dir)
+	if st, err := os.Stat(dir); err != nil || st.Mode().Perm() != 0o700 {
+		t.Fatalf("the records directory: %v, %v (want 0700)", st, err)
+	}
+	id := storeTInsert(t, s, 1, 1000, 99000)
+	path := filepath.Join(dir, id+".json")
+	first, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Mode().Perm() != 0o600 {
+		t.Fatalf("a record's mode is %v (want 0600)", first.Mode().Perm())
+	}
+	if err := s.Update(id, func(r *RunRecord) { r.State = StateFailed }); err != nil {
+		t.Fatal(err)
+	}
+	second, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(first, second) {
+		t.Fatal("the record was rewritten in place: it must be written under another name and renamed over the old one")
+	}
+	if second.Mode().Perm() != 0o600 {
+		t.Fatalf("the replaced record's mode is %v (want 0600)", second.Mode().Perm())
+	}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Fatalf("a temporary file was left behind: %s", e.Name())
+		}
+	}
+}

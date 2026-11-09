@@ -87,5 +87,22 @@ mut guest/agent/agent.go 's/needNL := last != .\\n./needNL := last != 0 \&\& fal
 mut guest/agent/agent.go 's/if len(body) > a.cfg.MaxCmd || body\[0\] != .{. || !json.Valid(body) {/if false {/' guest/agent 'TestBadCommandEndsTheJobAndKillsTheCollector' "any line is a command"
 mut guest/agent/agent.go 's/if count > a.cfg.MaxCmds {/if false {/' guest/agent 'TestTooManyCommands' "no limit on the number of commands"
 
+# ---- the supervisor's input checks and its record store (added 9 Nov 2026): session ranges, settings, files on disk ----
+mut supervisor/api.go 's/f != math.Trunc(f)/math.Trunc(f) != math.Trunc(f)/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "a session limit may be a fraction"
+mut supervisor/api.go 's/ || f < min || f > max {/ || f > max {/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "no lower bound on a session limit"
+mut supervisor/api.go 's/ || f > max {/ || f > max*1e9 {/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "no upper bound on a session limit"
+mut supervisor/api.go 's/wholeNumber(raw, 5, 120)/wholeNumber(raw, 0, 120)/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "idle_s may be shorter than 5"
+mut supervisor/api.go 's/wholeNumber(raw, 5, 120)/wholeNumber(raw, 5, 1200)/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "idle_s may be longer than 120"
+mut supervisor/api.go 's/wholeNumber(raw, 30, 600)/wholeNumber(raw, 1, 600)/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "max_s may be shorter than 30"
+mut supervisor/api.go 's/wholeNumber(raw, 30, 600)/wholeNumber(raw, 30, 6000)/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "max_s may be longer than 600"
+mut supervisor/api.go 's/if k != "idle_s" \&\& k != "max_s" {/if false {/' supervisor 'TestAPISessions_ValidateSubmit_SessionField' "an unknown session field is accepted"
+mut supervisor/config.go 's/if err != nil || v < min || v > max {/if err != nil || v > max {/' supervisor 'TestConfig_OutOfRangeOrMalformedValuesStopTheService|TestConfig_BoundariesAreInclusiveAndEmptyMeansDefault' "a setting below its range is accepted"
+mut supervisor/config.go 's/if err != nil || v < min || v > max {/if err != nil || v < min {/' supervisor 'TestConfig_OutOfRangeOrMalformedValuesStopTheService|TestConfig_BoundariesAreInclusiveAndEmptyMeansDefault' "a setting above its range is accepted"
+mut supervisor/config.go 's/if !digitsRe.MatchString(raw) {/if false {/' supervisor 'TestConfig_OutOfRangeOrMalformedValuesStopTheService' "a setting that is not plain digits is accepted"
+mut supervisor/store.go 's/tmp := s.path(rec.ID) + ".tmp"/tmp := s.path(rec.ID)/' supervisor 'TestStore_RecordsStayPrivateAndAreReplacedByRename' "a record is written in place, not to a temporary name and renamed"
+mut supervisor/store.go 's/if strings.HasSuffix(name, ".tmp") {/if false {/' supervisor 'TestStore_DamagedFileAndStrayTmpDoNotFailStartup' "a stray temporary file is not cleaned at start"
+mut supervisor/store.go 's/os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)/os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)/' supervisor 'TestStore_RecordsStayPrivateAndAreReplacedByRename' "a record is readable by everybody"
+mut supervisor/store.go 's/if err := os.MkdirAll(dir, 0o700); err != nil {/if err := os.MkdirAll(dir, 0o755); err != nil {/' supervisor 'TestStore_RecordsStayPrivateAndAreReplacedByRename' "the records directory is open to everybody"
+
 echo "mutations: $total, problems: $fails${skipped:+, skipped for lack of root: $skipped}"
 exit $((fails > 0))
