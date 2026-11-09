@@ -555,6 +555,52 @@ test('a result that came before the receipt is not undone by it', async () => {
   assert.equal(r.steps[0]!.status, 'done');
 });
 
+test('an email: a result that came before the receipt is not undone by it, for every command of the link walk', async () => {
+  const LIST = 'https://zerostress.test/x/0123';
+  const HREF = 'https://good.test/';
+  const { sup, deps } = await setup();
+  let snap = 1;
+  const list = () => [
+    ev('page', { url: LIST, title: 'links', lang: 'en', text: 'Link 1', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+    ev('forms', { forms: [], total: 0, loose_password_fields: 0 }),
+    ev('snapshot', { snap, text: '- list', lines: 1, truncated: false }),
+    ev('links', { snap, links: [{ ref: 'e1', text: 'Link 1', href: HREF, origin_differs: true }] }),
+  ];
+  const ack = (cmd: any, evidence: any[]) => {
+    sup.emit('command', { command_id: cmd.id, cmd: cmd.cmd, status: 'sent', risk: 'safe', command_sha256: 'a'.repeat(64) });
+    for (const e of evidence) sup.evidence(e);
+    sup.evidence(ev('cmd_result', { id: cmd.id, ok: true, snap }));
+    sup.emit('command', { command_id: cmd.id, cmd: cmd.cmd, status: 'done', risk: 'safe', command_sha256: 'a'.repeat(64) });
+    // the 202 comes after the events: the command is finished when its receipt says "accepted"
+    return { delayMs: 150, body: { command_id: cmd.id, status: 'accepted', command_sha256: 'a'.repeat(64) } };
+  };
+  let shots = 0;
+  sup.onCommand = (cmd) => {
+    if (cmd.cmd === 'open_link') {
+      snap++;
+      return ack(cmd, [
+        ev('nav', { via: 'commit', from: LIST, to: HREF }),
+        ev('page', { url: HREF, title: 'Hello', lang: 'en', text: 'A plain page', text_truncated: false, hidden_text: { present: false, reasons: [], text: '' }, meta: [] }),
+        ev('forms', { forms: [], total: 0, loose_password_fields: 0 }),
+        ev('snapshot', { snap, text: '- page', lines: 1, truncated: false }),
+        ev('links', { snap, links: [] }),
+      ]);
+    }
+    if (cmd.cmd === 'screenshot') {
+      const name = `shot-${++shots}.png`;
+      return ack(cmd, [ev('artifact', { id: `a${shots}`, file: name, name: 'screenshot.png', bytes: 100, sha256: 'b'.repeat(64), mime: 'image/png', saved: true })]);
+    }
+    if (cmd.cmd === 'back') { snap++; return ack(cmd, list()); }
+    if (cmd.cmd === 'close') { sup.evidence(ev('cmd_result', { id: cmd.id, ok: true })); finish(sup); }
+  };
+  begin(sup, [ev('nav', { via: 'requested', from: '', to: LIST }), ...list(), ev('summary', { final_url: LIST, nav_error: null })], true);
+  const r = await run(runTask({ url: LIST, session: {}, links: [HREF] }, deps));
+  assert.deepEqual(sup.commands.map((c) => c.cmd), ['open_link', 'screenshot', 'back', 'close']);
+  const walk = r.steps.filter((x) => x.action !== 'close');
+  assert.ok(walk.length >= 3, 'the walk has its steps');
+  assert.deepEqual(walk.map((x) => x.status), walk.map(() => 'done'), 'no step is made unfinished by its late receipt');
+});
+
 // ---- the picture --------------------------------------------------------------------------------------------------------------
 
 test('vision: the screenshot of the run is fetched from the supervisor and sent to the model', async () => {

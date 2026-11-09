@@ -8,6 +8,7 @@
 
 import type { ScannerConfig } from './config.ts';
 import { parseUrl } from './domain.ts';
+import { isObj } from './guard.ts';
 
 const API = 'https://api.cloudflare.com/client/v4/accounts';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -49,7 +50,6 @@ export interface UrlScanDeps {
   maxScansPerDay?: number;
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const cut = (v: unknown, n: number): string => (typeof v === 'string' ? v.slice(0, n) : '');
 
 /** The search value for one address, quoted; an address with a quote or a backslash is not searched at all. */

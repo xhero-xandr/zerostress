@@ -4,6 +4,7 @@
 // simply means "age unknown": it is never a reason for a verdict.
 
 import { domainToASCII } from 'node:url';
+import { isObj } from './guard.ts';
 
 export interface DomainInfo {
   /** the name that was asked about, as sent */
@@ -20,7 +21,6 @@ export type Fetcher = (url: string, init: { signal: AbortSignal; headers: Record
 
 const BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
 const DAY = 86_400_000;
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /** A name fit to put in a request path: ASCII letters, digits and hyphens in at least two labels; never an address. */

@@ -4,9 +4,8 @@
 // person; the agent never approves anything itself (docs/containment.md, rules 8 and 9).
 
 import { REF, validateCommand, type Risk } from './commands.ts';
+import { isObj } from './guard.ts';
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** The actions a model may propose, with the parameters each accepts and their limits. */
 const MODEL_ACTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze({

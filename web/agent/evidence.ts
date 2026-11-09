@@ -5,8 +5,7 @@
 // the link led (the scan), and again after each command in a deep check. Its summary comes last and names where the link
 // led, not where the agent went. A page is only ever judged against its own address.
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
+import { type Ev, isObj } from './guard.ts';
 
 export interface PageView {
   page: Ev;

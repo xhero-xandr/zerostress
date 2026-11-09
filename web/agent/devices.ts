@@ -3,11 +3,8 @@
 // the robot that visits like a computer. One reading of the evidence, used by both the facts and the signals.
 
 import { parseUrl, registrable } from './domain.ts';
+import { type Ev, isObj, str, cut } from './guard.ts';
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
 
 export type DeviceName = 'mobile' | 'tablet';
 export type Difference = 'other_site' | 'password_only_here';

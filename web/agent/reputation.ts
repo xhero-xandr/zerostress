@@ -5,6 +5,7 @@
 // The keys live in config/web.env and only ever travel in a header, a query string to Google, or a DNS name to Spamhaus.
 import { resolve4 } from 'node:dns/promises';
 import { registrable } from './domain.ts';
+import { isObj } from './guard.ts';
 
 export interface Reputation {
   /** Google's threat types for the address or where it led; [] when Google knows nothing bad; null when not asked */
@@ -45,7 +46,6 @@ const DBL: Record<string, string> = {
   '127.0.1.102': 'abused_spam', '127.0.1.103': 'abused_redirector', '127.0.1.104': 'abused_phish', '127.0.1.105': 'abused_malware', '127.0.1.106': 'abused_botnet',
 };
 const THREATS = new Set(['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION']);
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const count = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < 10_000 ? v : 0);
 
 export function createReputation(keys: ReputationKeys, deps: ReputationDeps = {}) {

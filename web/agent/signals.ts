@@ -9,6 +9,8 @@ import { BRANDS, EXECUTABLE_EXTENSIONS, LOGIN_WORDS, SHORTENERS, belongsTo } fro
 import { domainToUnicode } from 'node:url';
 import type { FileVerdict, Reputation } from './reputation.ts';
 import { isIpHost, mixedScripts, onSharedHost, parseUrl, registrable, sld, skeleton } from './domain.ts';
+import { type Ev, isObj, str, list } from './guard.ts';
+import { formCrossesSites, isBlocked, thirdPartyHosts } from './readings.ts';
 
 export type Level = 'info' | 'low' | 'medium' | 'high';
 export type Verdict = 'benign' | 'suspicious' | 'malicious' | 'unknown';
@@ -47,10 +49,6 @@ export interface Options {
   fileReputation?: { virustotal: FileVerdict | null } | null;
 }
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const origin = (u: unknown): string => parseUrl(u)?.origin ?? '';
 const pathOf = (u: string): string => parseUrl(u)?.pathname ?? '';
 const hostOf = (u: unknown): string => parseUrl(u)?.hostname ?? '';
@@ -89,7 +87,6 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const navError = summary ? str(summary[0].nav_error) : '';
   const finalUrl = str(summary?.[0].final_url) || str(page?.[0].url) || str([...navs].reverse().find(([e]) => e.via === 'commit')?.[0].to);
   const finalParsed = parseUrl(finalUrl);
-  const pageOrigin = finalParsed?.origin ?? '';
 
   // ---- where the visit went ----
   const origins: Array<{ o: string; ref: number; via: string }> = [];
@@ -222,17 +219,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
     const hasPassword = passwordForms.length > 0 || Number(v.forms?.loose_password_fields) > 0;
     const formRef = v.formsAt !== undefined ? [v.formsAt] : [];
 
-    // another SITE, not another origin: a bank's sign-in form posting to connect.secure.bank.example from
-    // www.bank.example sends the password to the bank itself
-    const cross = passwordForms.filter((f) => {
-      const stated = parseUrl(str(f.action_origin));
-      // the collector read where the form really goes: compare sites
-      if (stated && here) return registrable(stated.hostname) !== registrable(here.hostname);
-      const target = parseUrl(str(f.action));
-      if (target && here) return registrable(target.hostname) !== registrable(here.hostname);
-      // no address to compare: the collector's own flag decides
-      return f.origin_differs === true;
-    });
+    const cross = passwordForms.filter((f) => formCrossesSites(f, here));
     if (cross.length) addOnce('password_form_cross_origin', 'high', 'A form that asks for a password sends it to a different site than the one shown.', formRef);
 
     const overHttp = hasPassword && (here?.protocol === 'http:' || passwordForms.some((f) => parseUrl(f.action)?.protocol === 'http:'));
@@ -248,7 +235,7 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
       for (const b of ownBrand ? [] : BRANDS) {
         // whole words in the text too: "purchase" does not name Chase
         const named = b.words.some((w) => word(w, title)) || (hasPassword && b.words.some((w) => word(w, body)));
-        if (named && loginish && !belongsTo(b, here.hostname)) {
+        if (named && loginish) {
           const brand = b.words[0]!.charAt(0).toUpperCase() + b.words[0]!.slice(1);
           addOnce('brand_domain_mismatch', hasPassword ? 'high' : 'medium', of('subject').some(([e]) => e.what === 'uploaded_file')
             ? `The page presents itself as ${brand}, but it is a file someone sent, not ${brand}'s site.`
@@ -317,9 +304,9 @@ export function analyze(events: readonly unknown[], opts: Options = {}): Analysi
   const dialogs = of('dialog');
   if (popups.length || dialogs.length) add('popups_dialogs', 'low', 'The page opened extra windows or dialogs on its own.', [...popups, ...dialogs].map(([, i]) => i));
   const reqs = of('request').filter(([, i]) => i < visitEnd);
-  const third = new Set(reqs.map(([e]) => origin(e.url)).filter((o) => o !== '' && o !== pageOrigin));
+  const third = thirdPartyHosts(reqs.map(([e]) => e), finalParsed?.host ?? '');
   if (third.size > 10) add('many_third_parties', 'info', `The page contacted ${third.size} other sites.`, []);
-  const blocked = reqs.filter(([e]) => e.blocked != null && e.blocked !== false);
+  const blocked = reqs.filter(([e]) => isBlocked(e));
   if (blocked.length) add('blocked_requests', 'info', 'Some requests were blocked by the browser or the sandbox.', blocked.map(([, i]) => i));
 
   if (opts.injection) add('injection_attempt', 'medium', 'The page contains text aimed at an automated reader (instructions to a model).', []);

@@ -24,9 +24,9 @@ import { createGatekeeper, type Reason } from './gatekeeper.ts';
 import type { ModelClient } from './model.ts';
 import { SupervisorError, type SupervisorClient } from './supervisor.ts';
 import { createGuardedHooks, isInspectionLimit, type GuardedHooks } from '../hooks/index.ts';
+import { type Ev, isObj } from './guard.ts';
+import { isBlocked } from './readings.ts';
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const TERMINAL = new Set(['done', 'failed']);
 const COMMAND_END = new Set(['done', 'error', 'rejected', 'expired', 'voided', 'timeout']);
@@ -469,7 +469,7 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
       note('download', { saved: ev.saved === true });
     } else if (ev.kind === 'summary') {
       const reqs = events.filter((x): x is Ev => isObj(x) && x.kind === 'request');
-      note('visit_done', { requests: reqs.length, hosts: new Set(reqs.map((q) => hostOf(q.url)).filter(Boolean)).size, blocked: reqs.filter((q) => q.blocked != null && q.blocked !== false).length });
+      note('visit_done', { requests: reqs.length, hosts: new Set(reqs.map((q) => hostOf(q.url)).filter(Boolean)).size, blocked: reqs.filter(isBlocked).length });
     }
   }
 
@@ -558,8 +558,9 @@ export async function runTask(input: TaskInput, deps: RunnerDeps): Promise<TaskR
         fileStart = events.length;
         const done = new Promise<void>((resolve) => { waiters.set(id, resolve); });
         try {
+          // a risky command waits for a person, so nothing of it can have finished before its receipt
           const receipt = await deps.sup.command(runId, line);
-          if (!COMMAND_END.has(step.status)) step.status = receipt.status;
+          step.status = receipt.status;
           if (receipt.status === 'awaiting_approval') {
             await deps.sup.approve(runId, receipt.command_id, receipt.command_sha256);
             note('file_approved');

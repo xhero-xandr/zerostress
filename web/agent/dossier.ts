@@ -5,12 +5,9 @@
 import { currentView, landingView, linkVisit } from './evidence.ts';
 import type { Analysis } from './signals.ts';
 import { parseUrl } from './domain.ts';
+import { isObj, str, list, cut } from './guard.ts';
+import { formCrossesSites } from './readings.ts';
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
 
 export const DOSSIER_MAX_CHARS = 40_000;
 const TEXT_STEPS = [6000, 2000, 500, 0];
@@ -45,7 +42,7 @@ export function buildDossier(events: readonly unknown[], analysis: Analysis, mod
 
   const forms = list(now?.forms?.forms).filter(isObj).slice(0, 5).map((f) => ({
     action_host: cut(parseUrl(f.action)?.host ?? '', 100),
-    cross_origin: f.origin_differs === true,
+    cross_origin: formCrossesSites(f, parseUrl(now?.url)),
     has_password: f.has_password === true,
     fields: list(f.fields).filter(isObj).slice(0, 20).map((x) => ({ type: cut(str(x.type), 20), name: cut(str(x.name), 40), label: cut(str(x.label), 80) })),
   }));

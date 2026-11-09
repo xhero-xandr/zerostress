@@ -5,6 +5,7 @@
 
 import type { AgentConfig } from './config.ts';
 import type { Usage } from './budget.ts';
+import { isObj } from './guard.ts';
 
 export type Message = { role: 'system' | 'user' | 'assistant'; content: string | Array<Record<string, unknown>> };
 
@@ -188,7 +189,6 @@ export function extractJson(text: string): unknown {
   return a >= 0 && b > a ? tryParse(t.slice(a, b + 1)) : undefined;
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Reads the answer. `valid` is the set of evidence references that were really shown to the model. */
 const EVIDENCE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*|\[\d{1,3}\])*$/;

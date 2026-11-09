@@ -9,12 +9,9 @@ import { deviceViews, type DeviceView } from './devices.ts';
 import { hidesText } from './hiding.ts';
 import { ipv4ToInt, type GeoLookup } from './geo.ts';
 import type { DomainInfo } from './rdap.ts';
+import { isObj, str, list, cut } from './guard.ts';
+import { formCrossesSites, isBlocked, thirdPartyHosts } from './readings.ts';
 
-type Ev = Record<string, unknown>;
-const isObj = (v: unknown): v is Ev => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
 
 export interface Facts {
   final_host: string;
@@ -79,14 +76,8 @@ export function buildFacts(events: readonly unknown[], extra: FactsExtra = {}): 
   if (last !== '' && chain.at(-1)?.host !== last) chain.push({ via: 'commit', host: cut(last, 100) });
 
   const requests = of('request');
-  const hosts = new Set<string>();
-  let blocked = 0;
-  for (const r of requests) {
-    if (typeof r.blocked === 'string' && r.blocked !== '') blocked++;
-    const h = parseUrl(r.url)?.host;
-    if (h) hosts.add(h);
-  }
-  if (last !== '') hosts.delete(last);
+  const blocked = requests.filter(isBlocked).length;
+  const hosts = thirdPartyHosts(requests, last);
 
   // one entry per address: how many requests it served and for which sites (a name is only ever shown, never followed)
   const byIp = new Map<string, { requests: number; hosts: Set<string> }>();
@@ -119,7 +110,7 @@ export function buildFacts(events: readonly unknown[], extra: FactsExtra = {}): 
     chain: chain.slice(0, 12),
     forms: list((land?.forms ?? of('forms').at(-1))?.forms).filter(isObj).slice(0, 5).map((f) => ({
       action_host: cut(parseUrl(f.action)?.host ?? '', 100),
-      cross_origin: f.origin_differs === true,
+      cross_origin: formCrossesSites(f, parseUrl(land?.url)),
       has_password: f.has_password === true,
       asks: asksOf(f.fields),
     })),
