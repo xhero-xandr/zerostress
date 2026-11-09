@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The host (spec 001, 010): users and groups, the project's directories with their owners and SELinux types, the
-# settings files, /dev/kvm, log rotation, the kernel parameter. Idempotent. Does not touch sshd, swap or services.
+# settings files, /dev/kvm, log rotation, the kernel parameter, the admin's access to the checkout, and SSH (keys only,
+# no root) when somebody besides root has a key. Idempotent. Does not touch swap or services.
 source "$(dirname "$0")/../lib.sh"
 need_root
 need_root_dir
@@ -47,6 +48,7 @@ install -d -m 0750 -o caddy -g caddy "$S/data/caddy"
 for n in web supervisor caddy; do [[ -e $S/logs/$n.log ]] || install -m 0600 -o root -g root /dev/null "$S/logs/$n.log"; done
 chmod 0600 "$S"/logs/*.log*
 own_code
+admin_access
 selinux_rules "$S"
 restorecon -R "$S"
 
@@ -69,5 +71,15 @@ if ! grep -qw 'spec_store_bypass_disable=seccomp' /proc/cmdline; then
   else
     say "kernel: add spec_store_bypass_disable=seccomp to the kernel command line by hand (no grubby here)"
   fi
+fi
+# SSH: keys only, no root login (spec 001, 4.7). Closed only when a person besides root has a key to come back with:
+# otherwise this machine would lock its owner out. verify shows a host that is still open.
+if has_ssh_key; then
+  if ! cmp -s "$F/etc/ssh/sshd_config.d/00-zerostress-harden.conf" /etc/ssh/sshd_config.d/00-zerostress-harden.conf; then
+    put 0644 root:root /etc/ssh/sshd_config.d/00-zerostress-harden.conf
+    if sshd -t; then systemctl reload sshd; say "ssh: passwords and root login closed"; else rm -f /etc/ssh/sshd_config.d/00-zerostress-harden.conf; echo "sshd rejects the hardening file: removed it, SSH unchanged" >&2; exit 1; fi
+  fi
+else
+  say "ssh: NOT closed (passwords and root still allowed): no user besides root has an authorized key; add yours, then ./zs install host"
 fi
 say "$(ls -ld "$S" | awk '{print $1, $3, $NF}') (the code is $CODE_USER's), /dev/kvm $(stat -c '%A %G' /dev/kvm)"

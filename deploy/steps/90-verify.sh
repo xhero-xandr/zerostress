@@ -35,6 +35,8 @@ for p in "${CHROMIUM_LIBS[@]}"; do check "package $p (Chromium's library) is ins
 chrome=$(compgen -G "$(getent passwd "$CODE_USER" | cut -d: -f6)/.cache/ms-playwright/chromium-*/chrome-linux64/chrome" | head -1 || true)
 check "Playwright's Chromium is installed and finds all its libraries" bash -c "[[ -x '$chrome' ]] && ! ldd '$chrome' | grep -q 'not found'"
 check "the extension is built (build/extension)" test -s "$S/build/extension/manifest.json"
+check "SSH: no passwords" bash -c "sshd -T | grep -qx 'passwordauthentication no'"
+check "SSH: no root login" bash -c "sshd -T | grep -qx 'permitrootlogin no'"
 no_foreign_code() { [[ -z $(code_find -print -quit) ]]; }
 check "every file of the code is $CODE_USER's (./zs install and update give them back)" no_foreign_code
 check "the logs are root's only (they hold visitors' addresses)" bash -c "[[ -z \$(find '$S/logs' -name '*.log*' ! -perm 0600 -print -quit) ]]"

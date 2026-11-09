@@ -43,6 +43,37 @@ own_code() {
   code_find -exec chown -h "$CODE_USER:$CODE_USER" {} +
 }
 
+# The person who works in the checkout over SSH (VS Code, a shell) is not CODE_USER and must not need root for it:
+# ADMIN_USER, else whoever ran sudo. Git's author for the repository is the project's, set once and only if unset.
+GIT_NAME=${GIT_NAME:-xhero-xandr}
+GIT_EMAIL=${GIT_EMAIL:-devp.xandr@gmail.com}
+admin_user() { local u=${ADMIN_USER:-${SUDO_USER:-}}; [[ -n $u && $u != root ]] && id "$u" >/dev/null 2>&1 && echo "$u"; }
+
+# admin_access: rwX on the checkout for the admin user by ACL (the files stay CODE_USER's, so verify stays happy; the
+# ones the admin makes become theirs until own_code, which ./zs install and update run), git's safe.directory for them,
+# and the repository's author. The places of OWN_PLACES (root's and the services') are left out on purpose.
+admin_access() {
+  local u p prune=() ; u=$(admin_user) || { say "admin: no ADMIN_USER and nobody ran sudo: the checkout stays closed to people"; return 0; }
+  command -v setfacl >/dev/null || dnf install -y acl >/dev/null
+  for p in "${OWN_PLACES[@]}"; do prune+=(-o -path "$S/$p"); done
+  find "$S" \( "${prune[@]:1}" \) -prune -o -user "$CODE_USER" -exec setfacl -m "u:$u:rwX" {} +
+  find "$S" \( "${prune[@]:1}" \) -prune -o -user "$CODE_USER" -type d -exec setfacl -d -m "u:$u:rwX" {} +
+  runuser -u "$u" -- git config --global --get-all safe.directory 2>/dev/null | grep -qx "$S" || runuser -u "$u" -- git config --global --add safe.directory "$S"
+  as_builder git -C "$S" config user.name >/dev/null 2>&1 || as_builder git -C "$S" config user.name "$GIT_NAME"
+  as_builder git -C "$S" config user.email >/dev/null 2>&1 || as_builder git -C "$S" config user.email "$GIT_EMAIL"
+  say "admin: $u may work in the checkout; git author $(as_builder git -C "$S" config user.name)"
+}
+
+# has_ssh_key: somebody other than root can come back in by key, so closing passwords and root over SSH cannot lock
+# everybody out
+has_ssh_key() {
+  local h
+  for h in $(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /nologin|false/ {print $6}'); do
+    [[ -s $h/.ssh/authorized_keys ]] && return 0
+  done
+  return 1
+}
+
 as_builder() {
   local u=${BUILD_USER:-$(stat -c %U "$S")}
   if [[ $(id -un) == "$u" ]]; then "$@"; else runuser -u "$u" -- env PATH="$PATH" HOME="$(getent passwd "$u" | cut -d: -f6)" "$@"; fi
