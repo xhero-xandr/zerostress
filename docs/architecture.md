@@ -2,6 +2,10 @@
 
 How a check runs, how the containment is met and verified, what it is built from, and where each piece lives. The visitor's view is in [features.md](features.md); the nine containment rules are in [containment.md](containment.md).
 
+![A link crosses four boundaries: the gatekeeper, the unprivileged web layer, the privileged supervisor and a one-shot micro-VM that alone touches the suspicious page. Only evidence comes back.](architecture.svg)
+
+*The path of one check. Red marks where hostile content lives: nothing but evidence leaves it, and the micro-VM is destroyed afterwards. The numbers are the steps below.*
+
 ## How it works
 
 1. A gatekeeper checks the submitted address (scheme, size, no internal or cloud-metadata addresses) before anything runs.

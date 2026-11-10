@@ -25,6 +25,10 @@ All of it in detail: [docs/features.md](docs/features.md).
 
 An email brings a link that "confirms your delivery". Instead of clicking it, you paste it into [zerostress.space](https://zerostress.space). A fresh micro-VM boots and opens it; about 15 seconds later the report says *Dangerous*: the link went through three redirects to a two-day-old domain with a password and card-number form that posts to a third host, and the screenshot shows what the browser saw. If the agent wants to go further, say to download a file the page offers, it stops and waits for your approval. Then the micro-VM is destroyed and nothing of the page ever touched your device.
 
+![The path of one check: the gatekeeper, the unprivileged web layer, the privileged supervisor and a one-shot micro-VM that alone touches the suspicious page; only evidence comes back.](docs/architecture.svg)
+
+The path of one check, step by step: [docs/architecture.md](docs/architecture.md).
+
 ## Vultr services used
 
 | Service | What it does here |

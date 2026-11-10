@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 730" width="1260" height="730" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+<title id="t">How a ZeroStress check runs</title>
+<desc id="d">A visitor's link crosses four boundaries: the gatekeeper and the unprivileged web layer, the privileged supervisor, and a one-shot Firecracker micro-VM that alone touches the suspicious page. Only evidence comes back; the model may raise the verdict and never lower it; a person approves each risky step; the micro-VM is destroyed after the run.</desc>
+<defs>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#334155"/></marker>
+<marker id="ars" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#334155"/></marker>
+<marker id="ar-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#b45309"/></marker>
+<marker id="ar-ambers" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#b45309"/></marker>
+</defs>
+<rect x="0.5" y="0.5" width="1259" height="729" rx="14" fill="#ffffff" stroke="#d1d5db"/>
+<rect x="20" y="60" width="200" height="570" rx="12" fill="#f3f4f6" stroke="#cbd5e1" stroke-width="1" />
+<text x="34" y="84" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Visitor</text>
+<rect x="290" y="60" width="280" height="570" rx="12" fill="#eaf2ff" stroke="#cbd5e1" stroke-width="1" />
+<text x="304" y="84" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Host · no privileges</text>
+<rect x="640" y="60" width="210" height="570" rx="12" fill="#fff4e0" stroke="#cbd5e1" stroke-width="1" />
+<text x="654" y="84" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Host · privileged</text>
+<rect x="920" y="60" width="320" height="410" rx="12" fill="#fdeceb" stroke="#b42318" stroke-width="1.6" stroke-dasharray="7 5"/>
+<text x="958" y="84" font-size="12.5" font-weight="700" fill="#b42318" text-anchor="start">Micro-VM · one per task</text>
+<text x="958" y="100" font-size="11"  fill="#b42318" text-anchor="start">destroyed after the run, whatever happened</text>
+<rect x="34" y="110" width="172" height="92" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="46" y="129" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Browser · extension</text>
+<text x="46" y="147" font-size="11.5"  fill="#475569" text-anchor="start">or an AI agent (MCP) sends</text>
+<text x="46" y="162" font-size="11.5"  fill="#475569" text-anchor="start">a link, an email's links or</text>
+<text x="46" y="177" font-size="11.5"  fill="#475569" text-anchor="start">a file; the agent can ask,</text>
+<text x="46" y="192" font-size="11.5"  fill="#475569" text-anchor="start">never approve</text>
+<rect x="34" y="226" width="172" height="92" rx="8" fill="#ffffff" stroke="#b45309" stroke-width="1.6" />
+<text x="46" y="245" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">The person who asked</text>
+<text x="46" y="263" font-size="11.5"  fill="#475569" text-anchor="start">Allow / Don't allow a</text>
+<text x="46" y="278" font-size="11.5"  fill="#475569" text-anchor="start">risky step, with the</text>
+<text x="46" y="293" font-size="11.5"  fill="#475569" text-anchor="start">task key</text>
+<rect x="34" y="558" width="172" height="62" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="46" y="577" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Report page</text>
+<text x="46" y="595" font-size="11.5"  fill="#475569" text-anchor="start">verdict + proof:</text>
+<text x="46" y="610" font-size="11.5"  fill="#475569" text-anchor="start">redirects, TLS, forms</text>
+<rect x="304" y="110" width="252" height="84" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="316" y="129" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Gatekeeper</text>
+<text x="316" y="147" font-size="11.5"  fill="#475569" text-anchor="start">scheme, size, no internal or</text>
+<text x="316" y="162" font-size="11.5"  fill="#475569" text-anchor="start">metadata address; limits per IP</text>
+<rect x="304" y="232" width="252" height="60" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="316" y="251" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Task runner</text>
+<text x="316" y="269" font-size="11.5"  fill="#475569" text-anchor="start">start a run, stream progress (SSE)</text>
+<rect x="304" y="316" width="252" height="56" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="316" y="335" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Rules (deterministic)</text>
+<text x="316" y="353" font-size="11.5"  fill="#475569" text-anchor="start">evidence → signals → verdict</text>
+<rect x="304" y="396" width="252" height="62" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="316" y="415" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Injection hooks</text>
+<text x="316" y="433" font-size="11.5"  fill="#475569" text-anchor="start">scan every untrusted text;</text>
+<text x="316" y="448" font-size="11.5"  fill="#475569" text-anchor="start">unscanned text never reaches the model</text>
+<rect x="304" y="482" width="252" height="52" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="316" y="501" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Model client</text>
+<text x="316" y="519" font-size="11.5"  fill="#475569" text-anchor="start">raises the verdict, never lowers it</text>
+<rect x="304" y="558" width="200" height="62" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="316" y="577" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Report</text>
+<text x="316" y="595" font-size="11.5"  fill="#475569" text-anchor="start">fixed fields; page and model text</text>
+<text x="316" y="610" font-size="11.5"  fill="#475569" text-anchor="start">escaped, marked untrusted</text>
+<rect x="654" y="110" width="182" height="106" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="666" y="129" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Limits per micro-VM</text>
+<text x="666" y="147" font-size="11.5"  fill="#475569" text-anchor="start">1 vCPU · RAM cap</text>
+<text x="666" y="162" font-size="11.5"  fill="#475569" text-anchor="start">time cap per task</text>
+<text x="666" y="177" font-size="11.5"  fill="#475569" text-anchor="start">1 GiB scratch disk</text>
+<text x="666" y="192" font-size="11.5"  fill="#475569" text-anchor="start">packets/s, new conns/s</text>
+<rect x="654" y="232" width="182" height="60" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="666" y="251" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Supervisor (Go)</text>
+<text x="666" y="269" font-size="11.5"  fill="#475569" text-anchor="start">standard library only</text>
+<text x="666" y="284" font-size="11.5"  fill="#475569" text-anchor="start">queue · sessions · artifacts</text>
+<rect x="654" y="316" width="182" height="68" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="666" y="335" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">zsvm · zsnet</text>
+<text x="666" y="353" font-size="11.5"  fill="#475569" text-anchor="start">root helpers; own user</text>
+<text x="666" y="368" font-size="11.5"  fill="#475569" text-anchor="start">per slot, cgroups, NAT</text>
+<rect x="654" y="420" width="182" height="140" rx="8" fill="#ffffff" stroke="#b42318" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="666" y="439" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Never inside the guest</text>
+<text x="666" y="457" font-size="11.5"  fill="#475569" text-anchor="start">model key, tokens</text>
+<text x="666" y="472" font-size="11.5"  fill="#475569" text-anchor="start">the supervisor's socket</text>
+<text x="666" y="487" font-size="11.5"  fill="#475569" text-anchor="start">other micro-VMs</text>
+<text x="666" y="502" font-size="11.5"  fill="#475569" text-anchor="start">host and internal network</text>
+<text x="666" y="517" font-size="11.5"  fill="#475569" text-anchor="start">the metadata address</text>
+<rect x="934" y="114" width="292" height="62" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="946" y="133" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Disks</text>
+<text x="946" y="151" font-size="11.5"  fill="#475569" text-anchor="start">image: read-only, shared</text>
+<text x="946" y="166" font-size="11.5"  fill="#475569" text-anchor="start">scratch: 1 GiB, deleted with the run</text>
+<rect x="934" y="232" width="292" height="52" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="946" y="251" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Guest agent (Go)</text>
+<text x="946" y="269" font-size="11.5"  fill="#475569" text-anchor="start">job JSON in, events out (vsock)</text>
+<rect x="934" y="304" width="292" height="52" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="946" y="323" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Collector</text>
+<text x="946" y="341" font-size="11.5"  fill="#475569" text-anchor="start">Node + Playwright + raw CDP session</text>
+<rect x="934" y="376" width="292" height="52" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="946" y="395" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Chromium (sandboxed)</text>
+<text x="946" y="413" font-size="11.5"  fill="#475569" text-anchor="start">unprivileged user, own sandbox</text>
+<rect x="944" y="488" width="272" height="44" rx="8" fill="#ffffff" stroke="#b42318" stroke-width="1.4"/>
+<text x="1080" y="507" font-size="11"  fill="#b42318" text-anchor="middle">public addresses only: no host,</text>
+<text x="1080" y="520" font-size="11"  fill="#b42318" text-anchor="middle">no internal ranges, no metadata</text>
+<rect x="934" y="572" width="292" height="54" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+<text x="946" y="591" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Public internet</text>
+<text x="946" y="609" font-size="11.5"  fill="#475569" text-anchor="start">the suspicious page, and nothing else</text>
+<rect x="290" y="652" width="280" height="60" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="302" y="671" font-size="12.5" font-weight="700" fill="#1f2937" text-anchor="start">Vultr Serverless Inference</text>
+<text x="302" y="689" font-size="11.5"  fill="#475569" text-anchor="start">gets scanned evidence, no IP;</text>
+<text x="302" y="704" font-size="11.5"  fill="#475569" text-anchor="start">answers in a strict JSON schema</text>
+<path d="M206 152 L304 152" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<text x="255" y="142" font-size="11"  fill="#475569" text-anchor="middle">HTTPS</text>
+<path d="M430 194 L430 232" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M556 262 L654 262" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" marker-start="url(#ars)"/>
+<text x="605" y="229" font-size="11"  fill="#475569" text-anchor="middle">start /</text>
+<text x="605" y="242" font-size="11"  fill="#475569" text-anchor="middle">evidence</text>
+<path d="M745 292 L745 316" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M836 350 L920 350" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<text x="878" y="322" font-size="11"  fill="#475569" text-anchor="middle">boots,</text>
+<text x="878" y="335" font-size="11"  fill="#475569" text-anchor="middle">limits</text>
+<path d="M850 262 L934 262" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" marker-start="url(#ars)"/>
+<text x="892" y="250" font-size="11"  fill="#475569" text-anchor="middle">vsock</text>
+<path d="M1080 284 L1080 304" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M1080 356 L1080 376" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M1080 428 L1080 488" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" marker-start="url(#ars)"/>
+<path d="M1080 532 L1080 572" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" marker-start="url(#ars)"/>
+<path d="M430 292 L430 316" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M430 372 L430 396" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M430 458 L430 482" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M430 534 L430 558" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<path d="M530 534 L530 652" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" marker-start="url(#ars)"/>
+<path d="M304 589 L206 589" fill="none" stroke="#334155" stroke-width="1.6"  marker-end="url(#ar)" />
+<text x="255" y="579" font-size="11"  fill="#475569" text-anchor="middle">report</text>
+<path d="M304 262 L206 262" fill="none" stroke="#b45309" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-amber)" marker-start="url(#ar-ambers)"/>
+<text x="255" y="229" font-size="11"  fill="#b45309" text-anchor="middle">waits for</text>
+<text x="255" y="242" font-size="11"  fill="#b45309" text-anchor="middle">a person</text>
+<circle cx="304" cy="110" r="10" fill="#1d4ed8"/>
+<text x="304" y="114" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<circle cx="654" cy="232" r="10" fill="#1d4ed8"/>
+<text x="654" y="236" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<circle cx="934" cy="304" r="10" fill="#1d4ed8"/>
+<text x="934" y="308" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<circle cx="304" cy="316" r="10" fill="#1d4ed8"/>
+<text x="304" y="320" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<circle cx="304" cy="558" r="10" fill="#1d4ed8"/>
+<text x="304" y="562" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+<circle cx="944" cy="84" r="10" fill="#1d4ed8"/>
+<text x="944" y="88" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">6</text>
+</svg>
