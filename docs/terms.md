@@ -2,7 +2,7 @@
 
 These terms cover the site https://zerostress.space and the ZeroStress browser extension. By using them you agree to these terms.
 
-Last updated: 8 November 2026.
+Last updated: 10 November 2026.
 
 ## What the service is
 
@@ -19,6 +19,10 @@ A page can show one thing to our sandbox and another to you, change after the ch
 - Do not try to break out of the sandbox or attack the service; if you find a weakness, report it privately to devp.xandr@gmail.com.
 
 We may refuse a link or a file, limit the number of checks, or block access to protect the service and others.
+
+## For owners of the sites we open
+
+The sandbox opens only addresses a visitor asked us to check, with a limit on checks per person. If a site of yours was opened and you want it left alone, or you see traffic from us that looks wrong, write to devp.xandr@gmail.com with the address; we will answer and, where it is justified, stop opening it.
 
 ## Reports
 

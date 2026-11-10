@@ -10,7 +10,6 @@ import type { FileVerdict } from '../agent/reputation.ts';
 import { DOMAIN, type SenderInfo } from './sender.ts';
 import type { UrlScanClient } from '../agent/urlscan.ts';
 import { scanGuarded } from '../hooks/index.ts';
-import { getConnInfo } from '@hono/node-server/conninfo';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +20,7 @@ import { chatNote, cleanAnswer, MAX_QUESTION, type ChatInput, type ChatReason, t
 import type { Progress, TaskInput, TaskResult } from '../agent/runner.ts';
 import { SupervisorError } from '../agent/supervisor.ts';
 import { checkAddress } from './gate.ts';
+import { askCounter, defaultClientIp, fail, json, MAX_BODY, readCappedBytes, readJsonBody, sameOrigin } from './http.ts';
 import { clientBucket, type Limiter } from './limits.ts';
 import type { Stage, Store, Task } from './store.ts';
 import { errorText, T, type Demo } from './text.ts';
@@ -66,13 +66,12 @@ export const EXTENSION_ORIGINS = [
   'chrome-extension://eanjmnmjjbbcpgnhdifdpmednecllbbc', // the GitHub release and an unpacked load (manifest "key")
 ];
 const PANEL_CSP = CSP.replace("frame-ancestors 'none'", `frame-ancestors ${EXTENSION_ORIGINS.join(' ')}`);
-export const MAX_BODY = 4096;
+export { MAX_BODY };
 const SHOT_MAX = 4 * 1024 * 1024;
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 /** Only the kinds of file the build makes; the names are hashed by the build, so they can be cached for good. */
 const ASSET_TYPES: Readonly<Record<string, string>> = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const ASSET_NAME = /^[A-Za-z0-9_-]{1,80}\.(js|css)$/;
-const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 const STAGE_AT: Readonly<Record<Stage, number>> = { queued: 0, starting: 0, opening: 1, analysing: 2, done: 3, failed: 3 };
 
@@ -86,96 +85,12 @@ function stageOf(state: string): Stage | null {
   }
 }
 
-function defaultClientIp(c: Context): string {
-  let peer = '0.0.0.0';
-  try { peer = getConnInfo(c).remote.address ?? peer; } catch { /* not a socket (a test) */ }
-  // only our own proxy, on this machine, may say who the person is, and it sets X-Real-IP itself from an address it has
-  // checked (deploy/zerostress-web.Caddyfile); a header that came from the outside is never read
-  if (LOOPBACK.has(peer)) {
-    const h = c.req.header('x-real-ip');
-    if (h && h.length < 64 && /^[0-9a-fA-F:.]+$/.test(h)) return h;
-  }
-  return peer;
-}
-
-const json = (c: Context, status: 200 | 202 | 400 | 403 | 404 | 409 | 413 | 415 | 429 | 500 | 503, body: unknown, headers: Record<string, string> = {}): Response =>
-  c.json(body as object, status, { 'cache-control': 'no-store', ...headers });
-
-const fail = (c: Context, status: 400 | 403 | 404 | 413 | 415 | 429 | 500 | 503, code: string, headers: Record<string, string> = {}): Response =>
-  json(c, status, { code, message: errorText(code) }, headers);
-
 /** The name of the image for a device, only if it is one of this run's saved images (the supervisor's names are 16 hex digits). */
 function shotName(result: TaskResult, device: 'desktop' | 'mobile' | 'tablet'): string | null {
   const png = result.artifacts.filter((a) => a.mime === 'image/png' && /^[A-Za-z0-9._-]{1,60}$/.test(a.name)).map((a) => a.name);
   const named = result.shots?.[device] ?? null;
   if (named !== null) return png.includes(named) ? named : null;
   return device === 'desktop' && !result.shots ? (png.at(-1) ?? null) : null; // results stored before the devices existed
-}
-
-/** The body as text, read up to `max` bytes; null if it is longer (the rest is never read). */
-async function readCapped(c: Context, max: number): Promise<string | null> {
-  const stream = c.req.raw.body;
-  if (!stream) return '';
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel().catch(() => {});
-      return null;
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
-
-async function readCappedBytes(c: Context, max: number): Promise<Buffer | null> {
-  const stream = c.req.raw.body;
-  if (!stream) return Buffer.alloc(0);
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel().catch(() => {});
-      return null;
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks);
-}
-
-/** the same page as the sender, when the browser says which page that is */
-function sameOrigin(c: Context): boolean {
-  const origin = c.req.header('origin');
-  if (origin === undefined) return true;
-  try { return new URL(origin).host === c.req.header('host'); } catch { return false; }
-}
-
-/** A JSON object from a POST: the same page as the sender, the right type, a small body. Anything else is a plain refusal. */
-async function readJsonBody(c: Context): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; res: Response }> {
-  const origin = c.req.header('origin');
-  if (origin !== undefined) {
-    let ok = false;
-    try { ok = new URL(origin).host === c.req.header('host'); } catch { /* not an origin */ }
-    if (!ok) return { ok: false, res: fail(c, 403, 'forbidden') };
-  }
-  if (!(c.req.header('content-type') ?? '').toLowerCase().startsWith('application/json')) return { ok: false, res: fail(c, 415, 'bad_request') };
-  const declared = Number(c.req.header('content-length') ?? 0);
-  if (declared > MAX_BODY) return { ok: false, res: fail(c, 413, 'bad_request') };
-  // a body sent in chunks has no length to check first: it is read only up to the limit and then cut off
-  const text = await readCapped(c, MAX_BODY);
-  if (text === null) return { ok: false, res: fail(c, 413, 'bad_request') };
-  let body: unknown;
-  try { body = JSON.parse(text); } catch { return { ok: false, res: fail(c, 400, 'bad_request') }; }
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) return { ok: false, res: fail(c, 400, 'bad_request') };
-  return { ok: true, body: body as Record<string, unknown> };
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -240,7 +155,7 @@ export function createApp(deps: AppDeps): Hono {
     if (!gate.ok) return fail(c, 400, gate.reason);
 
     const slot = deps.limiter.start(ip(c));
-    if (!slot.ok) return fail(c, slot.reason === 'daily_cap' ? 503 : 429, slot.reason, { 'retry-after': String(slot.retryAfterS) });
+    if (!slot.ok) return slotRefused(c, slot);
 
     const { task, key } = deps.store.create(gate.url, deep === true);
     try {
@@ -249,27 +164,21 @@ export function createApp(deps: AppDeps): Hono {
       // the supervisor never took it: nothing ran, so it costs the person and the service nothing
       slot.cancel();
       deps.store.drop(task.id);
-      if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
-      return fail(c, 503, 'supervisor_unavailable');
+      return startRefused(c, e);
     }
     const started: TaskStarted = { id: task.id, key };
     return json(c, 202, started);
   });
 
   // ---- an email's sender: only its domain comes here (sender.ts); a few asks a minute per address ----
-  const senderAsks = new Map<string, number[]>();
+  const senderOk = askCounter(20);
   app.post('/api/sender', async (c) => {
     if (!deps.sender) return fail(c, 404, 'not_found');
     const read = await readJsonBody(c);
     if (!read.ok) return read.res;
     const domain = typeof read.body.domain === 'string' ? read.body.domain.trim().toLowerCase().replace(/\.$/, '') : '';
     if (Object.keys(read.body).some((k) => k !== 'domain') || !DOMAIN.test(domain)) return fail(c, 400, 'bad_request');
-    const who = ip(c);
-    const t = Date.now();
-    const recent = (senderAsks.get(who) ?? []).filter((x) => t - x < 60_000);
-    if (recent.length >= 20) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
-    senderAsks.set(who, [...recent, t]);
-    if (senderAsks.size > 10_000) senderAsks.clear();
+    if (!senderOk(ip(c))) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
     return json(c, 200, { sender: await deps.sender(domain) });
   });
 
@@ -289,7 +198,7 @@ export function createApp(deps: AppDeps): Hono {
     }
     if (links.length === 0) return fail(c, 400, 'bad_url');
     const slot = deps.limiter.start(ip(c));
-    if (!slot.ok) return fail(c, slot.reason === 'daily_cap' ? 503 : 429, slot.reason, { 'retry-after': String(slot.retryAfterS) });
+    if (!slot.ok) return slotRefused(c, slot);
     const { task, key } = deps.store.create(links[0]!, true);
     task.links = links.slice(0, MAX_EMAIL_LINKS);
     try {
@@ -297,8 +206,7 @@ export function createApp(deps: AppDeps): Hono {
     } catch (e) {
       slot.cancel();
       deps.store.drop(task.id);
-      if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
-      return fail(c, 503, 'supervisor_unavailable');
+      return startRefused(c, e);
     }
     const started: EmailCheckStarted = { id: task.id, key, links: task.links.length, skipped: links.length - task.links.length };
     return json(c, 202, started);
@@ -323,7 +231,7 @@ export function createApp(deps: AppDeps): Hono {
     if (data === null) return fail(c, 413, 'file_too_large');
     if (data.length === 0) return fail(c, 400, 'bad_request');
     const slot = deps.limiter.start(ip(c));
-    if (!slot.ok) return fail(c, slot.reason === 'daily_cap' ? 503 : 429, slot.reason, { 'retry-after': String(slot.retryAfterS) });
+    if (!slot.ok) return slotRefused(c, slot);
     const held = files.put(data, name, (c.req.header('content-type') ?? '').split(';')[0]!.trim());
     if (!held) { slot.cancel(); return fail(c, 503, 'busy', { 'retry-after': '30' }); }
     const { task, key } = deps.store.create(`${publicUrl}/fx/pending`, true);
@@ -335,15 +243,14 @@ export function createApp(deps: AppDeps): Hono {
       slot.cancel();
       files.drop(held.token);
       deps.store.drop(task.id);
-      if (e instanceof SupervisorError && e.code === 'queue_full') return fail(c, 503, 'busy', { 'retry-after': '30' });
-      return fail(c, 503, 'supervisor_unavailable');
+      return startRefused(c, e);
     }
     const started: FileCheckStarted = { id: task.id, key, name: held.file.name, bytes: held.file.bytes, sha256: held.file.sha256 };
     return json(c, 202, started);
   });
 
   // what VirusTotal knows about a file the browser has hashed: only the hash comes here, never the file
-  const hashAsks = new Map<string, number[]>();
+  const hashOk = askCounter(20);
   if (deps.fileReputation) {
     const ask = deps.fileReputation;
     app.post('/api/file-hash', async (c) => {
@@ -351,12 +258,7 @@ export function createApp(deps: AppDeps): Hono {
       if (!read.ok) return read.res;
       const sha = typeof read.body.sha256 === 'string' ? read.body.sha256.toLowerCase() : '';
       if (Object.keys(read.body).some((k) => k !== 'sha256') || !/^[0-9a-f]{64}$/.test(sha)) return fail(c, 400, 'bad_request');
-      const who = ip(c);
-      const t = Date.now();
-      const recent = (hashAsks.get(who) ?? []).filter((x) => t - x < 60_000);
-      if (recent.length >= 20) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
-      hashAsks.set(who, [...recent, t]);
-      if (hashAsks.size > 10_000) hashAsks.clear();
+      if (!hashOk(ip(c))) return fail(c, 429, 'chat_rate', { 'retry-after': '60' });
       const answer: FileHashAnswer = { virustotal: await ask(sha) };
       return json(c, 200, answer);
     });
@@ -389,6 +291,13 @@ export function createApp(deps: AppDeps): Hono {
       'x-content-type-options': 'nosniff', ...NO_STORE,
     });
   });
+
+  /** the limiter said no: a spent day is the service's to say (503), a person's own limit is theirs (429) */
+  const slotRefused = (c: Context, slot: { reason: string; retryAfterS: number }): Response =>
+    fail(c, slot.reason === 'daily_cap' ? 503 : 429, slot.reason, { 'retry-after': String(slot.retryAfterS) });
+  /** the supervisor did not take the run: a full queue is a wait, anything else an outage */
+  const startRefused = (c: Context, e: unknown): Response =>
+    e instanceof SupervisorError && e.code === 'queue_full' ? fail(c, 503, 'busy', { 'retry-after': '30' }) : fail(c, 503, 'supervisor_unavailable');
 
   /** Start the run and return once the supervisor has taken it (or refused it). The rest happens in the background. */
   function begin(task: Task, deep: boolean, release: () => void): Promise<void> {
